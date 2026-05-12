@@ -4,9 +4,15 @@
 Це **локальний прототип**, не production. Мета — продемонструвати архітектурне мислення, 
 розуміння монорепо, NestJS, динамічних API-контрактів та інтеграцій.
 
-**КРИТИЧНА ВИМОГА:** використовуємо ТІЛЬКИ безкоштовні сервіси або симуляцію 
-платних. Жодних API-ключів до Anthropic/OpenAI/Twilio/тощо. Все має 
-працювати offline на локальній машині без зовнішніх платних залежностей.
+**КРИТИЧНА ВИМОГА:** базовий demo path використовує тільки локальні безкоштовні
+інструменти або симуляцію платних сервісів. Жодних обов'язкових API-ключів до
+Anthropic/OpenAI/Twilio/тощо. Все має працювати offline на локальній машині без
+зовнішніх платних залежностей.
+
+**Дозволений optional free-tier:** Gemini API free tier можна використати як
+опційний provider для покращення нормалізації чеків, але тільки за явним env flag
+і наявності `GEMINI_API_KEY`. Без ключа або при rate-limit/error сервіс має
+автоматично повертатися до локального `RegexNormalizer`.
 
 ## Технічний стек (фіксований)
 
@@ -89,15 +95,16 @@ platform/
 ## 2️⃣ Receipt Recognizer
 
 **Призначення:** розпізнавання банківських чеків зі скріншотів.
-**Використовуємо Tesseract.js (безкоштовно) + симульований "AI normalizer".**
+**Використовуємо Tesseract.js (безкоштовно) + локальний normalizer.**
+Опційно можна підключити Gemini API free tier для AI-нормалізації OCR text.
 
 ### Архітектура
 
 ```
-Upload → multer → Tesseract.js (OCR) → "AI" Normalizer → Zod validate → DB
+Upload → multer → Tesseract.js (OCR) → Normalizer → Zod validate → DB
 ```
 
-### "AI" Normalizer — симуляція
+### Normalizer strategy
 
 Створи інтерфейс `IReceiptNormalizer`:
 ```typescript
@@ -110,12 +117,22 @@ interface IReceiptNormalizer {
 - **RegexNormalizer** (default) — парсить OCR text через regex patterns 
   для типових форматів (ПриватБанк, Monobank, Revolut). Імітує "AI" затримку 
   через `setTimeout(800-1500ms)` щоб виглядало реалістично в UI.
+- **GeminiNormalizer** (optional free-tier) — використовує Gemini API для
+  структурування OCR text у `ReceiptData`. Активується тільки через
+  `NORMALIZER=gemini`, `GEMINI_ENABLED=true` і `GEMINI_API_KEY`.
+  Якщо ключ відсутній, quota/rate limit вичерпано або API недоступний,
+  normalizer логить причину і робить graceful fallback на `RegexNormalizer`.
+  Рекомендована модель для прототипу: `gemini-2.5-flash-lite` або актуальна
+  free-tier Flash/Flash-Lite модель з Google AI Studio.
+  Важливо: free-tier usage може використовуватися Google для покращення
+  продуктів, тому не відправляти PII у demo без маскування.
 - **AnthropicNormalizer** (placeholder) — клас існує, ловить відсутність 
   API key і кидає зрозумілий error: "Anthropic provider requires API key. 
   Using RegexNormalizer instead." Це показує **архітектурну готовність** 
   до підключення реального LLM без витрат на тестове.
 
-**Перемикання через env:** `NORMALIZER=regex` (default) або `NORMALIZER=anthropic`.
+**Перемикання через env:** `NORMALIZER=regex` (default), `NORMALIZER=gemini`
+або `NORMALIZER=anthropic`.
 
 ### Endpoints
 - `POST /receipts/upload` (multipart) — приймає зображення, повертає `receiptId`
@@ -321,8 +338,10 @@ Postgres:
 - [ ] Tesseract.js інтеграція
 - [ ] `IReceiptNormalizer` інтерфейс
 - [ ] `RegexNormalizer` з парсингом PhonePe + 2-3 форматів банків
+- [ ] `GeminiNormalizer` optional adapter для Gemini API free tier
 - [ ] `AnthropicNormalizer` placeholder з graceful fallback
 - [ ] Selector через env `NORMALIZER`
+- [ ] Fallback chain: Gemini/Anthropic errors → RegexNormalizer
 - [ ] Zod schema відповіді
 - [ ] Endpoints `POST /receipts/upload`, `GET /receipts/:id`, `GET /receipts/:id/raw`
 - [ ] 1 тест на normalizer logic
@@ -401,7 +420,7 @@ Postgres:
 - ❌ Kubernetes, CI/CD, моніторинг
 - ❌ Великі тестові покриття — 1-2 значущих тести на сервіс
 - ❌ UI бібліотеки на фронті
-- ❌ Реальні API ключі — все локально/моки
+- ❌ Обов'язкові реальні API ключі — все локально/моки by default
 - ❌ Платні сервіси будь-якого вигляду
 
 # Філософія прототипу
