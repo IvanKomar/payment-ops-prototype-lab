@@ -1,0 +1,32 @@
+{
+  "name": "@payment-ops/shared-logger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "node -e \"console.log('No tests yet for shared-logger')\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2"
+  },
+  "devDependencies": {
+    "@payment-ops/eslint-config": "workspace:*",
+    "@payment-ops/tsconfig": "workspace:*",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

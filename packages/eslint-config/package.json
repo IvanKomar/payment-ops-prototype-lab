@@ -1,0 +1,22 @@
+{
+  "name": "@payment-ops/eslint-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "index.mjs"
+  ],
+  "peerDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "typescript-eslint": "^8.46.4"
+  },
+  "scripts": {
+    "lint": "eslint -c index.mjs index.mjs",
+    "test": "node -e \"console.log('No tests for shared ESLint config')\"",
+    "typecheck": "node --check index.mjs"
+  }
+}

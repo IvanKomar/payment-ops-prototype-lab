@@ -1,0 +1,15 @@
+{
+  "name": "@payment-ops/tsconfig",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "base.json",
+    "nestjs.json",
+    "vite.json"
+  ],
+  "scripts": {
+    "lint": "node -e \"for (const file of ['base.json','nestjs.json','vite.json']) JSON.parse(require('fs').readFileSync(file, 'utf8'))\"",
+    "test": "node -e \"console.log('No tests for shared TypeScript configs')\"",
+    "typecheck": "node -e \"console.log('No typecheck step for shared TypeScript configs')\""
+  }
+}

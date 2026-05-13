@@ -1,0 +1,27 @@
+{
+  "name": "@payment-ops/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "node -e \"console.log('No tests yet for shared-types')\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@payment-ops/eslint-config": "workspace:*",
+    "@payment-ops/tsconfig": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}
