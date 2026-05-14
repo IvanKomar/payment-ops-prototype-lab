@@ -2,7 +2,7 @@ import { Test } from "@nestjs/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import { SmsController } from "../src/sms/controllers/sms.controller.js";
-import { idempotencyKeyHeaderSchema, sendSmsSchema, ZodValidationPipe } from "../src/sms/dto/sms.schemas.js";
+import { sendSmsSchema, ZodValidationPipe } from "../src/sms/dto/sms.schemas.js";
 import { SmsService } from "../src/sms/sms.service.js";
 import type { SendSmsCommand } from "../src/sms/sms.types.js";
 
@@ -15,6 +15,7 @@ describe("SmsController", () => {
         provider: "Fast2SmsMockProvider",
         deduplicated: false
       })),
+      listRecentMessages: vi.fn(),
       getStatus: vi.fn()
     };
     const moduleRef = await Test.createTestingModule({
@@ -32,16 +33,13 @@ describe("SmsController", () => {
       message: "Your OTP is 123456"
     };
 
-    await expect(controller.send(command, "otp-login-usr_123")).resolves.toEqual({
+    await expect(controller.send(command)).resolves.toEqual({
       jobId: "sms_test",
       status: "queued",
       provider: "Fast2SmsMockProvider",
       deduplicated: false
     });
-    expect(smsService.send).toHaveBeenCalledWith({
-      ...command,
-      idempotencyKey: "otp-login-usr_123"
-    });
+    expect(smsService.send).toHaveBeenCalledWith(command);
   });
 
   it("rejects invalid phone numbers at the Zod boundary", () => {
@@ -55,13 +53,10 @@ describe("SmsController", () => {
     ).toThrow("Validation failed");
   });
 
-  it("rejects invalid idempotency headers", () => {
-    expect(idempotencyKeyHeaderSchema.safeParse("short").success).toBe(false);
-  });
-
   it("returns persisted status", async () => {
     const smsService = {
       send: vi.fn(),
+      listRecentMessages: vi.fn(),
       getStatus: vi.fn(async () => ({
         jobId: "sms_test",
         status: "sent",
@@ -88,5 +83,40 @@ describe("SmsController", () => {
       attempts: 1,
       lastError: null
     });
+  });
+
+  it("returns recent messages", async () => {
+    const recent = [
+      {
+        jobId: "sms_test",
+        phoneNumber: "+919876543210",
+        message: "Your OTP is 123456",
+        status: "sent",
+        provider: "Fast2SmsMockProvider",
+        attempts: 1,
+        lastError: null,
+        dedupeKey: "server:test",
+        createdAt: "2026-05-13T17:30:00.000Z",
+        sentAt: "2026-05-13T17:30:30.000Z"
+      }
+    ];
+    const smsService = {
+      send: vi.fn(),
+      getStatus: vi.fn(),
+      listRecentMessages: vi.fn(async () => recent)
+    };
+    const moduleRef = await Test.createTestingModule({
+      controllers: [SmsController],
+      providers: [
+        {
+          provide: SmsService,
+          useValue: smsService
+        }
+      ]
+    }).compile();
+    const controller = moduleRef.get(SmsController);
+
+    await expect(controller.getRecentMessages()).resolves.toEqual(recent);
+    expect(smsService.listRecentMessages).toHaveBeenCalledWith(10);
   });
 });

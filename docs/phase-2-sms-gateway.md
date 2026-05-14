@@ -3,13 +3,13 @@
 This document plans and records Phase 2 based on the repository state after
 Phase 1. The Phase 2 result is the first end-to-end backend service in the
 monorepo: a NestJS API with provider abstraction, country routing, BullMQ queue,
-Prisma persistence, Swagger, idempotency protection, and focused tests.
+Prisma persistence, Swagger, server-side duplicate-send protection, and focused tests.
 
 ## Implementation Status
 
 Implemented in `apps/sms-gateway` with a service-local Prisma schema, NestJS
 controllers, BullMQ processing, mock providers, optional Fast2SMS adapter,
-`Idempotency-Key` protection, Swagger setup, and focused tests. The
+server-side duplicate-send protection, Swagger setup, and focused tests. The
 implementation uses Prisma 6.x because Prisma 7 removed datasource URLs from
 `schema.prisma`, which would add unnecessary configuration complexity for this
 prototype phase.
@@ -39,13 +39,15 @@ Phase 2 includes:
 - creating `apps/sms-gateway`;
 - NestJS HTTP API;
 - Zod validation at the service boundary;
-- Swagger documentation for `POST /sms/send` and `GET /sms/status/:jobId`;
+- Swagger documentation for `POST /sms/send`, `GET /sms/status/:jobId`, and
+  `GET /sms/recent`;
 - Prisma schema and migration for `sms_messages`;
 - BullMQ queue for asynchronous SMS sending;
 - provider abstraction and mock providers;
 - country-based routing with a global fallback for all valid E.164 numbers;
 - fallback between providers;
-- duplicate-send protection through the `Idempotency-Key` header;
+- server-side duplicate-send protection for matching phone number and message
+  within five minutes;
 - optional `Fast2SmsProvider` behind env flags;
 - focused unit/integration tests;
 - service README.
@@ -117,7 +119,6 @@ Request:
 ```http
 POST /sms/send
 Content-Type: application/json
-Idempotency-Key: otp-login-usr_123-2026-05-13T17:30
 ```
 
 ```json
@@ -144,18 +145,16 @@ Response:
 Behavior:
 
 - validate the body with Zod;
-- accept the optional `Idempotency-Key` header;
 - choose the initial provider synchronously before queueing;
-- if the `Idempotency-Key` already exists for the same payload, return the
-  existing job instead of enqueueing a second send;
-- persist a `sms_messages` row with `queued` status and the optional idempotency
-  key;
+- if the same phone number and message were queued in the last five minutes,
+  return the existing job instead of enqueueing a second send;
+- persist a `sms_messages` row with `queued` status and a server-generated
+  idempotency key;
 - enqueue a BullMQ job with `jobId`;
 - return a queued response immediately.
 
-Duplicate handling is local and explicit. Phase 2 does not add auth, but clients
-can still prevent accidental double sends by reusing the same `Idempotency-Key`
-header for one logical SMS operation.
+Duplicate handling is local and based on server time, so client locations and
+time zones do not affect the five-minute window.
 
 ### `GET /sms/status/:jobId`
 
@@ -176,6 +175,33 @@ Behavior:
 - read canonical status from the database;
 - return `404` for unknown `jobId`;
 - include selected/current provider, attempts, and last error.
+
+### `GET /sms/recent`
+
+Response:
+
+```json
+[
+  {
+    "jobId": "sms_...",
+    "phoneNumber": "+919876543210",
+    "message": "Your OTP is 123456",
+    "status": "sent",
+    "provider": "Fast2SmsMockProvider",
+    "attempts": 1,
+    "lastError": null,
+    "dedupeKey": "server:...",
+    "createdAt": "2026-05-14T11:00:00.000Z",
+    "sentAt": "2026-05-14T11:00:01.000Z"
+  }
+]
+```
+
+Behavior:
+
+- return the latest 10 persisted messages;
+- order newest first by `createdAt`;
+- expose server timestamps as ISO strings.
 
 ### `GET /health`
 
@@ -226,11 +252,11 @@ enum SmsStatus {
 Recommended `jobId` format: `sms_` + collision-resistant random id. The service
 owns this id and uses it as both API id and DB primary key.
 
-Use the persisted `idempotencyKey` column to store the external
-`Idempotency-Key` header and protect against accidental duplicate sends. If a
-repeated request uses the same key, same phone number, and same message, return
-the existing job with `deduplicated: true`. If the same key is reused with a
-different phone number or message, return `409 Conflict`.
+Use the persisted `idempotencyKey` column for a server-generated key derived
+from phone number, message, and a five-minute server-time window. Before
+queueing, also check for an existing message with the same phone number and
+message created in the previous five minutes. If found, return the existing job
+with `deduplicated: true`.
 
 ## Queue Flow
 
@@ -239,7 +265,8 @@ Use BullMQ with Redis from `REDIS_URL`.
 Flow:
 
 1. `POST /sms/send` validates the payload.
-2. If `Idempotency-Key` is present, `SmsService` checks for an existing message.
+2. `SmsService` checks for an existing same phone number and message from the
+   last five minutes using server time.
 3. If an equivalent message already exists, the service returns that job without
    queueing another BullMQ job.
 4. `SmsService` selects the initial provider using `ProviderRegistry`.
@@ -375,15 +402,15 @@ Minimum tests:
 - validation:
   - invalid phone number rejected;
   - empty message rejected;
-  - invalid `Idempotency-Key` rejected;
-- idempotency:
-  - repeated same `Idempotency-Key`, phone number, and message returns existing
+- duplicate-send protection:
+  - repeated same phone number and message inside five minutes returns existing
     job;
-  - repeated same `Idempotency-Key` with different payload returns `409`;
-  - duplicate request does not enqueue a second BullMQ job;
+  - same phone number and message after five minutes can queue again;
+  - duplicate request inside the window does not enqueue a second BullMQ job;
 - API/controller:
   - `POST /sms/send` returns queued job;
   - `GET /sms/status/:jobId` returns persisted status;
+  - `GET /sms/recent` returns the latest 10 messages;
   - unknown `jobId` returns `404`;
 - Fast2SMS:
   - disabled by default;
@@ -415,9 +442,11 @@ Phase 2 is done when:
 
 - `apps/sms-gateway` starts locally with `pnpm dev`;
 - `POST /sms/send` returns a queued job;
-- duplicate `POST /sms/send` with the same `Idempotency-Key` does not send twice;
-- conflicting idempotency key reuse returns `409`;
+- duplicate `POST /sms/send` with the same phone number and message inside five
+  minutes does not send twice;
+- the same phone number and message can be queued again after five minutes;
 - `GET /sms/status/:jobId` returns persisted status;
+- `GET /sms/recent` returns the latest 10 persisted SMS messages;
 - mock providers route by country prefix and route all other valid E.164 numbers
   through the global fallback provider;
 - fallback is deterministic and tested;

@@ -10,12 +10,6 @@ implementation decisions become more concrete.
 
 `POST /sms/send`
 
-Optional duplicate-send guard:
-
-```http
-Idempotency-Key: otp-login-usr_123-2026-05-13T17:30
-```
-
 ```json
 {
   "phoneNumber": "+919876543210",
@@ -25,6 +19,11 @@ Idempotency-Key: otp-login-usr_123-2026-05-13T17:30
   }
 }
 ```
+
+Duplicate-send protection is server-side. Repeating the same phone number and
+message within five minutes returns the existing job instead of queueing another
+send. The window uses server time, independent of client time zones. After five
+minutes, the same phone number and message can be queued again.
 
 ### Response
 
@@ -49,6 +48,14 @@ Idempotency-Key: otp-login-usr_123-2026-05-13T17:30
   "lastError": null
 }
 ```
+
+### Recent Messages
+
+`GET /sms/recent`
+
+Returns the latest 10 persisted SMS messages, newest first, including job id,
+phone number, message, status, provider, attempts, last error, dedupe key,
+creation time, and sent time.
 
 ### Provider Interface
 

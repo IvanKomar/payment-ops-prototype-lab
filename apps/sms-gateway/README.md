@@ -1,8 +1,8 @@
 # SMS Gateway
 
 Local prototype NestJS service for queued SMS delivery with mock providers,
-country-based routing, fallback, idempotency protection, PostgreSQL persistence,
-Redis/BullMQ queueing, and Swagger docs.
+country-based routing, fallback, server-side duplicate-send protection,
+PostgreSQL persistence, Redis/BullMQ queueing, and Swagger docs.
 
 ## Local Run
 
@@ -26,7 +26,6 @@ Swagger UI: `http://localhost:3001/docs`
 ```http
 POST /sms/send
 Content-Type: application/json
-Idempotency-Key: otp-login-usr_123-2026-05-13T17:30
 ```
 
 ```json
@@ -39,15 +38,27 @@ Idempotency-Key: otp-login-usr_123-2026-05-13T17:30
 }
 ```
 
-The `Idempotency-Key` header is optional. Reusing the same key for the same phone
-number and message returns the existing job and does not enqueue another send.
-Reusing the same key for a different payload returns `409 Conflict`.
+Duplicate-send protection is handled on the server. Repeating the same phone
+number and message within five minutes returns the existing job and does not
+enqueue another send. The five-minute window uses server time, so client
+locations and time zones do not affect the result. After the window expires, the
+same message can be queued again.
 
 ### Check Status
 
 ```http
 GET /sms/status/:jobId
 ```
+
+### Recent Messages
+
+```http
+GET /sms/recent
+```
+
+Returns the latest 10 persisted SMS messages, newest first. The local web UI at
+`http://localhost:3001/` shows this list and refreshes it after sends/status
+checks.
 
 ## Provider Routing
 

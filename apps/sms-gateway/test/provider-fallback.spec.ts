@@ -1,7 +1,6 @@
 import type { SmsMessage } from "@prisma/client";
 import { SmsStatus } from "@prisma/client";
-import { ConflictException } from "@nestjs/common";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ISmsProvider, SmsProviderStatus, SmsSendResult } from "../src/sms/providers/provider.types.js";
 import type { ProviderRegistry } from "../src/sms/providers/provider-registry.js";
@@ -57,7 +56,11 @@ function createMessage(overrides: Partial<SmsMessage> = {}): SmsMessage {
   };
 }
 
-describe("SmsService fallback and idempotency", () => {
+describe("SmsService fallback and server deduplication", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("tries the next provider when the selected provider fails", async () => {
     const message = createMessage();
     const repository = {
@@ -93,10 +96,14 @@ describe("SmsService fallback and idempotency", () => {
     expect(repository.markFailed).not.toHaveBeenCalled();
   });
 
-  it("returns an existing job for an equivalent idempotency key without enqueueing", async () => {
-    const existing = createMessage();
+  it("returns an existing sent job for the same phone and message inside five minutes", async () => {
+    vi.setSystemTime(new Date("2026-05-13T17:34:00.000Z"));
+    const existing = createMessage({
+      status: SmsStatus.sent,
+      sentAt: new Date("2026-05-13T17:30:30.000Z")
+    });
     const repository = {
-      findByIdempotencyKey: vi.fn(async () => existing),
+      findRecentDuplicate: vi.fn(async () => existing),
       isUniqueConstraintError: vi.fn(() => false)
     };
     const registry = {
@@ -113,24 +120,83 @@ describe("SmsService fallback and idempotency", () => {
 
     const response = await service.send({
       phoneNumber: existing.phoneNumber,
-      message: existing.message,
-      idempotencyKey: "otp-login-usr_123"
+      message: existing.message
     });
 
     expect(response).toEqual({
       jobId: existing.id,
-      status: existing.status,
+      status: SmsStatus.sent,
       provider: existing.selectedProvider,
       deduplicated: true
     });
+    expect(repository.findRecentDuplicate).toHaveBeenCalledWith({
+      phoneNumber: existing.phoneNumber,
+      message: existing.message,
+      createdAfter: new Date("2026-05-13T17:29:00.000Z")
+    });
+    expect(registry.selectProvider).not.toHaveBeenCalled();
     expect(queue.enqueue).not.toHaveBeenCalled();
   });
 
-  it("rejects conflicting idempotency key reuse", async () => {
-    const existing = createMessage();
+  it("queues the same phone and message again after five minutes", async () => {
+    vi.setSystemTime(new Date("2026-05-13T17:36:00.000Z"));
+    const queued = createMessage({
+      id: "sms_new",
+      createdAt: new Date("2026-05-13T17:36:00.000Z")
+    });
     const repository = {
-      findByIdempotencyKey: vi.fn(async () => existing),
+      findRecentDuplicate: vi.fn(async () => null),
+      createQueued: vi.fn(async () => queued),
       isUniqueConstraintError: vi.fn(() => false)
+    };
+    const registry = {
+      selectProvider: vi.fn(() => ({
+        name: "Fast2SmsMockProvider"
+      }))
+    };
+    const queue = {
+      enqueue: vi.fn()
+    };
+    const service = new SmsService(
+      repository as unknown as SmsRepository,
+      registry as unknown as ProviderRegistry,
+      queue as unknown as SmsQueue
+    );
+
+    await expect(
+      service.send({
+        phoneNumber: queued.phoneNumber,
+        message: queued.message
+      })
+    ).resolves.toEqual({
+      jobId: queued.id,
+      status: queued.status,
+      provider: queued.selectedProvider,
+      deduplicated: false
+    });
+    expect(repository.findRecentDuplicate).toHaveBeenCalledWith({
+      phoneNumber: queued.phoneNumber,
+      message: queued.message,
+      createdAfter: new Date("2026-05-13T17:31:00.000Z")
+    });
+    expect(repository.createQueued).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phoneNumber: queued.phoneNumber,
+        message: queued.message,
+        idempotencyKey: expect.stringMatching(/^server:[a-f0-9]{64}$/)
+      })
+    );
+    expect(queue.enqueue).toHaveBeenCalledWith(queued.id);
+  });
+
+  it("lists the latest messages with API timestamps", async () => {
+    const message = createMessage({
+      status: SmsStatus.sent,
+      attempts: 1,
+      sentAt: new Date("2026-05-13T17:30:30.000Z")
+    });
+    const repository = {
+      findLatest: vi.fn(async () => [message])
     };
     const service = new SmsService(
       repository as unknown as SmsRepository,
@@ -138,12 +204,20 @@ describe("SmsService fallback and idempotency", () => {
       {} as unknown as SmsQueue
     );
 
-    await expect(
-      service.send({
-        phoneNumber: existing.phoneNumber,
-        message: "Different message",
-        idempotencyKey: "otp-login-usr_123"
-      })
-    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.listRecentMessages(10)).resolves.toEqual([
+      {
+        jobId: message.id,
+        phoneNumber: message.phoneNumber,
+        message: message.message,
+        status: SmsStatus.sent,
+        provider: message.selectedProvider,
+        attempts: 1,
+        lastError: null,
+        dedupeKey: message.idempotencyKey,
+        createdAt: "2026-05-13T17:30:00.000Z",
+        sentAt: "2026-05-13T17:30:30.000Z"
+      }
+    ]);
+    expect(repository.findLatest).toHaveBeenCalledWith(10);
   });
 });

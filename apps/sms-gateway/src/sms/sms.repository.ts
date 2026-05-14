@@ -5,7 +5,14 @@ import type { SendSmsCommand } from "./sms.types.js";
 
 interface CreateQueuedMessageInput extends SendSmsCommand {
   id: string;
+  idempotencyKey: string;
   selectedProvider: string;
+}
+
+interface FindRecentDuplicateInput {
+  phoneNumber: string;
+  message: string;
+  createdAfter: Date;
 }
 
 @Injectable()
@@ -24,18 +31,39 @@ export class SmsRepository {
     });
   }
 
+  findRecentDuplicate(input: FindRecentDuplicateInput): Promise<SmsMessage | null> {
+    return this.prisma.smsMessage.findFirst({
+      where: {
+        phoneNumber: input.phoneNumber,
+        message: input.message,
+        createdAt: {
+          gte: input.createdAfter
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+  }
+
+  findLatest(limit = 10): Promise<SmsMessage[]> {
+    return this.prisma.smsMessage.findMany({
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: limit
+    });
+  }
+
   createQueued(input: CreateQueuedMessageInput): Promise<SmsMessage> {
     const data: Prisma.SmsMessageCreateInput = {
       id: input.id,
       phoneNumber: input.phoneNumber,
       message: input.message,
+      idempotencyKey: input.idempotencyKey,
       status: SmsStatus.queued,
       selectedProvider: input.selectedProvider
     };
-
-    if (input.idempotencyKey !== undefined) {
-      data.idempotencyKey = input.idempotencyKey;
-    }
 
     if (input.metadata !== undefined) {
       data.metadata = this.toJson(input.metadata);

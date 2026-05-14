@@ -15,7 +15,8 @@ Phase 2 SMS Gateway is in place:
 - Docker Compose for PostgreSQL and Redis;
 - local environment example;
 - `apps/sms-gateway` NestJS service with PostgreSQL persistence, Redis/BullMQ
-  queueing, mock SMS providers, fallback, idempotency protection, and Swagger.
+  queueing, mock SMS providers, fallback, server-side duplicate-send protection,
+  and Swagger.
 
 ## Prerequisites
 
@@ -69,7 +70,6 @@ Queue a message:
 ```bash
 curl -X POST http://localhost:3001/sms/send \
   -H "content-type: application/json" \
-  -H "Idempotency-Key: smoke-test-001" \
   -d '{
     "phoneNumber": "+919876543210",
     "message": "Your OTP is 123456",
@@ -96,9 +96,16 @@ Check status:
 curl http://localhost:3001/sms/status/<jobId>
 ```
 
-Send the same request with the same `Idempotency-Key` to confirm duplicate-send
-protection. The response should reuse the same `jobId` and return
-`"deduplicated": true`.
+View the latest 10 messages:
+
+```bash
+curl http://localhost:3001/sms/recent
+```
+
+Send the same phone number and message again within five minutes to confirm
+server-side duplicate-send protection. The response should reuse the same
+`jobId` and return `"deduplicated": true`. After five minutes, the same request
+can be queued again.
 
 ## Verification
 
@@ -144,8 +151,8 @@ pnpm docker:logs
 - `sms-gateway`: implemented in Phase 2. It routes queued SMS jobs through mock
   country-based providers by default, stores message state in PostgreSQL,
   processes sends with Redis/BullMQ, prevents accidental duplicate sends with an
-  optional `Idempotency-Key` header, and exposes Swagger at `/docs`. Optional real
-  Fast2SMS support is behind explicit env flags.
+  server-side five-minute duplicate-send window, and exposes Swagger at `/docs`.
+  Optional real Fast2SMS support is behind explicit env flags.
 - `receipt-recognizer`: planned for Phase 3. It will upload receipt screenshots,
   run OCR, normalize extracted payment data, and fall back to local regex parsing
   when optional providers are unavailable.

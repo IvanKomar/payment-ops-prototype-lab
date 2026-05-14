@@ -11,8 +11,6 @@ export const sendSmsSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional()
 });
 
-export const idempotencyKeyHeaderSchema = z.string().trim().min(8).max(160).optional();
-
 export class SendSmsDto {
   @ApiProperty({ type: String, example: "+919876543210" })
   phoneNumber!: string;
@@ -53,6 +51,23 @@ export class SmsStatusResponseDto {
 
   @ApiProperty({ type: String, example: null, nullable: true })
   lastError!: string | null;
+}
+
+export class SmsRecentMessageResponseDto extends SmsStatusResponseDto {
+  @ApiProperty({ type: String, example: "+919876543210" })
+  phoneNumber!: string;
+
+  @ApiProperty({ type: String, example: "Your OTP is 123456" })
+  message!: string;
+
+  @ApiProperty({ type: String, example: "server:a1b2...", nullable: true })
+  dedupeKey!: string | null;
+
+  @ApiProperty({ type: String, example: "2026-05-14T11:00:00.000Z" })
+  createdAt!: string;
+
+  @ApiProperty({ type: String, example: "2026-05-14T11:00:01.000Z", nullable: true })
+  sentAt!: string | null;
 }
 
 @Injectable()

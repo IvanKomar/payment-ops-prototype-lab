@@ -1,12 +1,19 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { SmsMessage } from "@prisma/client";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { ProviderRegistry } from "./providers/provider-registry.js";
 import type { ISmsProvider } from "./providers/provider.types.js";
 import { SmsQueue } from "./queue/sms.queue.js";
 import { SmsRepository } from "./sms.repository.js";
-import type { SendSmsCommand, SendSmsResponse, SmsStatusResponse } from "./sms.types.js";
+import type {
+  SendSmsCommand,
+  SendSmsResponse,
+  SmsRecentMessageResponse,
+  SmsStatusResponse
+} from "./sms.types.js";
+
+const SERVER_DEDUPE_WINDOW_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class SmsService {
@@ -17,21 +24,26 @@ export class SmsService {
   ) {}
 
   async send(command: SendSmsCommand): Promise<SendSmsResponse> {
-    if (command.idempotencyKey) {
-      const existing = await this.repository.findByIdempotencyKey(command.idempotencyKey);
+    const now = new Date();
+    const existing = await this.repository.findRecentDuplicate({
+      phoneNumber: command.phoneNumber,
+      message: command.message,
+      createdAfter: new Date(now.getTime() - SERVER_DEDUPE_WINDOW_MS)
+    });
 
-      if (existing) {
-        return this.toDeduplicatedSendResponse(existing, command);
-      }
+    if (existing) {
+      return this.toDeduplicatedSendResponse(existing);
     }
 
     const selectedProvider = this.providerRegistry.selectProvider(command.phoneNumber);
+    const idempotencyKey = this.createServerIdempotencyKey(command, now);
     const jobId = this.createJobId();
 
     try {
       const message = await this.repository.createQueued({
         ...command,
         id: jobId,
+        idempotencyKey,
         selectedProvider: selectedProvider.name
       });
 
@@ -44,11 +56,11 @@ export class SmsService {
         deduplicated: false
       };
     } catch (error) {
-      if (command.idempotencyKey && this.repository.isUniqueConstraintError(error)) {
-        const existing = await this.repository.findByIdempotencyKey(command.idempotencyKey);
+      if (this.repository.isUniqueConstraintError(error)) {
+        const existing = await this.repository.findByIdempotencyKey(idempotencyKey);
 
         if (existing) {
-          return this.toDeduplicatedSendResponse(existing, command);
+          return this.toDeduplicatedSendResponse(existing);
         }
       }
 
@@ -70,6 +82,23 @@ export class SmsService {
       attempts: message.attempts,
       lastError: message.lastError
     };
+  }
+
+  async listRecentMessages(limit = 10): Promise<SmsRecentMessageResponse[]> {
+    const messages = await this.repository.findLatest(limit);
+
+    return messages.map((message) => ({
+      jobId: message.id,
+      phoneNumber: message.phoneNumber,
+      message: message.message,
+      status: message.status,
+      provider: message.selectedProvider,
+      attempts: message.attempts,
+      lastError: message.lastError,
+      dedupeKey: message.idempotencyKey,
+      createdAt: message.createdAt.toISOString(),
+      sentAt: message.sentAt?.toISOString() ?? null
+    }));
   }
 
   async processQueuedMessage(jobId: string): Promise<void> {
@@ -104,11 +133,7 @@ export class SmsService {
     await this.repository.markFailed(jobId, lastError);
   }
 
-  private toDeduplicatedSendResponse(message: SmsMessage, command: SendSmsCommand): SendSmsResponse {
-    if (message.phoneNumber !== command.phoneNumber || message.message !== command.message) {
-      throw new ConflictException("Idempotency-Key is already used for a different SMS payload");
-    }
-
+  private toDeduplicatedSendResponse(message: SmsMessage): SendSmsResponse {
     return {
       jobId: message.id,
       status: message.status,
@@ -119,6 +144,19 @@ export class SmsService {
 
   private createJobId(): string {
     return `sms_${randomUUID().replaceAll("-", "")}`;
+  }
+
+  private createServerIdempotencyKey(command: SendSmsCommand, now: Date): string {
+    const window = Math.floor(now.getTime() / SERVER_DEDUPE_WINDOW_MS);
+    const digest = createHash("sha256")
+      .update(command.phoneNumber)
+      .update("\0")
+      .update(command.message)
+      .update("\0")
+      .update(String(window))
+      .digest("hex");
+
+    return `server:${digest}`;
   }
 
   private formatProviderError(provider: ISmsProvider, error: unknown): string {

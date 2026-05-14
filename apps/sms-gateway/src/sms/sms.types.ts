@@ -3,7 +3,6 @@ import type { SmsStatus } from "@prisma/client";
 export interface SendSmsCommand {
   phoneNumber: string;
   message: string;
-  idempotencyKey?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
 }
 
@@ -20,6 +19,14 @@ export interface SmsStatusResponse {
   provider: string;
   attempts: number;
   lastError: string | null;
+}
+
+export interface SmsRecentMessageResponse extends SmsStatusResponse {
+  phoneNumber: string;
+  message: string;
+  dedupeKey: string | null;
+  createdAt: string;
+  sentAt: string | null;
 }
 
 export interface SmsQueueJobData {

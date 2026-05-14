@@ -85,6 +85,10 @@ export class UiController {
         gap: 16px;
       }
 
+      .recent-section {
+        margin-top: 16px;
+      }
+
       section {
         border: 1px solid var(--line);
         border-radius: 8px;
@@ -131,7 +135,7 @@ export class UiController {
 
       .row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(180px, 0.5fr);
+        grid-template-columns: 1fr;
         gap: 12px;
       }
 
@@ -203,6 +207,62 @@ export class UiController {
         word-break: break-word;
       }
 
+      .table-wrap {
+        overflow-x: auto;
+        margin-top: 14px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+
+      table {
+        width: 100%;
+        min-width: 860px;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #f0f3f7;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      }
+
+      .message-cell {
+        max-width: 280px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 22px;
+        border: 1px solid #ccd5df;
+        border-radius: 999px;
+        padding: 2px 8px;
+        background: #f8fafc;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
       @media (max-width: 820px) {
         main {
           width: min(100% - 24px, 1120px);
@@ -222,6 +282,10 @@ export class UiController {
 
         .health {
           text-align: left;
+        }
+
+        table {
+          min-width: 760px;
         }
       }
     </style>
@@ -243,10 +307,6 @@ export class UiController {
               <label>
                 Phone number
                 <input name="phoneNumber" value="+919876543210" autocomplete="tel" required />
-              </label>
-              <label>
-                Idempotency key
-                <input name="idempotencyKey" value="" placeholder="optional" />
               </label>
             </div>
             <label>
@@ -280,6 +340,34 @@ export class UiController {
           <pre id="output">Ready.</pre>
         </section>
       </div>
+
+      <section class="recent-section">
+        <div class="actions">
+          <h2>Recent Messages</h2>
+          <button type="button" class="secondary" id="refreshRecentButton">Refresh</button>
+          <span class="status" id="recentStatus"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Status</th>
+                <th>Phone</th>
+                <th>Message</th>
+                <th>Provider</th>
+                <th>Attempts</th>
+                <th>Job ID</th>
+              </tr>
+            </thead>
+            <tbody id="recentBody">
+              <tr>
+                <td colspan="7">Loading.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <script>
@@ -292,6 +380,9 @@ export class UiController {
       const sendButton = document.querySelector("#sendButton");
       const statusButton = document.querySelector("#statusButton");
       const clearButton = document.querySelector("#clearButton");
+      const refreshRecentButton = document.querySelector("#refreshRecentButton");
+      const recentStatus = document.querySelector("#recentStatus");
+      const recentBody = document.querySelector("#recentBody");
 
       function setStatus(element, message, type = "") {
         element.textContent = message;
@@ -300,6 +391,56 @@ export class UiController {
 
       function writeOutput(title, value) {
         output.textContent = title + "\\n" + JSON.stringify(value, null, 2);
+      }
+
+      function formatDate(value) {
+        if (!value) {
+          return "";
+        }
+
+        return new Intl.DateTimeFormat(undefined, {
+          dateStyle: "short",
+          timeStyle: "medium"
+        }).format(new Date(value));
+      }
+
+      function renderRecent(messages) {
+        if (!messages.length) {
+          recentBody.innerHTML = '<tr><td colspan="7">No messages yet.</td></tr>';
+          return;
+        }
+
+        recentBody.replaceChildren(
+          ...messages.map((message) => {
+            const row = document.createElement("tr");
+            const cells = [
+              formatDate(message.createdAt),
+              message.status,
+              message.phoneNumber,
+              message.message,
+              message.provider,
+              String(message.attempts),
+              message.jobId
+            ];
+
+            for (const value of cells) {
+              const cell = document.createElement("td");
+              cell.textContent = value;
+              row.append(cell);
+            }
+
+            row.children[1].textContent = "";
+            const badge = document.createElement("span");
+            badge.className = "badge";
+            badge.textContent = message.status;
+            row.children[1].append(badge);
+            row.children[3].className = "message-cell";
+            row.children[3].title = message.message;
+            row.children[6].className = "mono";
+
+            return row;
+          })
+        );
       }
 
       async function requestJson(url, options = {}) {
@@ -325,6 +466,21 @@ export class UiController {
         }
       }
 
+      async function refreshRecent() {
+        refreshRecentButton.disabled = true;
+        setStatus(recentStatus, "Refreshing");
+
+        try {
+          const messages = await requestJson("/sms/recent");
+          renderRecent(messages);
+          setStatus(recentStatus, "Loaded", "ok");
+        } catch (error) {
+          setStatus(recentStatus, error.message, "error");
+        } finally {
+          refreshRecentButton.disabled = false;
+        }
+      }
+
       sendForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         sendButton.disabled = true;
@@ -343,10 +499,6 @@ export class UiController {
           }
 
           const headers = { "Content-Type": "application/json" };
-          const idempotencyKey = String(form.get("idempotencyKey") || "").trim();
-          if (idempotencyKey) {
-            headers["Idempotency-Key"] = idempotencyKey;
-          }
 
           const result = await requestJson("/sms/send", {
             method: "POST",
@@ -357,6 +509,7 @@ export class UiController {
           statusForm.elements.jobId.value = result.jobId;
           setStatus(sendStatus, "Queued", "ok");
           writeOutput("Send response", result);
+          await refreshRecent();
         } catch (error) {
           setStatus(sendStatus, error.message, "error");
           writeOutput("Send error", error.body || { message: error.message });
@@ -376,6 +529,7 @@ export class UiController {
           const result = await requestJson("/sms/status/" + encodeURIComponent(jobId));
           setStatus(lookupStatus, result.status, "ok");
           writeOutput("Status response", result);
+          await refreshRecent();
         } catch (error) {
           setStatus(lookupStatus, error.message, "error");
           writeOutput("Status error", error.body || { message: error.message });
@@ -390,7 +544,12 @@ export class UiController {
         setStatus(lookupStatus, "");
       });
 
+      refreshRecentButton.addEventListener("click", () => {
+        void refreshRecent();
+      });
+
       void refreshHealth();
+      void refreshRecent();
     </script>
   </body>
 </html>`;
