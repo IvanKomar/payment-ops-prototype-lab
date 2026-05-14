@@ -1,14 +1,20 @@
-# Вимоги до сервісів
+# Service Requirements
 
-Цей документ зберігає детальну поведінку сервісів окремо від основної
-архітектури. Його варто оновлювати на старті відповідної фази, коли
-implementation decisions стають конкретнішими.
+This document keeps detailed service behavior separate from the main
+architecture document. It should be updated at the start of each phase when
+implementation decisions become more concrete.
 
 ## SMS Gateway
 
 ### Request
 
 `POST /sms/send`
+
+Optional duplicate-send guard:
+
+```http
+Idempotency-Key: otp-login-usr_123-2026-05-13T17:30
+```
 
 ```json
 {
@@ -60,15 +66,15 @@ export interface ISmsProvider {
 - `+380` -> `KyivstarMockProvider`
 - `+91` -> `Fast2SmsMockProvider`
 - `+49`, `+33`, `+44` -> `VonageMockProvider`
-- всі інші номери -> `TwilioMockProvider`
+- all other valid E.164 numbers worldwide -> `TwilioMockProvider`
 
 ### Mock Behavior
 
-- Providers симулюють latency і failures.
-- Success rate і latency range мають бути configurable через env vars або
+- Providers simulate latency and failures.
+- Success rate and latency range must be configurable through env vars or
   provider config objects.
-- Fallback пробує наступний provider, коли selected provider падає.
-- Тести мають покрити country routing і fallback.
+- Fallback tries the next provider when the selected provider fails.
+- Tests must cover country routing and fallback.
 
 ### Fast2SMS Optional Adapter
 
@@ -77,7 +83,7 @@ export interface ISmsProvider {
 - API endpoint: `POST https://www.fast2sms.com/dev/bulkV2`.
 - Auth: `authorization` header.
 - Supported documented routes: `dlt`, `dlt_manual`, `otp`, `q`.
-- Tests і default demos мають використовувати тільки mock transport.
+- Tests and default demos must use mock transport only.
 
 ## Receipt Recognizer
 
@@ -86,8 +92,8 @@ export interface ISmsProvider {
 `POST /receipts/upload`
 
 - multipart image upload;
-- повертає `receiptId`;
-- зберігає raw OCR text і normalized result.
+- returns `receiptId`;
+- stores raw OCR text and normalized result.
 
 ### Result
 
@@ -126,7 +132,7 @@ export interface IReceiptNormalizer {
 
 ### PhonePe Fixtures
 
-Зберігати надані screenshots тут:
+Store the provided screenshots here:
 
 ```text
 apps/receipt-recognizer/test-fixtures/phonepe/
@@ -164,7 +170,7 @@ Regex patterns should handle:
 
 - multipart logo upload;
 - brand name;
-- palette extraction через `node-vibrant`;
+- palette extraction through `node-vibrant`;
 - generated per-brand API schema.
 
 ### Dynamic Schema Shapes
@@ -206,7 +212,7 @@ Example flat schema:
 
 ### Dashboard Layout Reference
 
-Один template має базуватися на наданому KOI-style payments dashboard:
+One template must be based on the provided KOI-style payments dashboard:
 
 - top bar with logo/name;
 - `P2P / INTENT` segmented control;

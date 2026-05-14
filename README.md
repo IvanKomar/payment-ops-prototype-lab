@@ -8,13 +8,14 @@ external services.
 
 ## Current Status
 
-Phase 1 foundation is in place:
+Phase 2 SMS Gateway is in place:
 
 - pnpm workspace and Turborepo task wiring;
 - shared TypeScript, ESLint, config, logger, and type packages;
 - Docker Compose for PostgreSQL and Redis;
 - local environment example;
-- no NestJS services or business logic yet.
+- `apps/sms-gateway` NestJS service with PostgreSQL persistence, Redis/BullMQ
+  queueing, mock SMS providers, fallback, idempotency protection, and Swagger.
 
 ## Prerequisites
 
@@ -30,6 +31,8 @@ corepack prepare pnpm@11.0.9 --activate
 pnpm install
 cp .env.example .env
 pnpm docker:up
+pnpm --filter @payment-ops/sms-gateway prisma:generate
+pnpm --filter @payment-ops/sms-gateway prisma:deploy
 pnpm lint
 pnpm typecheck
 ```
@@ -41,6 +44,7 @@ follow container logs.
 
 ```text
 apps/
+  sms-gateway/
 packages/
   eslint-config/
   shared-config/
@@ -65,9 +69,11 @@ pnpm docker:logs
 
 ## Services
 
-- `sms-gateway`: planned for Phase 2. It will route SMS jobs through mock
-  country-based providers by default, with optional real Fast2SMS support behind
-  explicit env flags.
+- `sms-gateway`: implemented in Phase 2. It routes queued SMS jobs through mock
+  country-based providers by default, stores message state in PostgreSQL,
+  processes sends with Redis/BullMQ, prevents accidental duplicate sends with an
+  optional `Idempotency-Key` header, and exposes Swagger at `/docs`. Optional real
+  Fast2SMS support is behind explicit env flags.
 - `receipt-recognizer`: planned for Phase 3. It will upload receipt screenshots,
   run OCR, normalize extracted payment data, and fall back to local regex parsing
   when optional providers are unavailable.
@@ -86,6 +92,5 @@ missing, quotas are exhausted, or providers fail.
 ## Documentation
 
 - [Architecture](./docs/architecture.md)
-- [Implementation Plan](./docs/implementation.md)
+- [Phase 2 SMS Gateway Plan](./docs/phase-2-sms-gateway.md)
 - [Service Requirements](./docs/service-requirements.md)
-- [Review Notes](./docs/review.md)

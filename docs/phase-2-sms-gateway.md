@@ -1,15 +1,24 @@
 # Phase 2: SMS Gateway Plan
 
-Цей документ планує Phase 2 з урахуванням поточного стану репозиторію після
-Phase 1. Результат Phase 2 має бути першим end-to-end backend service у
-монорепо: NestJS API, provider abstraction, country routing, BullMQ queue,
-Prisma persistence, Swagger і focused tests.
+This document plans and records Phase 2 based on the repository state after
+Phase 1. The Phase 2 result is the first end-to-end backend service in the
+monorepo: a NestJS API with provider abstraction, country routing, BullMQ queue,
+Prisma persistence, Swagger, idempotency protection, and focused tests.
+
+## Implementation Status
+
+Implemented in `apps/sms-gateway` with a service-local Prisma schema, NestJS
+controllers, BullMQ processing, mock providers, optional Fast2SMS adapter,
+`Idempotency-Key` protection, Swagger setup, and focused tests. The
+implementation uses Prisma 6.x because Prisma 7 removed datasource URLs from
+`schema.prisma`, which would add unnecessary configuration complexity for this
+prototype phase.
 
 ## Current Repository State
 
-Вже є:
+Already available:
 
-- root pnpm workspace з `pnpm@11.0.9`;
+- root pnpm workspace with `pnpm@11.0.9`;
 - Turborepo tasks: `build`, `dev`, `lint`, `test`, `typecheck`;
 - shared packages:
   - `@payment-ops/tsconfig`;
@@ -17,38 +26,38 @@ Prisma persistence, Swagger і focused tests.
   - `@payment-ops/shared-types`;
   - `@payment-ops/shared-config`;
   - `@payment-ops/shared-logger`;
-- Docker Compose для PostgreSQL і Redis;
-- `.env.example` з базовими `DATABASE_URL`, `REDIS_URL`, `LOG_LEVEL`;
-- порожній `apps/`, готовий для першого сервісу.
+- Docker Compose for PostgreSQL and Redis;
+- `.env.example` with base `DATABASE_URL`, `REDIS_URL`, and `LOG_LEVEL`;
+- `apps/sms-gateway` as the first backend service.
 
-Phase 2 має працювати поверх цієї foundation без зміни напрямку Phase 1.
+Phase 2 builds on this foundation without changing the Phase 1 direction.
 
 ## Scope
 
-Phase 2 включає:
+Phase 2 includes:
 
-- створення `apps/sms-gateway`;
+- creating `apps/sms-gateway`;
 - NestJS HTTP API;
-- Zod validation на service boundary;
-- Swagger документацію для `POST /sms/send` і `GET /sms/status/:jobId`;
-- Prisma schema і migration для `sms_messages`;
-- BullMQ queue для асинхронної відправки SMS;
-- provider abstraction і mock providers;
-- country-based routing;
-- fallback між providers;
-- захист від подвійної відправки через idempotency key;
+- Zod validation at the service boundary;
+- Swagger documentation for `POST /sms/send` and `GET /sms/status/:jobId`;
+- Prisma schema and migration for `sms_messages`;
+- BullMQ queue for asynchronous SMS sending;
+- provider abstraction and mock providers;
+- country-based routing with a global fallback for all valid E.164 numbers;
+- fallback between providers;
+- duplicate-send protection through the `Idempotency-Key` header;
 - optional `Fast2SmsProvider` behind env flags;
 - focused unit/integration tests;
-- README для сервісу.
+- service README.
 
-Phase 2 не включає:
+Phase 2 does not include:
 
 - Receipt Recognizer;
 - Layout Builder;
 - frontend;
 - auth system;
 - production observability;
-- real SMS calls in tests або default demo;
+- real SMS calls in tests or in the default demo;
 - complex retry orchestration beyond a clear prototype flow.
 
 ## Target Structure
@@ -92,10 +101,6 @@ apps/sms-gateway/
 │       ├── sms.service.ts
 │       └── sms.types.ts
 ├── test/
-│   ├── fixtures/
-│   ├── provider-routing.spec.ts
-│   ├── provider-fallback.spec.ts
-│   └── sms-api.e2e-spec.ts
 ├── eslint.config.mjs
 ├── package.json
 ├── README.md
@@ -103,20 +108,22 @@ apps/sms-gateway/
 └── tsconfig.build.json
 ```
 
-Якщо NestJS CLI генерує трохи іншу форму, її варто привести до цієї структури
-після scaffold, а не тягнути зайву CLI-generated складність.
-
 ## API Contract
 
 ### `POST /sms/send`
 
 Request:
 
+```http
+POST /sms/send
+Content-Type: application/json
+Idempotency-Key: otp-login-usr_123-2026-05-13T17:30
+```
+
 ```json
 {
   "phoneNumber": "+919876543210",
   "message": "Your OTP is 123456",
-  "idempotencyKey": "otp-login-usr_123-2026-05-13T17:30",
   "metadata": {
     "source": "demo"
   }
@@ -136,18 +143,19 @@ Response:
 
 Behavior:
 
-- validate body with Zod;
-- accept optional `idempotencyKey` in body;
-- choose initial provider synchronously before queueing;
-- if `idempotencyKey` already exists, return the existing job instead of
-  enqueueing a second send;
-- persist `sms_messages` row with `queued` status and optional idempotency key;
-- enqueue BullMQ job with `jobId`;
-- return `queued` response immediately.
+- validate the body with Zod;
+- accept the optional `Idempotency-Key` header;
+- choose the initial provider synchronously before queueing;
+- if the `Idempotency-Key` already exists for the same payload, return the
+  existing job instead of enqueueing a second send;
+- persist a `sms_messages` row with `queued` status and the optional idempotency
+  key;
+- enqueue a BullMQ job with `jobId`;
+- return a queued response immediately.
 
-Duplicate handling should be local and explicit. Phase 2 does not add auth, but
-clients can still prevent accidental double sends by reusing the same
-`idempotencyKey` for one logical SMS operation.
+Duplicate handling is local and explicit. Phase 2 does not add auth, but clients
+can still prevent accidental double sends by reusing the same `Idempotency-Key`
+header for one logical SMS operation.
 
 ### `GET /sms/status/:jobId`
 
@@ -165,7 +173,7 @@ Response:
 
 Behavior:
 
-- read canonical status from database;
+- read canonical status from the database;
 - return `404` for unknown `jobId`;
 - include selected/current provider, attempts, and last error.
 
@@ -186,7 +194,7 @@ Use `HealthResponse` from `@payment-ops/shared-types`.
 
 ## Persistence
 
-Use service-local Prisma schema in `apps/sms-gateway/prisma/schema.prisma`.
+Use a service-local Prisma schema in `apps/sms-gateway/prisma/schema.prisma`.
 
 Initial model:
 
@@ -216,13 +224,13 @@ enum SmsStatus {
 ```
 
 Recommended `jobId` format: `sms_` + collision-resistant random id. The service
-should own this id and use it as both API id and DB primary key.
+owns this id and uses it as both API id and DB primary key.
 
-Use `idempotencyKey` to protect against accidental duplicate sends. If a repeated
-request uses the same key, same phone number, and same message, return the
-existing job with `deduplicated: true`. If the same key is reused with a different
-phone number or message, return `409 Conflict` because the client is attempting
-to reuse an idempotency key for a different logical operation.
+Use the persisted `idempotencyKey` column to store the external
+`Idempotency-Key` header and protect against accidental duplicate sends. If a
+repeated request uses the same key, same phone number, and same message, return
+the existing job with `deduplicated: true`. If the same key is reused with a
+different phone number or message, return `409 Conflict`.
 
 ## Queue Flow
 
@@ -230,19 +238,21 @@ Use BullMQ with Redis from `REDIS_URL`.
 
 Flow:
 
-1. `POST /sms/send` validates payload.
-2. If `idempotencyKey` is present, `SmsService` checks for an existing message.
+1. `POST /sms/send` validates the payload.
+2. If `Idempotency-Key` is present, `SmsService` checks for an existing message.
 3. If an equivalent message already exists, the service returns that job without
    queueing another BullMQ job.
 4. `SmsService` selects the initial provider using `ProviderRegistry`.
-5. Service creates a `SmsMessage` row with `queued`.
-6. Service adds a BullMQ job to `sms-send`.
-7. Processor loads the message and marks it `processing`.
-8. Processor calls selected provider.
-9. On success, DB row becomes `sent`.
-10. On provider failure, processor asks registry for the next fallback provider.
-11. If fallback succeeds, DB row becomes `sent` with the fallback provider name.
-12. If all providers fail, DB row becomes `failed` with `lastError`.
+5. The service creates a `SmsMessage` row with `queued` status.
+6. The service adds a BullMQ job to `sms-send`.
+7. The processor loads the message and marks it `processing`.
+8. The processor calls the selected provider.
+9. On success, the DB row becomes `sent`.
+10. On provider failure, the processor asks the registry for the next fallback
+    provider.
+11. If fallback succeeds, the DB row becomes `sent` with the fallback provider
+    name.
+12. If all providers fail, the DB row becomes `failed` with `lastError`.
 
 Keep BullMQ retry settings conservative. Provider fallback should be explicit in
 service code, not hidden behind many queue retries.
@@ -265,13 +275,18 @@ Provider routing:
 - `+380` -> `KyivstarMockProvider`;
 - `+91` -> `Fast2SmsMockProvider`;
 - `+49`, `+33`, `+44` -> `VonageMockProvider`;
-- all other numbers -> `TwilioMockProvider`.
+- all other valid E.164 numbers worldwide -> `TwilioMockProvider`.
+
+`TwilioMockProvider` is the global catch-all route. The service does not need one
+mock provider per country to route every country; country-specific providers are
+preferred when configured, and all remaining valid E.164 numbers use the global
+mock provider.
 
 Fallback order:
 
 1. selected country provider;
-2. `VonageMockProvider`, якщо це не selected provider;
-3. `TwilioMockProvider`, якщо це не selected provider;
+2. `VonageMockProvider`, if it is not the selected provider;
+3. `TwilioMockProvider`, if it is not the selected provider;
 4. remaining mock providers in stable registration order.
 
 This keeps fallback deterministic and easy to test.
@@ -288,7 +303,7 @@ in `@payment-ops/shared-config`.
 
 ## Optional Fast2SMS Adapter
 
-Add real adapter name: `Fast2SmsProvider`.
+Real adapter name: `Fast2SmsProvider`.
 
 Activation rules:
 
@@ -299,7 +314,7 @@ Activation rules:
 
 Implementation approach:
 
-- use native `fetch` from Node runtime;
+- use native `fetch` from the Node runtime;
 - endpoint: `POST https://www.fast2sms.com/dev/bulkV2`;
 - auth header: `authorization`;
 - keep the request builder isolated and covered by tests with mocked fetch;
@@ -307,7 +322,7 @@ Implementation approach:
 
 ## Configuration
 
-Service env schema should use `@payment-ops/shared-config`.
+Service env schema uses `@payment-ops/shared-config`.
 
 Expected service env vars:
 
@@ -326,19 +341,19 @@ FAST2SMS_ENABLED=false
 FAST2SMS_API_KEY=
 ```
 
-Update root `.env.example` only if a variable is actually consumed by the
+Update root `.env.example` only when a variable is actually consumed by the
 implemented service.
 
 ## Dependencies
 
-Expected app dependencies:
+App dependencies:
 
 - NestJS core/platform packages;
 - Swagger package for API docs;
 - Zod;
 - Prisma client;
 - BullMQ and Nest integration for queues;
-- Pino integration if needed, or direct shared logger usage;
+- shared logger/config/type packages;
 - test runner dependencies local to the app.
 
 Keep dependency additions service-scoped where possible. Root dev dependencies
@@ -352,7 +367,7 @@ Minimum tests:
   - `+380` -> `KyivstarMockProvider`;
   - `+91` -> `Fast2SmsMockProvider`;
   - `+49`, `+33`, `+44` -> `VonageMockProvider`;
-  - unknown prefix -> `TwilioMockProvider`;
+  - unknown valid E.164 prefixes -> `TwilioMockProvider`;
 - fallback:
   - selected provider fails;
   - next provider succeeds;
@@ -360,22 +375,24 @@ Minimum tests:
 - validation:
   - invalid phone number rejected;
   - empty message rejected;
+  - invalid `Idempotency-Key` rejected;
 - idempotency:
-  - repeated same `idempotencyKey`, phone number, and message returns existing job;
-  - repeated same `idempotencyKey` with different payload returns `409`;
+  - repeated same `Idempotency-Key`, phone number, and message returns existing
+    job;
+  - repeated same `Idempotency-Key` with different payload returns `409`;
   - duplicate request does not enqueue a second BullMQ job;
-- API:
+- API/controller:
   - `POST /sms/send` returns queued job;
   - `GET /sms/status/:jobId` returns persisted status;
   - unknown `jobId` returns `404`;
 - Fast2SMS:
   - disabled by default;
   - missing key falls back to mock;
-  - request builder sends `authorization` header when enabled.
+  - request builder sends the `authorization` header when enabled.
 
-For e2e tests, prefer a test database schema or cleanup strategy that does not
-depend on production-like infrastructure. If full Docker-backed e2e is too slow,
-keep one integration test path and use unit tests for routing/fallback detail.
+For this environment, tests avoid opening a local HTTP listener because the
+sandbox can block socket binds. Controller, validation, provider, fallback, and
+adapter behavior are tested directly.
 
 ## Implementation Order
 
@@ -389,7 +406,7 @@ keep one integration test path and use unit tests for routing/fallback detail.
 8. Add optional `Fast2SmsProvider` behind env flags.
 9. Add Swagger setup and service README.
 10. Add focused tests.
-11. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
+11. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
 12. Verify local demo path with Docker running.
 
 ## Definition of Done
@@ -398,10 +415,11 @@ Phase 2 is done when:
 
 - `apps/sms-gateway` starts locally with `pnpm dev`;
 - `POST /sms/send` returns a queued job;
-- duplicate `POST /sms/send` with the same `idempotencyKey` does not send twice;
+- duplicate `POST /sms/send` with the same `Idempotency-Key` does not send twice;
 - conflicting idempotency key reuse returns `409`;
 - `GET /sms/status/:jobId` returns persisted status;
-- mock providers route by country prefix;
+- mock providers route by country prefix and route all other valid E.164 numbers
+  through the global fallback provider;
 - fallback is deterministic and tested;
 - PostgreSQL stores SMS message state;
 - Redis/BullMQ processes queued sends;
