@@ -100,8 +100,9 @@ export interface ISmsProvider {
 
 - multipart image upload;
 - optional `model=tesseract|gemini`, defaulting to `tesseract`;
-- returns `receiptId`;
-- stores raw OCR text and normalized result.
+- returns `receiptId`, `requestedModel`, and `recognitionModel`;
+- stores raw OCR text, normalized result, requested model, and actual recognition
+  model.
 
 ### Result
 
@@ -122,6 +123,12 @@ export interface ReceiptData {
   rawText: string;
   normalizedBy: ReceiptNormalizerKind;
 }
+
+export interface ReceiptRecognizerUploadReceiptResponse {
+  receiptId: string;
+  requestedModel: ReceiptRecognitionModel;
+  recognitionModel: ReceiptRecognitionModel;
+}
 ```
 
 Persisted receipts include `requestedModel` and `recognitionModel`, so the API
@@ -139,9 +146,17 @@ export interface IReceiptNormalizer {
 
 - `NORMALIZER=regex` is default.
 - `GEMINI_MODEL=gemini-2.5-flash-lite` is the default Gemini API model.
-- `NORMALIZER=gemini` requires `GEMINI_ENABLED=true` and `GEMINI_API_KEY`.
+- `model=gemini` requires `GEMINI_ENABLED=true` and `GEMINI_API_KEY`.
 - `NORMALIZER=anthropic` is a placeholder and should fall back without a key.
-- Any optional provider error falls back to `RegexNormalizer`.
+- Any Gemini provider error, quota error, missing key, or invalid JSON falls back
+  to Tesseract.js plus `RegexNormalizer`.
+
+### Recent Receipts
+
+`GET /receipts/recent`
+
+Returns the latest 10 receipts, newest first, including requested/actual model,
+structured payment fields, confidence, raw OCR text, and timestamps.
 
 ### PhonePe Fixtures
 

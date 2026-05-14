@@ -89,19 +89,28 @@ Persistence:
 Purpose: upload receipt screenshots, run OCR, normalize text into structured
 payment data, and persist the result.
 
-Pipeline:
+Default local pipeline:
 
 ```text
 Upload -> multer -> Tesseract.js -> Normalizer -> Zod validation -> DB
 ```
 
-Normalizer strategy:
+Optional Gemini pipeline:
 
-- `RegexNormalizer` - default offline implementation.
-- `GeminiNormalizer` - optional free-tier support behind `NORMALIZER=gemini`,
-  `GEMINI_ENABLED=true`, and `GEMINI_API_KEY`.
-- `AnthropicNormalizer` - placeholder showing provider readiness, but it must
-  gracefully fall back without an API key.
+```text
+Upload -> multer -> Gemini image recognition -> Zod validation -> DB
+```
+
+Recognition strategy:
+
+- `tesseract` - default offline implementation. Runs Tesseract.js and
+  `RegexNormalizer`.
+- `gemini` - optional free-tier image-to-JSON support behind upload
+  `model=gemini`, `GEMINI_ENABLED=true`, and `GEMINI_API_KEY`.
+- The default Gemini API model is `gemini-2.5-flash-lite`.
+- If Gemini is unavailable or returns invalid output, the service falls back to
+  `tesseract` and persists both `requestedModel` and `recognitionModel`.
+- `AnthropicNormalizer` remains a future placeholder, not a required V1 path.
 
 Privacy rule: free-tier LLM usage may be used by providers to improve their
 products. Do not send real PII in the demo without masking.
@@ -109,12 +118,20 @@ products. Do not send real PII in the demo without masking.
 Main API:
 
 - `POST /receipts/upload`
+- `GET /receipts/recent`
 - `GET /receipts/:id`
 - `GET /receipts/:id/raw`
 
 Persistence:
 
 - `receipts`
+
+UI:
+
+- server-rendered static page at `/`;
+- upload form with `tesseract` / `gemini` selector;
+- parsed result panel, raw OCR view, and recent receipt history;
+- confidence shown as a color-coded percentage badge.
 
 Fixtures:
 
@@ -177,7 +194,8 @@ Detailed plan and implementation notes:
 
 ### Phase 3: Receipt Recognizer
 
-Upload, OCR, normalizer strategy, fixtures, and fallback behavior.
+Upload, selectable recognition model, OCR/normalizer fallback, fixtures,
+history UI, and persistence.
 
 ### Phase 4: Layout Builder
 

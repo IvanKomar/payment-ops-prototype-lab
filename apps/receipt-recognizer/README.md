@@ -1,7 +1,8 @@
 # Receipt Recognizer
 
-Local prototype NestJS service for receipt screenshot OCR, PhonePe payment
-normalization, PostgreSQL persistence, Swagger docs, and a small browser UI.
+Local prototype NestJS service for receipt screenshot recognition, PhonePe
+payment normalization, PostgreSQL persistence, Swagger docs, and a small browser
+UI.
 
 ## Local Run
 
@@ -17,6 +18,8 @@ pnpm --filter @payment-ops/receipt-recognizer dev
 Default port: `3002`.
 
 Swagger UI: `http://localhost:3002/docs`
+
+Browser UI: `http://localhost:3002/`
 
 ## API
 
@@ -47,6 +50,14 @@ service stores the requested model and the model actually used.
 }
 ```
 
+Example:
+
+```bash
+curl -X POST http://localhost:3002/receipts/upload \
+  -F model=gemini \
+  -F file=@apps/receipt-recognizer/test-fixtures/phonepe/phonepe-axis-bank-10000.jpg
+```
+
 ### Fetch Parsed Result
 
 ```http
@@ -69,7 +80,22 @@ Returns the latest 10 persisted receipts, newest first. The local web UI at
 `http://localhost:3002/` supports upload, result display, raw OCR viewing, and
 history refresh.
 
-## Normalizer
+## Recognition Models
 
-`NORMALIZER=regex` remains the local fallback path. Gemini recognition uses the
-configured `GEMINI_MODEL` value, defaulting to `gemini-2.5-flash-lite`.
+- `tesseract`: default local path. Runs Tesseract.js OCR and regex
+  normalization.
+- `gemini`: optional image-to-JSON path. Requires `GEMINI_ENABLED=true` and
+  `GEMINI_API_KEY`; uses `GEMINI_MODEL`, defaulting to
+  `gemini-2.5-flash-lite`.
+- If Gemini is unavailable, fails quota, or returns invalid output, upload falls
+  back to `tesseract` and the response/history show that fallback through
+  `requestedModel` and `recognitionModel`.
+
+## Confidence
+
+The UI renders confidence as a percentage badge:
+
+- green: `>= 90%`;
+- blue: `75-89%`;
+- orange: `50-74%`;
+- red: `< 50%`.

@@ -24,7 +24,7 @@ Phase 2 SMS Gateway is in place and Phase 3 Receipt Recognizer has been added:
 ## Prerequisites
 
 - Node.js 22 or newer with Corepack available.
-- pnpm `11.0.9`.
+- pnpm `10.32.1`.
 - Docker Desktop or another Docker Compose compatible runtime.
 
 ## First Run
@@ -35,7 +35,7 @@ Use these commands from the repository root.
 
 ```bash
 corepack enable
-corepack prepare pnpm@11.0.9 --activate
+corepack prepare pnpm@10.32.1 --activate
 pnpm install
 cp .env.example .env
 ```
@@ -139,6 +139,19 @@ set.
 - Health check: `http://localhost:3002/health`
 - Swagger UI: `http://localhost:3002/docs`
 - Upload/history UI: `http://localhost:3002/`
+
+Upload a receipt through the API:
+
+```bash
+curl -X POST http://localhost:3002/receipts/upload \
+  -F model=tesseract \
+  -F file=@apps/receipt-recognizer/test-fixtures/phonepe/phonepe-axis-bank-10000.jpg
+```
+
+Use `model=gemini` to request Gemini recognition. Gemini runs only when
+`GEMINI_ENABLED=true` and `GEMINI_API_KEY` are configured; otherwise the service
+records `requestedModel=gemini` and falls back to `recognitionModel=tesseract`.
+The default Gemini model is `gemini-2.5-flash-lite`.
 
 ## Workspace
 
