@@ -5,6 +5,7 @@ import { loadSmsGatewayConfig } from "./config/sms-gateway.config.js";
 import { HealthModule } from "./health/health.module.js";
 import { PrismaModule } from "./prisma/prisma.module.js";
 import { SmsModule } from "./sms/sms.module.js";
+import { UiModule } from "./ui/ui.module.js";
 
 const config = loadSmsGatewayConfig();
 const redisUrl = new URL(config.REDIS_URL);
@@ -19,7 +20,8 @@ const redisUrl = new URL(config.REDIS_URL);
     }),
     PrismaModule,
     HealthModule,
-    SmsModule
+    SmsModule,
+    UiModule
   ]
 })
 export class AppModule {}
