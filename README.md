@@ -23,18 +23,90 @@ Phase 2 SMS Gateway is in place:
 - pnpm `11.0.9`.
 - Docker Desktop or another Docker Compose compatible runtime.
 
-## Setup
+## First Run
+
+Use these commands from the repository root.
+
+### 1. Install tooling and dependencies
 
 ```bash
 corepack enable
 corepack prepare pnpm@11.0.9 --activate
 pnpm install
 cp .env.example .env
+```
+
+### 2. Start local infrastructure
+
+```bash
 pnpm docker:up
+```
+
+This starts PostgreSQL on `localhost:5432` and Redis on `localhost:6379`.
+
+### 3. Prepare the SMS Gateway database
+
+```bash
 pnpm --filter @payment-ops/sms-gateway prisma:generate
 pnpm --filter @payment-ops/sms-gateway prisma:deploy
+```
+
+### 4. Run the SMS Gateway
+
+```bash
+pnpm --filter @payment-ops/sms-gateway dev
+```
+
+The service starts on `http://localhost:3001`.
+
+- Health check: `http://localhost:3001/health`
+- Swagger UI: `http://localhost:3001/docs`
+
+### 5. Smoke test the API
+
+Queue a message:
+
+```bash
+curl -X POST http://localhost:3001/sms/send \
+  -H "content-type: application/json" \
+  -H "Idempotency-Key: smoke-test-001" \
+  -d '{
+    "phoneNumber": "+919876543210",
+    "message": "Your OTP is 123456",
+    "metadata": {
+      "source": "readme-smoke"
+    }
+  }'
+```
+
+Example response:
+
+```json
+{
+  "jobId": "sms_...",
+  "status": "queued",
+  "provider": "Fast2SmsMockProvider",
+  "deduplicated": false
+}
+```
+
+Check status:
+
+```bash
+curl http://localhost:3001/sms/status/<jobId>
+```
+
+Send the same request with the same `Idempotency-Key` to confirm duplicate-send
+protection. The response should reuse the same `jobId` and return
+`"deduplicated": true`.
+
+## Verification
+
+```bash
 pnpm lint
 pnpm typecheck
+pnpm test
+pnpm build
 ```
 
 Use `pnpm docker:down` to stop local infrastructure and `pnpm docker:logs` to

@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/shared-config"
+    },
+    {
+      "path": "./packages/shared-logger"
+    },
+    {
+      "path": "./packages/shared-types"
+    },
+    {
+      "path": "./apps/sms-gateway"
+    }
+  ]
+}
