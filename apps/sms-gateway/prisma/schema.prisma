@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SmsMessage {
+  id                String    @id
+  phoneNumber       String
+  message           String
+  idempotencyKey    String?   @unique
+  metadata          Json?
+  status            SmsStatus
+  selectedProvider  String
+  providerMessageId String?
+  attempts          Int       @default(0)
+  lastError         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  sentAt            DateTime?
+
+  @@map("sms_messages")
+}
+
+enum SmsStatus {
+  queued
+  processing
+  sent
+  failed
+}
