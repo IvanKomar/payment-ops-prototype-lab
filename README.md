@@ -8,7 +8,7 @@ external services.
 
 ## Current Status
 
-Phase 2 SMS Gateway is in place:
+Phase 2 SMS Gateway is in place and Phase 3 Receipt Recognizer has been added:
 
 - pnpm workspace and Turborepo task wiring;
 - shared TypeScript, ESLint, config, logger, and type packages;
@@ -17,6 +17,9 @@ Phase 2 SMS Gateway is in place:
 - `apps/sms-gateway` NestJS service with PostgreSQL persistence, Redis/BullMQ
   queueing, mock SMS providers, fallback, server-side duplicate-send protection,
   and Swagger.
+- `apps/receipt-recognizer` NestJS service with image upload, selectable
+  Tesseract/Gemini recognition, regex fallback normalization for PhonePe
+  receipts, PostgreSQL persistence, Swagger, and a small local browser UI.
 
 ## Prerequisites
 
@@ -119,10 +122,29 @@ pnpm build
 Use `pnpm docker:down` to stop local infrastructure and `pnpm docker:logs` to
 follow container logs.
 
+## Receipt Recognizer
+
+Prepare the database and start the service:
+
+```bash
+pnpm --filter @payment-ops/receipt-recognizer prisma:generate
+pnpm --filter @payment-ops/receipt-recognizer prisma:deploy
+pnpm --filter @payment-ops/receipt-recognizer dev
+```
+
+The service starts on `http://localhost:3002` when
+`RECEIPT_RECOGNIZER_PORT=3002` is present in `.env` or when no port override is
+set.
+
+- Health check: `http://localhost:3002/health`
+- Swagger UI: `http://localhost:3002/docs`
+- Upload/history UI: `http://localhost:3002/`
+
 ## Workspace
 
 ```text
 apps/
+  receipt-recognizer/
   sms-gateway/
 packages/
   eslint-config/
@@ -153,9 +175,11 @@ pnpm docker:logs
   processes sends with Redis/BullMQ, prevents accidental duplicate sends with an
   server-side five-minute duplicate-send window, and exposes Swagger at `/docs`.
   Optional real Fast2SMS support is behind explicit env flags.
-- `receipt-recognizer`: planned for Phase 3. It will upload receipt screenshots,
-  run OCR, normalize extracted payment data, and fall back to local regex parsing
-  when optional providers are unavailable.
+- `receipt-recognizer`: implemented in Phase 3. It uploads receipt screenshots,
+  lets the user request `tesseract` or `gemini`, falls back to local
+  Tesseract.js OCR when Gemini is unavailable, normalizes PhonePe payment data,
+  stores structured fields plus raw OCR text, and exposes upload/history through
+  a local web UI.
 - `layout-builder`: planned for Phase 4. It will create per-brand dynamic API
   contracts, extract palettes from logos, and render deterministic SVG layouts.
 - `builder-frontend`: planned for Phase 5. It will provide a compact local demo

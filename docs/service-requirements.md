@@ -99,6 +99,7 @@ export interface ISmsProvider {
 `POST /receipts/upload`
 
 - multipart image upload;
+- optional `model=tesseract|gemini`, defaulting to `tesseract`;
 - returns `receiptId`;
 - stores raw OCR text and normalized result.
 
@@ -106,6 +107,7 @@ export interface ISmsProvider {
 
 ```ts
 export type ReceiptNormalizerKind = "regex" | "gemini" | "anthropic";
+export type ReceiptRecognitionModel = "tesseract" | "gemini";
 
 export interface ReceiptData {
   bank: string | null;
@@ -122,6 +124,9 @@ export interface ReceiptData {
 }
 ```
 
+Persisted receipts include `requestedModel` and `recognitionModel`, so the API
+can show when a `gemini` request fell back to local `tesseract`.
+
 ### Normalizer Interface
 
 ```ts
@@ -133,6 +138,7 @@ export interface IReceiptNormalizer {
 ### Normalizer Selection
 
 - `NORMALIZER=regex` is default.
+- `GEMINI_MODEL=gemini-2.5-flash-lite` is the default Gemini API model.
 - `NORMALIZER=gemini` requires `GEMINI_ENABLED=true` and `GEMINI_API_KEY`.
 - `NORMALIZER=anthropic` is a placeholder and should fall back without a key.
 - Any optional provider error falls back to `RegexNormalizer`.
