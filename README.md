@@ -8,7 +8,8 @@ external services.
 
 ## Current Status
 
-Phase 2 SMS Gateway is in place and Phase 3 Receipt Recognizer has been added:
+Phase 2 SMS Gateway, Phase 3 Receipt Recognizer, and Phase 4 Layout Builder are
+in place:
 
 - pnpm workspace and Turborepo task wiring;
 - shared TypeScript, ESLint, config, logger, and type packages;
@@ -20,6 +21,10 @@ Phase 2 SMS Gateway is in place and Phase 3 Receipt Recognizer has been added:
 - `apps/receipt-recognizer` NestJS service with image upload, selectable
   Tesseract/Gemini recognition, regex fallback normalization for PhonePe
   receipts, PostgreSQL persistence, Swagger, and a small local browser UI.
+- `apps/layout-builder` NestJS service with logo upload, palette extraction,
+  generated per-brand API contracts, dynamic dashboard config ingestion,
+  PostgreSQL persistence, SVG rendering, Swagger, and a small local browser UI
+  with a brand sidebar.
 
 ## Prerequisites
 
@@ -53,6 +58,7 @@ This starts:
 
 - SMS Gateway: `http://localhost:3001`
 - Receipt Recognizer: `http://localhost:3002`
+- Layout Builder: `http://localhost:3003`
 
 ### 3. Or run setup and apps separately
 
@@ -165,10 +171,36 @@ Use `model=gemini` to request Gemini recognition. Gemini runs only when
 records `requestedModel=gemini` and falls back to `recognitionModel=tesseract`.
 The default Gemini model is `gemini-2.5-flash-lite`.
 
+## Layout Builder
+
+To run only the layout builder while developing:
+
+```bash
+pnpm --filter @payment-ops/layout-builder prisma:generate
+pnpm --filter @payment-ops/layout-builder prisma:deploy
+pnpm --filter @payment-ops/layout-builder dev
+```
+
+- Health check: `http://localhost:3003/health`
+- Swagger UI: `http://localhost:3003/docs`
+- Brand UI: `http://localhost:3003/`
+
+Create a brand through the API:
+
+```bash
+curl -X POST http://localhost:3003/brands \
+  -F brandName=KOI \
+  -F logo=@/path/to/logo.svg
+```
+
+The service accepts JPEG, PNG, WebP, and SVG logos. Gemini is not used for V1
+template generation; SVG layouts are rendered by deterministic local logic.
+
 ## Workspace
 
 ```text
 apps/
+  layout-builder/
   receipt-recognizer/
   sms-gateway/
 packages/
@@ -209,8 +241,9 @@ pnpm run docker:logs
   Tesseract.js OCR when Gemini is unavailable, normalizes PhonePe payment data,
   stores structured fields plus raw OCR text, and exposes upload/history through
   a local web UI.
-- `layout-builder`: planned for Phase 4. It will create per-brand dynamic API
-  contracts, extract palettes from logos, and render deterministic SVG layouts.
+- `layout-builder`: implemented in Phase 4. It creates per-brand dynamic API
+  contracts, stores uploaded logos, extracts brand palettes, accepts dynamic
+  dashboard config, and renders KOI-style SVG layouts.
 - `builder-frontend`: planned for Phase 5. It will provide a compact local demo
   UI for the backend flows.
 

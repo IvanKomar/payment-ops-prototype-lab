@@ -198,8 +198,16 @@ Regex patterns should handle:
 
 - multipart logo upload;
 - brand name;
+- accepts JPEG, PNG, WebP, and SVG logos;
 - palette extraction through `node-vibrant`;
+- SVG palettes use local color extraction from sanitized SVG markup;
+- uploaded logos are stored on disk;
 - generated per-brand API schema.
+
+`GET /brands/recent`
+
+Returns recent brands for the UI sidebar, newest first, including brand id,
+name, logo MIME type, palette, and timestamps.
 
 ### Dynamic Schema Shapes
 
@@ -237,6 +245,12 @@ Example flat schema:
 - Optional PNG export can be added later through Puppeteer.
 - Use seeded randomness with `brandId` as the seed.
 - Keep output deterministic for the same brand/config pair.
+- Embed the stored logo into the rendered SVG as base64.
+- Gemini is not used for V1 template generation; the KOI-style dashboard is
+  rendered by deterministic local logic.
+- The renderer must vary the actual layout by brand id: element positions,
+  table column order, table labels, and status badge style should not be fixed
+  across all brands.
 
 ### Dashboard Layout Reference
 
@@ -254,3 +268,10 @@ One template must be based on the provided KOI-style payments dashboard:
 - compact status badges;
 - copy icon near transaction id;
 - scrollable table body.
+
+### UI
+
+- Static browser UI at `/`.
+- Left sidebar lists recent brands and lets the user switch between them.
+- Main view includes brand creation, generated schema details, editable sample
+  payload, dynamic endpoint submit, and SVG preview.

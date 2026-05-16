@@ -49,6 +49,55 @@ model Receipt {
   @@map("receipts")
 }
 
+model Brand {
+  id                   String         @id
+  name                 String
+  logoOriginalFilename String
+  logoMimeType         String
+  logoSizeBytes        Int
+  logoPath             String
+  palette              Json
+  schemas              BrandSchema[]
+  requests             BrandRequest[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@map("brands")
+}
+
+model BrandSchema {
+  id          String                 @id
+  brandId     String
+  brand       Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  slug        String                 @unique
+  fieldsStyle String
+  structure   String
+  fields      Json
+  requests    BrandRequest[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@index([brandId])
+  @@map("brand_schemas")
+}
+
+model BrandRequest {
+  id               String      @id
+  brandId          String
+  brand            Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  schemaId         String
+  schema           BrandSchema @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+  originalPayload  Json
+  canonicalPayload Json
+  renderedSvg      String
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([brandId, createdAt])
+  @@index([schemaId])
+  @@map("brand_requests")
+}
+
 enum SmsStatus {
   queued
   processing

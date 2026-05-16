@@ -6,16 +6,16 @@
   "scripts": {
     "build": "turbo run build --concurrency=1",
     "dev": "turbo run dev --parallel",
+    "up": "pnpm run setup && pnpm run dev",
+    "setup": "pnpm run docker:up && pnpm run prisma:generate && pnpm run db:deploy",
+    "prisma:generate": "pnpm --filter @payment-ops/layout-builder prisma:generate",
+    "db:deploy": "set -a; [ -f .env ] && . ./.env; set +a; pnpm --filter @payment-ops/sms-gateway prisma:deploy && pnpm --filter @payment-ops/receipt-recognizer prisma:deploy && pnpm --filter @payment-ops/layout-builder prisma:deploy",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck --concurrency=1",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f",
-    "up": "pnpm run setup && pnpm run dev",
-    "setup": "pnpm run docker:up && pnpm run prisma:generate && pnpm run db:deploy",
-    "prisma:generate": "pnpm --filter @payment-ops/receipt-recognizer prisma:generate",
-    "db:deploy": "set -a; [ -f .env ] && . ./.env; set +a; pnpm --filter @payment-ops/sms-gateway prisma:deploy && pnpm --filter @payment-ops/receipt-recognizer prisma:deploy"
+    "docker:logs": "docker compose logs -f"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

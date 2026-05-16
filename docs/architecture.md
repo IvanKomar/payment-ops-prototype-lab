@@ -149,13 +149,14 @@ Flow:
 1. Upload logo and brand name.
 2. Extract palette through `node-vibrant`.
 3. Generate a unique endpoint slug and randomized field names.
-4. Store canonical field mapping.
+4. Store sanitized logo on disk and canonical field mapping.
 5. Accept brand configuration through the dynamic endpoint.
 6. Render the final SVG layout.
 
 Static API:
 
 - `POST /brands`
+- `GET /brands/recent`
 - `GET /brands/:id/schema`
 - `GET /brands/:id/layout`
 
@@ -168,6 +169,15 @@ Persistence:
 - `brands`
 - `brand_schemas`
 - `brand_requests`
+
+Logo support:
+
+- Accept JPEG, PNG, WebP, and SVG logos.
+- Raster palettes use `node-vibrant`.
+- SVG palettes use local color extraction from sanitized SVG markup.
+- Rendered SVG embeds the stored logo as base64.
+- Layout profiles are deterministic by brand id and vary element placement,
+  table column order, column labels, and status badge style.
 
 Layout reference:
 
@@ -200,7 +210,7 @@ history UI, and persistence.
 ### Phase 4: Layout Builder
 
 Brand creation, palette extraction, dynamic schema generation, dynamic route
-decoding, and SVG rendering.
+decoding, SVG logo support, brand switching UI, and SVG rendering.
 
 ### Phase 5: Frontend and Demo Polish
 
