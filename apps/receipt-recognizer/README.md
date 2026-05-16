@@ -8,14 +8,25 @@ UI.
 
 From the repository root:
 
+To run the whole implemented monorepo:
+
 ```bash
-pnpm docker:up
+pnpm run up
+```
+
+This runs `pnpm run setup` first, then starts all implemented apps with `pnpm run dev`.
+
+To run only Receipt Recognizer:
+
+```bash
+pnpm run docker:up
 pnpm --filter @payment-ops/receipt-recognizer prisma:generate
 pnpm --filter @payment-ops/receipt-recognizer prisma:deploy
 pnpm --filter @payment-ops/receipt-recognizer dev
 ```
 
-Default port: `3002`.
+Default port: `3002`. Use `RECEIPT_RECOGNIZER_PORT=3002` to override it
+explicitly in the monorepo `.env`.
 
 Swagger UI: `http://localhost:3002/docs`
 

@@ -8,5 +8,10 @@ export function loadSmsGatewayConfig(source: NodeJS.ProcessEnv = process.env): S
     loadWorkspaceEnv();
   }
 
-  return parseEnv(smsGatewayEnvSchema, source);
+  const config = parseEnv(smsGatewayEnvSchema, source);
+
+  return {
+    ...config,
+    PORT: config.SMS_GATEWAY_PORT ?? config.PORT
+  };
 }

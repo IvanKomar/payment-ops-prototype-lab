@@ -8,14 +8,25 @@ PostgreSQL persistence, Redis/BullMQ queueing, and Swagger docs.
 
 From the repository root:
 
+To run the whole implemented monorepo:
+
 ```bash
-pnpm docker:up
+pnpm run up
+```
+
+This runs `pnpm run setup` first, then starts all implemented apps with `pnpm run dev`.
+
+To run only SMS Gateway:
+
+```bash
+pnpm run docker:up
 pnpm --filter @payment-ops/sms-gateway prisma:generate
 pnpm --filter @payment-ops/sms-gateway prisma:deploy
 pnpm --filter @payment-ops/sms-gateway dev
 ```
 
-Default port: `3001`.
+Default port: `3001`. Use `SMS_GATEWAY_PORT=3001` to override it explicitly in
+the monorepo `.env`.
 
 Swagger UI: `http://localhost:3001/docs`
 

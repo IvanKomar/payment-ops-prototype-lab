@@ -27,6 +27,7 @@ const numberFromString = (defaultValue: number) =>
 export const smsGatewayEnvSchema = createEnvSchema({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: numberFromString(3001),
+  SMS_GATEWAY_PORT: numberFromString(3001).optional(),
   DATABASE_URL: z
     .string()
     .default("postgresql://postgres:postgres@localhost:5432/payment_ops?schema=public"),

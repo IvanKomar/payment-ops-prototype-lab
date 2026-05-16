@@ -40,33 +40,35 @@ pnpm install
 cp .env.example .env
 ```
 
-### 2. Start local infrastructure
+### 2. Start everything locally
+
+For the usual local workflow, one command starts infrastructure, prepares the
+database, and then runs all implemented apps:
 
 ```bash
-pnpm docker:up
+pnpm run up
 ```
 
-This starts PostgreSQL on `localhost:5432` and Redis on `localhost:6379`.
+This starts:
 
-### 3. Prepare the SMS Gateway database
+- SMS Gateway: `http://localhost:3001`
+- Receipt Recognizer: `http://localhost:3002`
+
+### 3. Or run setup and apps separately
 
 ```bash
-pnpm --filter @payment-ops/sms-gateway prisma:generate
-pnpm --filter @payment-ops/sms-gateway prisma:deploy
+pnpm run setup
+pnpm run dev
 ```
 
-### 4. Run the SMS Gateway
+This starts the Docker infrastructure containers and applies Prisma migrations.
+Docker Compose runs only PostgreSQL on `localhost:5432` and Redis on
+`localhost:6379`; the NestJS services run on your host through pnpm/Turborepo.
 
-```bash
-pnpm --filter @payment-ops/sms-gateway dev
-```
-
-The service starts on `http://localhost:3001`.
+### 4. Smoke test the SMS Gateway
 
 - Health check: `http://localhost:3001/health`
 - Swagger UI: `http://localhost:3001/docs`
-
-### 5. Smoke test the API
 
 Queue a message:
 
@@ -119,12 +121,22 @@ pnpm test
 pnpm build
 ```
 
-Use `pnpm docker:down` to stop local infrastructure and `pnpm docker:logs` to
+Use `pnpm run docker:down` to stop local infrastructure and `pnpm run docker:logs` to
 follow container logs.
+
+Root setup scripts:
+
+```bash
+pnpm run prisma:generate # generate the shared Prisma client
+pnpm run db:deploy       # apply service migrations
+pnpm run setup           # docker:up + prisma:generate + db:deploy
+pnpm run dev             # run implemented services in parallel
+pnpm run up              # setup, then run implemented services
+```
 
 ## Receipt Recognizer
 
-Prepare the database and start the service:
+To run only the receipt recognizer while developing:
 
 ```bash
 pnpm --filter @payment-ops/receipt-recognizer prisma:generate
@@ -172,13 +184,17 @@ Root scripts:
 
 ```bash
 pnpm build
-pnpm dev
-pnpm lint
-pnpm test
-pnpm typecheck
-pnpm docker:up
-pnpm docker:down
-pnpm docker:logs
+pnpm run up
+pnpm run setup
+pnpm run dev
+pnpm run prisma:generate
+pnpm run db:deploy
+pnpm run lint
+pnpm run test
+pnpm run typecheck
+pnpm run docker:up
+pnpm run docker:down
+pnpm run docker:logs
 ```
 
 ## Services

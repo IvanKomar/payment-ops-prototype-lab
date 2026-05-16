@@ -220,7 +220,7 @@ Vite demo UI, root README demo scripts, ADRs, and final walkthrough.
 
 - Prefer replaceable interfaces for every external integration.
 - Mocks must be realistic enough: latency, failure, fallback, and status polling.
-- Local startup must be simple: `pnpm install`, `pnpm docker:up`, `pnpm dev`.
+- Local startup must be simple: `pnpm install`, `pnpm run up`.
 - Use Zod at service boundaries.
 - Use Prisma migrations for durable state.
 - The frontend should be minimal but useful for verifying network behavior.
