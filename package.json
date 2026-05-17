@@ -5,7 +5,9 @@
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "build": "turbo run build --concurrency=1",
+    "demo": "pnpm run up",
     "dev": "turbo run dev --parallel",
+    "dev:frontend": "pnpm --filter @payment-ops/builder-frontend dev",
     "up": "pnpm run setup && pnpm run dev",
     "setup": "pnpm run docker:up && pnpm run prisma:generate && pnpm run db:deploy",
     "prisma:generate": "pnpm --filter @payment-ops/layout-builder prisma:generate",

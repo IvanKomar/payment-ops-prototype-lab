@@ -8,8 +8,8 @@ external services.
 
 ## Current Status
 
-Phase 2 SMS Gateway, Phase 3 Receipt Recognizer, and Phase 4 Layout Builder are
-in place:
+Phase 2 SMS Gateway, Phase 3 Receipt Recognizer, Phase 4 Layout Builder, and
+Phase 5 Builder Frontend are in place:
 
 - pnpm workspace and Turborepo task wiring;
 - shared TypeScript, ESLint, config, logger, and type packages;
@@ -25,6 +25,9 @@ in place:
   generated per-brand API contracts, dynamic dashboard config ingestion,
   PostgreSQL persistence, SVG rendering, Swagger, and a small local browser UI
   with a brand sidebar.
+- `apps/builder-frontend` Vite demo console that brings SMS sending, receipt
+  upload/history, brand creation, dynamic payload submission, and SVG layout
+  preview into one local UI.
 
 ## Prerequisites
 
@@ -56,6 +59,7 @@ pnpm run up
 
 This starts:
 
+- Builder Frontend: `http://localhost:3000`
 - SMS Gateway: `http://localhost:3001`
 - Receipt Recognizer: `http://localhost:3002`
 - Layout Builder: `http://localhost:3003`
@@ -72,6 +76,16 @@ Docker Compose runs only PostgreSQL on `localhost:5432` and Redis on
 `localhost:6379`; the NestJS services run on your host through pnpm/Turborepo.
 
 ### 4. Smoke test the SMS Gateway
+
+Open the combined Phase 5 demo console:
+
+- Builder Frontend: `http://localhost:3000`
+
+The frontend talks to the backend services through Vite proxy routes
+(`/sms-api`, `/receipt-api`, and `/layout-api`), so the browser stays on one
+local origin.
+
+### 5. Smoke test the SMS Gateway API
 
 - Health check: `http://localhost:3001/health`
 - Swagger UI: `http://localhost:3001/docs`
@@ -133,11 +147,13 @@ follow container logs.
 Root setup scripts:
 
 ```bash
+pnpm run demo            # alias for pnpm run up
 pnpm run prisma:generate # generate the shared Prisma client
 pnpm run db:deploy       # apply service migrations
 pnpm run setup           # docker:up + prisma:generate + db:deploy
-pnpm run dev             # run implemented services in parallel
-pnpm run up              # setup, then run implemented services
+pnpm run dev             # run implemented services and frontend in parallel
+pnpm run dev:frontend    # run only the Vite demo UI
+pnpm run up              # setup, then run implemented services and frontend
 ```
 
 ## Receipt Recognizer
@@ -200,6 +216,7 @@ template generation; SVG layouts are rendered by deterministic local logic.
 
 ```text
 apps/
+  builder-frontend/
   layout-builder/
   receipt-recognizer/
   sms-gateway/
@@ -216,9 +233,11 @@ Root scripts:
 
 ```bash
 pnpm build
+pnpm run demo
 pnpm run up
 pnpm run setup
 pnpm run dev
+pnpm run dev:frontend
 pnpm run prisma:generate
 pnpm run db:deploy
 pnpm run lint
@@ -242,10 +261,12 @@ pnpm run docker:logs
   stores structured fields plus raw OCR text, and exposes upload/history through
   a local web UI.
 - `layout-builder`: implemented in Phase 4. It creates per-brand dynamic API
-  contracts, stores uploaded logos, extracts brand palettes, accepts dynamic
-  dashboard config, and renders KOI-style SVG layouts.
-- `builder-frontend`: planned for Phase 5. It will provide a compact local demo
-  UI for the backend flows.
+  contracts, stores uploaded logos, extracts brand palettes, accepts and returns
+  dashboard data through the generated brand API endpoint, supports deleting
+  demo brands, and renders KOI-style SVG layouts.
+- `builder-frontend`: implemented in Phase 5. It provides a compact Vite demo
+  UI for the backend flows and uses local proxy routes so the browser can drive
+  all services from `http://localhost:3000`.
 
 ## Offline By Default
 
@@ -257,5 +278,6 @@ missing, quotas are exhausted, or providers fail.
 ## Documentation
 
 - [Architecture](./docs/architecture.md)
+- [ADR 0001: Builder Frontend Uses Vite Proxy Routes](./docs/adr/0001-builder-frontend-vite-proxy.md)
 - [Phase 2 SMS Gateway Plan](./docs/phase-2-sms-gateway.md)
 - [Service Requirements](./docs/service-requirements.md)

@@ -1,0 +1,23 @@
+{
+  "name": "@payment-ops/builder-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && vite build",
+    "dev": "vite",
+    "lint": "eslint \"src/**/*.ts\" vite.config.ts",
+    "test": "node -e \"console.log('No tests yet for builder-frontend')\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@payment-ops/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@payment-ops/eslint-config": "workspace:*",
+    "@payment-ops/tsconfig": "workspace:*",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.12"
+  }
+}
