@@ -49,6 +49,7 @@ export interface LayoutBuilderBrandSchemaResponse {
   schemaId: string;
   endpoint: string;
   method: "POST";
+  methods: Array<"GET" | "POST">;
   fieldsStyle: LayoutBuilderFieldStyle;
   structure: LayoutBuilderPayloadStructure;
   layoutVariant: LayoutBuilderLayoutVariant;
@@ -77,4 +78,10 @@ export interface LayoutBuilderConfigureResponse {
   requestId: string;
   brandId: string;
   layoutUrl: string;
+  data: unknown;
+}
+
+export interface LayoutBuilderDeleteBrandResponse {
+  brandId: string;
+  deleted: true;
 }

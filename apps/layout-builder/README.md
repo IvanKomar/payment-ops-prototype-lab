@@ -42,7 +42,7 @@ Multipart fields:
 - `logo` as JPEG, PNG, WebP, or SVG
 
 The service stores the logo on disk, extracts a palette, creates a dynamic
-schema, and returns the generated endpoint plus a sample payload.
+brand API schema, and returns the generated endpoint plus a sample payload.
 The response also includes the deterministic `layoutVariant` chosen for that
 brand.
 
@@ -59,12 +59,26 @@ Returns the latest brands for the UI sidebar.
 Returns the generated endpoint, field style, payload structure, field mapping,
 and sample payload.
 
-### Configure Dynamic Endpoint
+### Delete Brand
+
+`DELETE /brands/:id`
+
+Deletes the brand, generated schema, stored dynamic API requests, and attempts
+to remove the stored logo file.
+
+### Dynamic Brand API
+
+`GET /brands/:id/:slug`
+
+Returns the latest dashboard data in the generated contract shape for that
+brand. If no data has been posted yet, the service returns the default dashboard
+data in the generated contract shape.
 
 `POST /brands/:id/:slug`
 
 Accepts the generated schema payload, maps randomized fields to canonical
-dashboard config, persists the request, and updates the rendered layout.
+dashboard config, persists the request, updates the rendered layout, and returns
+the stored data in the generated contract shape.
 
 ### Render Layout
 

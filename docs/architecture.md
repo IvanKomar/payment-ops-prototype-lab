@@ -150,19 +150,25 @@ Flow:
 2. Extract palette through `node-vibrant`.
 3. Generate a unique endpoint slug and randomized field names.
 4. Store sanitized logo on disk and canonical field mapping.
-5. Accept brand configuration through the dynamic endpoint.
-6. Render the final SVG layout.
+5. Expose a per-brand dynamic API endpoint for reads and writes.
+6. Render the final SVG layout from the latest accepted brand API payload.
 
 Static API:
 
 - `POST /brands`
 - `GET /brands/recent`
 - `GET /brands/:id/schema`
+- `DELETE /brands/:id`
 - `GET /brands/:id/layout`
 
-Dynamic API:
+Dynamic Brand API:
 
+- `GET /brands/:id/:slug`
 - `POST /brands/:id/:slug`
+
+The dynamic API uses the generated field names and payload structure for both
+GET responses and POST bodies. Static admin endpoints create and inspect brands;
+the dynamic endpoint is the brand-specific server contract.
 
 Persistence:
 
@@ -214,7 +220,10 @@ decoding, SVG logo support, brand switching UI, and SVG rendering.
 
 ### Phase 5: Frontend and Demo Polish
 
-Vite demo UI, root README demo scripts, ADRs, and final walkthrough.
+Vite demo UI, root README demo scripts, ADRs, and final walkthrough. The
+frontend lives in `apps/builder-frontend`, runs on `http://localhost:3000`, and
+uses local Vite proxy routes for the SMS Gateway, Receipt Recognizer, and Layout
+Builder services.
 
 ## Non-Goals
 

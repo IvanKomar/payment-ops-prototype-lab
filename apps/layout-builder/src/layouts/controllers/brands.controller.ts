@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Inject,
@@ -21,7 +22,8 @@ import type {
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
-  LayoutBuilderConfigureResponse
+  LayoutBuilderConfigureResponse,
+  LayoutBuilderDeleteBrandResponse
 } from "@payment-ops/shared-types";
 
 import { loadLayoutBuilderConfig } from "../../config/layout-builder.config.js";
@@ -32,6 +34,7 @@ import {
   ConfigureBrandResponseDto,
   createBrandSchema,
   CreateBrandResponseDto,
+  DeleteBrandResponseDto,
   slugSchema,
   ZodValidationPipe
 } from "../dto/layout.schemas.js";
@@ -93,12 +96,31 @@ export class BrandsController {
     return this.layoutService.getBrandSchema(id);
   }
 
+  @Delete(":id")
+  @ApiOkResponse({ type: DeleteBrandResponseDto })
+  @ApiNotFoundResponse({ description: "Brand was not found" })
+  deleteBrand(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string
+  ): Promise<LayoutBuilderDeleteBrandResponse> {
+    return this.layoutService.deleteBrand(id);
+  }
+
   @Get(":id/layout")
   @Header("Content-Type", "image/svg+xml; charset=utf-8")
   @ApiOkResponse({ description: "Rendered SVG layout" })
   @ApiNotFoundResponse({ description: "Brand was not found" })
   renderLayout(@Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string): Promise<string> {
     return this.layoutService.renderBrandLayout(id);
+  }
+
+  @Get(":id/:slug")
+  @ApiOkResponse({ description: "Latest dashboard data in the generated brand API contract" })
+  @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
+  getBrandContractData(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+  ): Promise<unknown> {
+    return this.layoutService.getBrandContractData(id, slug);
   }
 
   @Post(":id/:slug")

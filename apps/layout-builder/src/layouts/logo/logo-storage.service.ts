@@ -2,7 +2,7 @@ import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import type { LayoutBuilderEnv } from "../../config/env.schema.js";
 import { LAYOUT_BUILDER_CONFIG } from "../layout.constants.js";
 import type { StoredLogo, UploadedLogoFile } from "../layout.types.js";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -44,6 +44,10 @@ export class LogoStorageService {
       sizeBytes: file.size,
       path
     };
+  }
+
+  async remove(path: string): Promise<void> {
+    await rm(path, { force: true });
   }
 
   private assertSafeSvg(svg: string): void {

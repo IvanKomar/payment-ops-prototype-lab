@@ -26,6 +26,7 @@ describe("PayloadMapperService", () => {
       currency: config.currency,
       payments: expect.arrayContaining([expect.objectContaining({ transactionId: "txn_10291" })])
     });
+    expect(mapper.toExternal(generated, config)).toEqual(payload);
   });
 
   it("maps nested payloads into canonical dashboard config", () => {
@@ -33,6 +34,7 @@ describe("PayloadMapperService", () => {
     const payload = generator.samplePayload(generated, "KOI");
 
     expect(mapper.toCanonical(generated, payload).filters).toMatchObject(config.filters);
+    expect(mapper.toExternal(generated, config)).toEqual(payload);
   });
 
   it("maps key-value-array payloads into canonical dashboard config", () => {
@@ -40,5 +42,6 @@ describe("PayloadMapperService", () => {
     const payload = generator.samplePayload(generated, "KOI");
 
     expect(mapper.toCanonical(generated, payload).balance).toEqual(config.balance);
+    expect(mapper.toExternal(generated, config)).toEqual(payload);
   });
 });

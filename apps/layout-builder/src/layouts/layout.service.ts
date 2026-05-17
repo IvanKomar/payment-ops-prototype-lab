@@ -3,7 +3,8 @@ import type {
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
-  LayoutBuilderConfigureResponse
+  LayoutBuilderConfigureResponse,
+  LayoutBuilderDeleteBrandResponse
 } from "@payment-ops/shared-types";
 import { randomUUID } from "node:crypto";
 
@@ -63,6 +64,17 @@ export class LayoutService {
     }));
   }
 
+  async deleteBrand(id: string): Promise<LayoutBuilderDeleteBrandResponse> {
+    const brand = await this.getExistingBrand(id);
+    await this.repository.deleteBrand(id);
+    await this.logoStorage.remove(brand.logoPath).catch(() => undefined);
+
+    return {
+      brandId: id,
+      deleted: true
+    };
+  }
+
   async getBrandSchema(id: string): Promise<LayoutBuilderBrandSchemaResponse> {
     const brand = await this.getExistingBrand(id);
     return this.toSchemaResponse(brand);
@@ -70,10 +82,7 @@ export class LayoutService {
 
   async configureBrand(id: string, slug: string, payload: unknown): Promise<LayoutBuilderConfigureResponse> {
     const brand = await this.getExistingBrand(id);
-
-    if (brand.schema.slug !== slug) {
-      throw new NotFoundException(`Brand schema endpoint was not found: ${id}/${slug}`);
-    }
+    this.assertBrandApiSlug(brand, slug);
 
     const canonicalPayload = this.payloadMapper.toCanonical(brand.schema, payload);
     const renderedSvg = await this.renderer.render({ brand, config: canonicalPayload });
@@ -89,8 +98,21 @@ export class LayoutService {
     return {
       requestId: request.id,
       brandId: brand.id,
-      layoutUrl: `/brands/${brand.id}/layout`
+      layoutUrl: `/brands/${brand.id}/layout`,
+      data: this.payloadMapper.toExternal(brand.schema, canonicalPayload)
     };
+  }
+
+  async getBrandContractData(id: string, slug: string): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+
+    const latestRequest = await this.repository.findLatestRequest(id);
+    const config = latestRequest
+      ? brandRequestToCanonicalConfig(latestRequest)
+      : createDefaultDashboardConfig(brand.name);
+
+    return this.payloadMapper.toExternal(brand.schema, config);
   }
 
   async renderBrandLayout(id: string): Promise<string> {
@@ -111,6 +133,12 @@ export class LayoutService {
     }
 
     return brand;
+  }
+
+  private assertBrandApiSlug(brand: BrandWithSchema, slug: string): void {
+    if (brand.schema.slug !== slug) {
+      throw new NotFoundException(`Brand schema endpoint was not found: ${brand.id}/${slug}`);
+    }
   }
 
   private assertLogo(file: UploadedLogoFile | undefined): asserts file is UploadedLogoFile {
@@ -144,6 +172,7 @@ export class LayoutService {
       schemaId: brand.schema.id,
       endpoint: `/brands/${brand.id}/${brand.schema.slug}`,
       method: "POST",
+      methods: ["GET", "POST"],
       fieldsStyle: brand.schema.fieldsStyle,
       structure: brand.schema.structure,
       layoutVariant: createLayoutProfile(brand.id).variant,

@@ -33,6 +33,9 @@ export class CreateBrandResponseDto {
   @ApiProperty({ type: String, example: "POST" })
   method!: "POST";
 
+  @ApiProperty({ type: [String], example: ["GET", "POST"] })
+  methods!: Array<"GET" | "POST">;
+
   @ApiProperty({ type: String, enum: ["camelCase", "snake_case", "kebab-case"] })
   fieldsStyle!: LayoutBuilderFieldStyle;
 
@@ -95,6 +98,17 @@ export class ConfigureBrandResponseDto {
 
   @ApiProperty({ type: String, example: "/brands/br_.../layout" })
   layoutUrl!: string;
+
+  @ApiProperty({ type: Object })
+  data!: unknown;
+}
+
+export class DeleteBrandResponseDto {
+  @ApiProperty({ type: String, example: "br_01d9326390ac4c1898da7c6cd25b66e1" })
+  brandId!: string;
+
+  @ApiProperty({ type: Boolean, example: true })
+  deleted!: true;
 }
 
 @Injectable()

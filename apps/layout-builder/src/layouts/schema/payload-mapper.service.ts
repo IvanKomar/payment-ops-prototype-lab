@@ -65,6 +65,39 @@ export class PayloadMapperService {
     return result.data;
   }
 
+  toExternal(schema: GeneratedSchema, config: LayoutBuilderDashboardConfig): unknown {
+    const flat = Object.fromEntries(
+      CANONICAL_FIELDS.map((field) => [external(schema, field), getCanonicalValue(config, field)])
+    );
+
+    if (schema.structure === "flat") {
+      return flat;
+    }
+
+    if (schema.structure === "key-value-array") {
+      return Object.entries(flat).map(([key, value]) => ({ key, value }));
+    }
+
+    return {
+      dashboard: {
+        [external(schema, "title")]: config.title,
+        [external(schema, "balance")]: config.balance,
+        [external(schema, "currency")]: config.currency,
+        [external(schema, "mode")]: config.mode,
+        [external(schema, "searchTransactionId")]: config.searchTransactionId,
+        [external(schema, "pageSize")]: config.pageSize
+      },
+      filters: {
+        [external(schema, "filters.method")]: config.filters.method,
+        [external(schema, "filters.type")]: config.filters.type,
+        [external(schema, "filters.status")]: config.filters.status,
+        [external(schema, "filters.dateFrom")]: config.filters.dateFrom,
+        [external(schema, "filters.dateTo")]: config.filters.dateTo
+      },
+      [external(schema, "payments")]: config.payments
+    };
+  }
+
   private toFlatExternalPayload(schema: GeneratedSchema, payload: unknown): Record<string, unknown> {
     if (schema.structure === "flat") {
       return objectPayload(payload);
@@ -112,6 +145,15 @@ function keyValuePayload(value: unknown): Record<string, unknown> {
       return [String(item.key), item.value];
     })
   );
+}
+
+function getCanonicalValue(config: LayoutBuilderDashboardConfig, field: string): unknown {
+  if (field.startsWith("filters.")) {
+    const filterKey = field.slice("filters.".length) as keyof LayoutBuilderDashboardConfig["filters"];
+    return config.filters[filterKey];
+  }
+
+  return config[field as keyof LayoutBuilderDashboardConfig];
 }
 
 export function canonicalFieldsForTests(): readonly string[] {

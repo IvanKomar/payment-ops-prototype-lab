@@ -107,6 +107,12 @@ export class LayoutRepository {
       }
     });
   }
+
+  async deleteBrand(id: string): Promise<void> {
+    await this.prisma.brand.delete({
+      where: { id }
+    });
+  }
 }
 
 function toBrandWithSchema(brand: BrandWithRelations): BrandWithSchema {

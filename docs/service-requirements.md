@@ -209,7 +209,24 @@ Regex patterns should handle:
 Returns recent brands for the UI sidebar, newest first, including brand id,
 name, logo MIME type, palette, and timestamps.
 
+`DELETE /brands/:id`
+
+Deletes a brand plus its generated schema and stored requests. Logo file cleanup
+is best effort.
+
 ### Dynamic Schema Shapes
+
+Each created brand gets a dynamic server contract at the generated endpoint.
+The static brand creation endpoint is not the contract itself; it only creates
+the brand, stores its logo/palette, and returns the generated contract metadata.
+
+The generated endpoint supports:
+
+- `GET /brands/:id/:slug`: returns the latest dashboard data using the generated
+  field names and payload structure.
+- `POST /brands/:id/:slug`: accepts dashboard data using the generated field
+  names and payload structure, stores it as the latest canonical config, and
+  updates the rendered layout.
 
 Supported field styles:
 
