@@ -151,7 +151,8 @@ Flow:
 3. Generate a unique endpoint slug and randomized field names.
 4. Store sanitized logo on disk and canonical field mapping.
 5. Expose a per-brand dynamic API endpoint for reads and writes.
-6. Render the final SVG layout from the latest accepted brand API payload.
+6. Render the final SVG layout and SSR brand app from the latest accepted brand
+   API payload.
 
 Static API:
 
@@ -164,11 +165,15 @@ Static API:
 Dynamic Brand API:
 
 - `GET /brands/:id/:slug`
+- `GET /brands/:id/:slug/data`
+- `GET /brands/:id/:slug/app`
 - `POST /brands/:id/:slug`
 
 The dynamic API uses the generated field names and payload structure for both
 GET responses and POST bodies. Static admin endpoints create and inspect brands;
-the dynamic endpoint is the brand-specific server contract.
+the dynamic endpoint is the brand-specific server contract. The public preview
+loads the SSR app URL and the browser calls only the `/data` endpoint, keeping
+schema mapping server-side.
 
 Persistence:
 
@@ -183,8 +188,11 @@ Logo support:
 - SVG palettes use local color extraction from sanitized SVG markup.
 - Rendered SVG embeds the stored logo as base64.
 - Template profiles are stable per brand and are chosen against recent brands to
-  vary element placement, navigation style, metric/filter composition, table
+  vary element placement, navigation style, metric composition, table
   density, table column order, column labels, actions, and status badge style.
+- Dashboard payloads intentionally omit mode/search/filter chips and payment row
+  type/method fields; preview data is limited to title, balance, currency, page
+  size, and payment rows.
 
 Layout reference:
 

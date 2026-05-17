@@ -23,12 +23,13 @@ Phase 5 Builder Frontend are in place:
   receipts, PostgreSQL persistence, Swagger, and a small local browser UI.
 - `apps/layout-builder` NestJS service with logo upload, palette extraction,
   generated per-brand API contracts, dynamic dashboard config ingestion,
-  PostgreSQL persistence, SVG rendering, Swagger, and a small local browser UI
-  with a brand sidebar.
+  PostgreSQL persistence, SVG rendering, SSR brand app preview, Swagger, and a
+  small local browser UI with a brand sidebar.
 - `apps/builder-frontend` Vite demo console that brings SMS sending, receipt
-  upload/history, brand creation, dynamic payload submission, and live branded
-  Layout Builder preview into one local UI. The preview is loaded as an SSR
-  brand app and calls only the generated brand data endpoint from the browser.
+  upload/history, modal brand creation, compact brand management, and live
+  branded Layout Builder preview into one local UI. The preview is loaded as an
+  SSR brand app and calls only the generated brand data endpoint from the
+  browser.
 
 ## Prerequisites
 
@@ -264,7 +265,7 @@ pnpm run docker:logs
 - `layout-builder`: implemented in Phase 4. It creates per-brand dynamic API
   contracts, stores uploaded logos, extracts brand palettes, accepts and returns
   dashboard data through the generated brand API endpoint, supports deleting
-  demo brands, and renders KOI-style SVG layouts.
+  demo brands, renders KOI-style SVG layouts, and serves SSR brand preview apps.
 - `builder-frontend`: implemented in Phase 5. It provides a compact Vite demo
   UI for the backend flows and uses local proxy routes so the browser can drive
   all services from `http://localhost:3000`.

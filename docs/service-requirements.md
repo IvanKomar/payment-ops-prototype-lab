@@ -207,7 +207,7 @@ Regex patterns should handle:
 `GET /brands/recent`
 
 Returns recent brands for the UI sidebar, newest first, including brand id,
-name, logo MIME type, palette, and timestamps.
+name, logo MIME type, palette, public data endpoint, app URL, and timestamps.
 
 `DELETE /brands/:id`
 
@@ -224,6 +224,10 @@ The generated endpoint supports:
 
 - `GET /brands/:id/:slug`: returns the latest dashboard data using the generated
   field names and payload structure.
+- `GET /brands/:id/:slug/data`: returns the latest dashboard data for the public
+  brand app. This is the only data request made by the browser preview.
+- `GET /brands/:id/:slug/app`: returns the server-rendered brand SPA shell with
+  schema mapping kept on the server side.
 - `POST /brands/:id/:slug`: accepts dashboard data using the generated field
   names and payload structure, stores it as the latest canonical config, and
   updates the rendered layout.
@@ -251,16 +255,18 @@ Example flat schema:
   "fieldsStyle": "snake_case",
   "structure": "flat",
   "fields": {
-    "title": "company_title_8fa",
-    "primaryColor": "primary_color_2x",
-    "layoutVariant": "variant_q3"
+    "title": "title_8fa1",
+    "balance": "balance_4be2",
+    "currency": "currency_912a",
+    "pageSize": "page_size_c177",
+    "payments": "payments_72ab"
   }
 }
 ```
 
 ### Rendering
 
-- Render SVG first.
+- Render SVG and SSR brand app from the same canonical dashboard config.
 - Optional PNG export can be added later through Puppeteer.
 - Use seeded randomness with `brandId` as the seed.
 - Keep output deterministic for the same brand/config pair.
@@ -268,11 +274,13 @@ Example flat schema:
 - Gemini is not used for V1 template generation; the KOI-style dashboard is
   rendered by deterministic local logic.
 - The renderer must vary the actual layout by brand id: element positions,
-  navigation style, metric/filter composition, table column order, table labels,
-  density, actions, and status badge style should not be fixed across all
-  brands.
+  navigation style, metric composition, table column order, table labels,
+  density, actions, and status badge style should not be fixed across all brands.
 - Template selection should compare candidates against recent brands so the
   nearest five to six created brands are visually distinct where possible.
+- Dashboard payloads intentionally exclude mode/search/filter chips and payment
+  row type/method fields. Canonical dashboard data is title, balance, currency,
+  page size, and payment rows.
 
 ### Dashboard Layout Reference
 
@@ -292,9 +300,10 @@ One template must be based on the provided KOI-style payments dashboard:
 
 - Static browser UI at `/`.
 - Left sidebar lists recent brands and lets the user switch between them.
-- Main view includes brand creation, generated schema details, editable sample
-  payload, dynamic endpoint submit, and a live SPA preview rendered from the
-  brand GET response.
+- Brand creation opens in a modal; refresh and delete actions live with the
+  brand list rather than inside the preview.
+- Main view shows only the live SPA preview rendered from the brand data
+  response.
 - Live preview loads through a server-rendered brand app URL and the preview
   browser runtime only calls the generated public data endpoint. The generated
   schema remains server-side for preview rendering.

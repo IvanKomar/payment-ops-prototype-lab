@@ -2,7 +2,8 @@
 
 Local prototype NestJS service for dynamic branded dashboard layout generation.
 It accepts brand logos, extracts a palette, generates a per-brand API contract,
-stores posted dashboard configuration, and renders a deterministic SVG layout.
+stores posted dashboard configuration, renders a deterministic SVG layout, and
+serves a server-rendered branded SPA preview.
 
 ## Local Run
 
@@ -43,8 +44,8 @@ Multipart fields:
 
 The service stores the logo on disk, extracts a palette, creates a dynamic
 brand API schema, and returns the generated endpoint plus a sample payload.
-The response also includes the deterministic `layoutVariant` chosen for that
-brand.
+The response also includes the public data endpoint, SSR app URL, and the
+deterministic `layoutVariant` chosen for that brand.
 
 ### Recent Brands
 
@@ -74,6 +75,16 @@ Returns the latest dashboard data in the generated contract shape for that
 brand. If no data has been posted yet, the service returns the default dashboard
 data in the generated contract shape.
 
+`GET /brands/:id/:slug/data`
+
+Returns the same generated data shape for the public brand app. This is the only
+data endpoint called by the browser preview.
+
+`GET /brands/:id/:slug/app`
+
+Returns the server-rendered brand SPA shell. Schema mapping stays server-side;
+the client only receives app context and then refreshes via `/data`.
+
 `POST /brands/:id/:slug`
 
 Accepts the generated schema payload, maps randomized fields to canonical
@@ -86,6 +97,12 @@ the stored data in the generated contract shape.
 
 Returns a self-contained SVG with the logo embedded as base64.
 
+### UI
+
+The demo UI keeps brand management outside the preview surface. Recent brands
+are shown in a compact sidebar, create opens a modal, and delete/refresh actions
+live beside the brand list. The main panel shows only the live SPA preview.
+
 ## Notes
 
 - Gemini is not used in V1. The KOI-style dashboard is rendered by deterministic
@@ -93,6 +110,9 @@ Returns a self-contained SVG with the logo embedded as base64.
 - Brands get stable generated template profiles. New brands are scored against
   recent brands so nearby creations vary layout variant, navigation style, table
   column order, column labels, density, actions, and status badge style.
+- Dashboard config intentionally excludes filter/search/mode chips and payment
+  row `type`/`method`; canonical payload fields are title, balance, currency,
+  page size, and payment rows.
 - Raster palettes use `node-vibrant`.
 - SVG palettes use basic color extraction from SVG markup.
 - Uploaded SVGs are rejected if they contain scripts, `foreignObject`, inline
