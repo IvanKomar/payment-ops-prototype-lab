@@ -11,24 +11,13 @@ const paymentRowSchema = z.object({
   requestedAmount: z.coerce.number().finite().nonnegative(),
   paidAmount: z.coerce.number().finite().nonnegative(),
   createdAt: z.string().trim().min(1),
-  paidAt: z.string().trim().min(1).nullable(),
-  type: z.enum(["p2p", "intent", "refund"]),
-  method: z.string().trim().min(1)
+  paidAt: z.string().trim().min(1).nullable()
 });
 
 const dashboardConfigSchema = z.object({
   title: z.string().trim().min(1).max(120),
   balance: z.coerce.number().finite(),
   currency: z.string().trim().min(3).max(8),
-  mode: z.enum(["P2P", "INTENT"]),
-  searchTransactionId: z.string().trim(),
-  filters: z.object({
-    method: z.string().trim(),
-    type: z.string().trim(),
-    status: z.string().trim(),
-    dateFrom: z.string().trim(),
-    dateTo: z.string().trim()
-  }),
   pageSize: z.coerce.number().int().min(1).max(100),
   payments: z.array(paymentRowSchema).min(1).max(50)
 });
@@ -41,15 +30,6 @@ export class PayloadMapperService {
       title: flat[external(schema, "title")],
       balance: flat[external(schema, "balance")],
       currency: flat[external(schema, "currency")],
-      mode: flat[external(schema, "mode")],
-      searchTransactionId: flat[external(schema, "searchTransactionId")],
-      filters: {
-        method: flat[external(schema, "filters.method")],
-        type: flat[external(schema, "filters.type")],
-        status: flat[external(schema, "filters.status")],
-        dateFrom: flat[external(schema, "filters.dateFrom")],
-        dateTo: flat[external(schema, "filters.dateTo")]
-      },
       pageSize: flat[external(schema, "pageSize")],
       payments: flat[external(schema, "payments")]
     };
@@ -83,16 +63,7 @@ export class PayloadMapperService {
         [external(schema, "title")]: config.title,
         [external(schema, "balance")]: config.balance,
         [external(schema, "currency")]: config.currency,
-        [external(schema, "mode")]: config.mode,
-        [external(schema, "searchTransactionId")]: config.searchTransactionId,
         [external(schema, "pageSize")]: config.pageSize
-      },
-      filters: {
-        [external(schema, "filters.method")]: config.filters.method,
-        [external(schema, "filters.type")]: config.filters.type,
-        [external(schema, "filters.status")]: config.filters.status,
-        [external(schema, "filters.dateFrom")]: config.filters.dateFrom,
-        [external(schema, "filters.dateTo")]: config.filters.dateTo
       },
       [external(schema, "payments")]: config.payments
     };
@@ -110,7 +81,6 @@ export class PayloadMapperService {
     const nested = objectPayload(payload);
     return {
       ...objectPayload(nested.dashboard),
-      ...objectPayload(nested.filters),
       [external(schema, "payments")]: nested[external(schema, "payments")]
     };
   }
@@ -148,11 +118,6 @@ function keyValuePayload(value: unknown): Record<string, unknown> {
 }
 
 function getCanonicalValue(config: LayoutBuilderDashboardConfig, field: string): unknown {
-  if (field.startsWith("filters.")) {
-    const filterKey = field.slice("filters.".length) as keyof LayoutBuilderDashboardConfig["filters"];
-    return config.filters[filterKey];
-  }
-
   return config[field as keyof LayoutBuilderDashboardConfig];
 }
 

@@ -1,6 +1,12 @@
 export type LayoutBuilderFieldStyle = "camelCase" | "snake_case" | "kebab-case";
 export type LayoutBuilderPayloadStructure = "flat" | "nested" | "key-value-array";
-export type LayoutBuilderLayoutVariant = "classic" | "summary-left" | "dense-ops";
+export type LayoutBuilderLayoutVariant =
+  | "classic"
+  | "summary-left"
+  | "dense-ops"
+  | "command-center"
+  | "finance-ledger"
+  | "compact-review";
 
 export interface LayoutBuilderPalette {
   primary: string;
@@ -18,23 +24,12 @@ export interface LayoutBuilderPaymentRow {
   paidAmount: number;
   createdAt: string;
   paidAt: string | null;
-  type: "p2p" | "intent" | "refund";
-  method: string;
 }
 
 export interface LayoutBuilderDashboardConfig {
   title: string;
   balance: number;
   currency: string;
-  mode: "P2P" | "INTENT";
-  searchTransactionId: string;
-  filters: {
-    method: string;
-    type: string;
-    status: string;
-    dateFrom: string;
-    dateTo: string;
-  };
   pageSize: number;
   payments: LayoutBuilderPaymentRow[];
 }
@@ -47,7 +42,12 @@ export interface LayoutBuilderSchemaField {
 export interface LayoutBuilderBrandSchemaResponse {
   brandId: string;
   schemaId: string;
+  name: string;
+  logoMimeType: string;
+  palette: LayoutBuilderPalette;
   endpoint: string;
+  dataEndpoint: string;
+  appUrl: string;
   method: "POST";
   methods: Array<"GET" | "POST">;
   fieldsStyle: LayoutBuilderFieldStyle;
@@ -70,6 +70,8 @@ export interface LayoutBuilderBrandListItem {
   name: string;
   logoMimeType: string;
   palette: LayoutBuilderPalette;
+  dataEndpoint: string;
+  appUrl: string;
   createdAt: string;
   updatedAt: string;
 }

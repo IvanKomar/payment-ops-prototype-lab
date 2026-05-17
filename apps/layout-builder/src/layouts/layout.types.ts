@@ -4,6 +4,7 @@ import type {
   LayoutBuilderPalette,
   LayoutBuilderPayloadStructure
 } from "@payment-ops/shared-types";
+import type { LayoutProfile } from "./render/layout-profile.js";
 
 export interface UploadedLogoFile {
   originalname: string;
@@ -26,6 +27,7 @@ export interface GeneratedSchema {
   fieldsStyle: LayoutBuilderFieldStyle;
   structure: LayoutBuilderPayloadStructure;
   fields: Record<string, string>;
+  templateProfile: LayoutProfile;
 }
 
 export interface BrandWithSchema {

@@ -3,6 +3,7 @@ import type { Brand, BrandRequest, BrandSchema, Prisma } from "@prisma/client";
 import type { LayoutBuilderDashboardConfig, LayoutBuilderPalette } from "@payment-ops/shared-types";
 
 import { PrismaService } from "../prisma/prisma.service.js";
+import { createLayoutProfile, type LayoutProfile } from "./render/layout-profile.js";
 import type {
   BrandWithSchema,
   CreateBrandInput,
@@ -34,7 +35,10 @@ export class LayoutRepository {
             slug: input.schema.slug,
             fieldsStyle: input.schema.fieldsStyle,
             structure: input.schema.structure,
-            fields: input.schema.fields as Prisma.InputJsonValue
+            fields: {
+              mappings: input.schema.fields,
+              templateProfile: input.schema.templateProfile
+            } as unknown as Prisma.InputJsonValue
           }
         }
       },
@@ -122,6 +126,8 @@ function toBrandWithSchema(brand: BrandWithRelations): BrandWithSchema {
     throw new Error(`Brand has no schema: ${brand.id}`);
   }
 
+  const parsedFields = parseSchemaFields(schema.fields, brand.id);
+
   return {
     id: brand.id,
     name: brand.name,
@@ -138,9 +144,73 @@ function toBrandWithSchema(brand: BrandWithRelations): BrandWithSchema {
       slug: schema.slug,
       fieldsStyle: schema.fieldsStyle as GeneratedSchema["fieldsStyle"],
       structure: schema.structure as GeneratedSchema["structure"],
-      fields: schema.fields as Record<string, string>
+      fields: parsedFields.mappings,
+      templateProfile: parsedFields.templateProfile
     } satisfies GeneratedSchema
   };
+}
+
+function parseSchemaFields(
+  value: unknown,
+  brandId: string
+): { mappings: Record<string, string>; templateProfile: LayoutProfile } {
+  if (isObject(value) && isObject(value.mappings)) {
+    return {
+      mappings: stringRecord(value.mappings),
+      templateProfile: normalizeLayoutProfile(value.templateProfile, brandId)
+    };
+  }
+
+  return {
+    mappings: stringRecord(value),
+    templateProfile: createLayoutProfile(brandId)
+  };
+}
+
+function normalizeLayoutProfile(value: unknown, brandId: string): LayoutProfile {
+  const fallback = createLayoutProfile(brandId);
+
+  if (!isLayoutProfile(value)) {
+    return fallback;
+  }
+
+  const columns = value.columns.filter((column) => PAYMENT_COLUMN_KEYS.has(column.key));
+
+  if (columns.length === 0) {
+    return fallback;
+  }
+
+  return {
+    ...value,
+    columns
+  };
+}
+
+const PAYMENT_COLUMN_KEYS = new Set<LayoutProfile["columns"][number]["key"]>([
+  "transactionId",
+  "status",
+  "requestedAmount",
+  "paidAmount",
+  "createdAt",
+  "paidAt"
+]);
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  if (!isObject(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+  );
+}
+
+function isLayoutProfile(value: unknown): value is LayoutProfile {
+  return isObject(value) && typeof value.templateId === "string" && Array.isArray(value.columns);
 }
 
 export function brandRequestToCanonicalConfig(request: BrandRequest): LayoutBuilderDashboardConfig {

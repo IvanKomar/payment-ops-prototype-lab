@@ -2,30 +2,26 @@ import type {
   HealthResponse,
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandResponse,
-  LayoutBuilderBrandSchemaResponse,
   ReceiptRecognitionModel,
   ReceiptRecognizerReceiptResponse
 } from "@payment-ops/shared-types";
 
 import { api, type SmsRecentMessageResponse, type SmsStatusResponse } from "./api.js";
-import { createDemoLogo, formatJson, parseJson } from "./demo-data.js";
+import { createDemoLogo } from "./demo-data.js";
 import "./styles.css";
 
 interface LayoutState {
-  activeBrand: LayoutBuilderBrandResponse | null;
-  activeSchema: LayoutBuilderBrandSchemaResponse | null;
+  activeBrand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem | null;
 }
 
 type DemoRoute = "sms" | "receipts" | "layouts";
-type ContractMethod = "GET" | "POST";
 
 const ROUTES: readonly DemoRoute[] = ["sms", "receipts", "layouts"];
 
 const layoutState: LayoutState = {
-  activeBrand: null,
-  activeSchema: null
+  activeBrand: null
 };
-let activeContractMethod: ContractMethod = "GET";
+let recentLayoutBrands: LayoutBuilderBrandListItem[] = [];
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -141,74 +137,60 @@ app.innerHTML = `
         </article>
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Phase 4 + 5</p>
             <h2>Brand layout demo</h2>
           </div>
-          <button class="icon-button" id="layout-refresh" type="button" title="Refresh brands">↻</button>
         </div>
         <div class="layout-workbench">
           <aside class="brand-sidebar">
-            <h3>Create brand</h3>
-            <form id="brand-form" class="form-grid">
-              <label>
-                Brand name
-                <input name="brandName" value="KOI Demo" required />
-              </label>
-              <label>
-                Logo
-                <input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
-              </label>
-              <button class="button" type="submit">Create brand</button>
-              <span class="hint">No file selected uses a generated SVG mark.</span>
-            </form>
-            <h3 class="sidebar-title">Recent brands</h3>
+            <div class="sidebar-header">
+              <h3>Brands</h3>
+              <div class="sidebar-actions">
+                <button class="icon-button" id="open-brand-modal" type="button" title="Create brand">+</button>
+                <button class="icon-button" id="layout-refresh" type="button" title="Refresh brands">↻</button>
+              </div>
+            </div>
             <div class="list compact" id="brand-list"></div>
+            <button class="button danger sidebar-delete" id="delete-brand" type="button" disabled>Delete selected</button>
           </aside>
 
           <section class="preview-column">
             <div class="preview-header">
               <div>
-                <h3>Preview</h3>
+                <h3>Live SPA preview</h3>
                 <div class="selected-brand" id="selected-brand-title">No brand selected</div>
               </div>
-              <button class="button danger" id="delete-brand" type="button" disabled>Delete brand</button>
             </div>
-            <div class="layout-preview">
-              <img id="layout-image" alt="Rendered payment operations layout" />
+            <div class="live-preview" id="live-preview">
+              <div class="empty">Select a brand to load the preview.</div>
             </div>
           </section>
 
-          <section class="contract-console">
-            <div>
-              <h3>Brand API contract</h3>
-              <div class="schema-meta" id="schema-meta">Create or select a brand to load its schema.</div>
-            </div>
-            <div class="contract-grid">
-              <div>
-                <div class="contract-toolbar" aria-label="Contract method">
-                  <button class="method-button active" type="button" data-contract-method="GET">GET</button>
-                  <button class="method-button" type="button" data-contract-method="POST">POST</button>
-                </div>
-                <label class="contract-url">
-                  Endpoint
-                  <input id="contract-endpoint" readonly />
-                </label>
-                <label id="contract-body-wrap">
-                  Request body
-                  <textarea id="layout-payload" class="code-input" rows="12" spellcheck="false"></textarea>
-                </label>
-                <button class="button" id="send-contract" type="button">Send GET</button>
-              </div>
-              <div>
-                <h3 class="response-title">Response</h3>
-                <pre id="contract-response">No contract request sent yet.</pre>
-              </div>
-            </div>
-          </section>
         </div>
       </article>
     </section>
   </main>
+
+  <div class="modal-backdrop" id="brand-modal" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="brand-modal-title">
+      <div class="modal-header">
+        <h3 id="brand-modal-title">Create brand</h3>
+        <button class="icon-button" id="close-brand-modal" type="button" aria-label="Close create brand dialog">X</button>
+      </div>
+      <form id="brand-form" class="form-grid">
+        <label>
+          Brand name
+          <input name="brandName" value="KOI Demo" required />
+        </label>
+        <label>
+          Logo
+          <input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+        </label>
+        <button class="button" type="submit">Create brand</button>
+        <span class="hint">No file selected uses a generated SVG mark.</span>
+        <span class="modal-status" id="brand-modal-status"></span>
+      </form>
+    </section>
+  </div>
 `;
 
 const refreshAllButton = required<HTMLButtonElement>("#refresh-all");
@@ -220,16 +202,12 @@ const receiptResult = required<HTMLElement>("#receipt-result");
 const receiptRaw = required<HTMLPreElement>("#receipt-raw");
 const receiptHistory = required<HTMLElement>("#receipt-history");
 const brandForm = required<HTMLFormElement>("#brand-form");
+const brandModal = required<HTMLElement>("#brand-modal");
+const brandModalStatus = required<HTMLElement>("#brand-modal-status");
 const brandList = required<HTMLElement>("#brand-list");
 const selectedBrandTitle = required<HTMLElement>("#selected-brand-title");
 const deleteBrandButton = required<HTMLButtonElement>("#delete-brand");
-const schemaMeta = required<HTMLElement>("#schema-meta");
-const contractEndpoint = required<HTMLInputElement>("#contract-endpoint");
-const contractBodyWrap = required<HTMLElement>("#contract-body-wrap");
-const layoutPayload = required<HTMLTextAreaElement>("#layout-payload");
-const sendContract = required<HTMLButtonElement>("#send-contract");
-const contractResponse = required<HTMLPreElement>("#contract-response");
-const layoutImage = required<HTMLImageElement>("#layout-image");
+const livePreview = required<HTMLElement>("#live-preview");
 
 window.addEventListener("hashchange", () => {
   void setActiveRoute(routeFromHash());
@@ -251,6 +229,20 @@ required<HTMLButtonElement>("#layout-refresh").addEventListener("click", () => {
   void refreshBrands();
 });
 
+required<HTMLButtonElement>("#open-brand-modal").addEventListener("click", () => {
+  openBrandModal();
+});
+
+required<HTMLButtonElement>("#close-brand-modal").addEventListener("click", () => {
+  closeBrandModal();
+});
+
+brandModal.addEventListener("click", (event) => {
+  if (event.target === brandModal) {
+    closeBrandModal();
+  }
+});
+
 smsForm.addEventListener("submit", (event) => {
   event.preventDefault();
   void sendSms();
@@ -268,20 +260,6 @@ brandForm.addEventListener("submit", (event) => {
 
 deleteBrandButton.addEventListener("click", () => {
   void deleteActiveBrand();
-});
-
-document.querySelectorAll<HTMLButtonElement>("[data-contract-method]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const method = button.dataset.contractMethod;
-
-    if (method === "GET" || method === "POST") {
-      setContractMethod(method);
-    }
-  });
-});
-
-sendContract.addEventListener("click", () => {
-  void sendContractRequest();
 });
 
 void setActiveRoute(routeFromHash());
@@ -555,6 +533,17 @@ async function loadReceipt(receiptId: string): Promise<void> {
   }
 }
 
+function openBrandModal(): void {
+  brandModal.hidden = false;
+  brandModalStatus.textContent = "";
+  brandForm.querySelector<HTMLInputElement>('input[name="brandName"]')?.focus();
+}
+
+function closeBrandModal(): void {
+  brandModal.hidden = true;
+  brandModalStatus.textContent = "";
+}
+
 async function createBrand(): Promise<void> {
   const formData = new FormData(brandForm);
   const brandName = String(formData.get("brandName") ?? "").trim();
@@ -564,14 +553,15 @@ async function createBrand(): Promise<void> {
   const logo = selectedLogo ?? createDemoLogo(brandName);
 
   setBusy(brandForm, true);
-  schemaMeta.textContent = "Creating brand and schema...";
+  brandModalStatus.textContent = "Creating brand...";
 
   try {
     const brand = await api.layout.createBrand(brandName, logo);
     await setActiveBrand(brand);
     await refreshBrands();
+    closeBrandModal();
   } catch (error) {
-    schemaMeta.textContent = errorMessage(error);
+    brandModalStatus.textContent = errorMessage(error);
   } finally {
     setBusy(brandForm, false);
   }
@@ -580,6 +570,7 @@ async function createBrand(): Promise<void> {
 async function refreshBrands(): Promise<void> {
   try {
     const brands = await api.layout.recent();
+    recentLayoutBrands = brands;
     renderBrandList(brands);
 
     if (brands.length === 0) {
@@ -587,13 +578,13 @@ async function refreshBrands(): Promise<void> {
       return;
     }
 
-    const activeBrandId = layoutState.activeSchema?.brandId;
+    const activeBrandId = layoutState.activeBrand?.brandId;
     const activeBrandStillExists = activeBrandId
       ? brands.some((brand) => brand.brandId === activeBrandId)
       : false;
 
     if (!activeBrandStillExists && brands[0]) {
-      await selectBrand(brands[0].brandId, brands[0].name);
+      await selectBrand(brands[0].brandId);
     }
   } catch (error) {
     brandList.textContent = errorMessage(error);
@@ -609,10 +600,12 @@ function renderBrandList(brands: LayoutBuilderBrandListItem[]): void {
   brandList.innerHTML = brands
     .map(
       (brand) => `
-        <button class="list-item brand-item${layoutState.activeSchema?.brandId === brand.brandId ? " active" : ""}" type="button" data-brand-id="${escapeHtml(brand.brandId)}" data-brand-name="${escapeHtml(brand.name)}">
+        <button class="list-item brand-item${layoutState.activeBrand?.brandId === brand.brandId ? " active" : ""}" type="button" data-brand-id="${escapeHtml(brand.brandId)}">
           <span class="swatch" style="background:${escapeHtml(brand.palette.primary)}"></span>
-          <span>${escapeHtml(brand.name)}</span>
-          <strong>${escapeHtml(brand.logoMimeType.replace("image/", ""))}</strong>
+          <span>
+            <strong>${escapeHtml(brand.name)}</strong>
+            <small>${escapeHtml(shortId(brand.brandId))}</small>
+          </span>
         </button>
       `
     )
@@ -623,44 +616,45 @@ function renderBrandList(brands: LayoutBuilderBrandListItem[]): void {
       const brandId = button.dataset.brandId;
 
       if (brandId) {
-        void selectBrand(brandId, button.dataset.brandName);
+        void selectBrand(brandId);
       }
     });
   });
 }
 
-async function selectBrand(brandId: string, brandName?: string): Promise<void> {
-  try {
-    const schema = await api.layout.schema(brandId);
-    layoutState.activeBrand = null;
-    layoutState.activeSchema = schema;
-    applySchema(schema, brandName);
-    layoutImage.src = api.layout.layoutUrl(brandId);
-    renderBrandListSelection(brandId);
-  } catch (error) {
-    schemaMeta.textContent = errorMessage(error);
+async function selectBrand(brandId: string): Promise<void> {
+  const brand = recentLayoutBrands.find((item) => item.brandId === brandId);
+
+  if (!brand) {
+    livePreview.innerHTML = `<div class="empty">Brand was not found in the recent list: ${escapeHtml(brandId)}</div>`;
+    return;
   }
+
+  layoutState.activeBrand = brand;
+  applyBrandPreview(brand);
+  renderBrandListSelection(brandId);
 }
 
 async function setActiveBrand(brand: LayoutBuilderBrandResponse): Promise<void> {
   layoutState.activeBrand = brand;
-  layoutState.activeSchema = brand;
-  applySchema(brand, brand.name);
-  layoutImage.src = api.layout.layoutUrl(brand.brandId);
+  applyBrandPreview(brand, brand.name);
   renderBrandListSelection(brand.brandId);
 }
 
-function applySchema(schema: LayoutBuilderBrandSchemaResponse, brandName?: string): void {
-  schemaMeta.innerHTML = `
-    <strong>${escapeHtml(schema.endpoint)}</strong>
-    <span>${escapeHtml(schema.methods.join(" / "))} · ${escapeHtml(schema.fieldsStyle)} · ${escapeHtml(schema.structure)} · ${escapeHtml(schema.layoutVariant)}</span>
-  `;
-  selectedBrandTitle.textContent = brandName ? `${brandName} · ${schema.brandId}` : schema.brandId;
+function applyBrandPreview(
+  brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem,
+  brandName?: string
+): void {
+  selectedBrandTitle.textContent = `${brandName ?? brand.name} · ${brand.brandId}`;
   deleteBrandButton.disabled = false;
-  contractEndpoint.value = schema.endpoint;
-  layoutPayload.value = formatJson(schema.samplePayload);
-  contractResponse.textContent = "No contract request sent yet.";
-  setContractMethod(activeContractMethod);
+  livePreview.removeAttribute("style");
+  livePreview.innerHTML = `
+    <iframe
+      class="preview-frame"
+      title="${escapeHtml(brand.name)} live preview"
+      src="${escapeHtml(api.layout.publicUrl(brand.appUrl))}"
+    ></iframe>
+  `;
 }
 
 function renderBrandListSelection(brandId: string): void {
@@ -671,76 +665,32 @@ function renderBrandListSelection(brandId: string): void {
 
 function clearLayoutSelection(): void {
   layoutState.activeBrand = null;
-  layoutState.activeSchema = null;
   selectedBrandTitle.textContent = "No brand selected";
   deleteBrandButton.disabled = true;
-  schemaMeta.textContent = "Create or select a brand to load its schema.";
-  contractEndpoint.value = "";
-  layoutPayload.value = "";
-  contractResponse.textContent = "No contract request sent yet.";
-  layoutImage.removeAttribute("src");
+  livePreview.removeAttribute("style");
+  livePreview.innerHTML = `<div class="empty">Select a brand to load the preview.</div>`;
 }
 
 async function deleteActiveBrand(): Promise<void> {
-  const schema = layoutState.activeSchema;
+  const brand = layoutState.activeBrand;
 
-  if (!schema) {
+  if (!brand) {
     return;
   }
 
-  if (!window.confirm(`Delete brand ${schema.brandId}?`)) {
+  if (!window.confirm(`Delete brand ${brand.brandId}?`)) {
     return;
   }
 
   deleteBrandButton.disabled = true;
-  contractResponse.textContent = "Deleting brand...";
 
   try {
-    await api.layout.deleteBrand(schema.brandId);
+    await api.layout.deleteBrand(brand.brandId);
     clearLayoutSelection();
     await refreshBrands();
   } catch (error) {
     deleteBrandButton.disabled = false;
-    contractResponse.textContent = errorMessage(error);
-  }
-}
-
-function setContractMethod(method: ContractMethod): void {
-  activeContractMethod = method;
-  contractBodyWrap.hidden = method === "GET";
-  sendContract.textContent = `Send ${method}`;
-
-  document.querySelectorAll<HTMLButtonElement>("[data-contract-method]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.contractMethod === method);
-  });
-}
-
-async function sendContractRequest(): Promise<void> {
-  const schema = layoutState.activeSchema;
-
-  if (!schema) {
-    schemaMeta.textContent = "Create or select a brand first.";
-    return;
-  }
-
-  sendContract.disabled = true;
-  contractResponse.textContent = "Sending...";
-
-  try {
-    if (activeContractMethod === "GET") {
-      const response = await api.layout.fetchContract(schema.endpoint);
-      contractResponse.textContent = formatJson(response);
-      return;
-    }
-
-    const payload = parseJson(layoutPayload.value);
-    const response = await api.layout.configure(schema.endpoint, payload);
-    contractResponse.textContent = formatJson(response);
-    layoutImage.src = api.layout.layoutUrl(schema.brandId);
-  } catch (error) {
-    contractResponse.textContent = errorMessage(error);
-  } finally {
-    sendContract.disabled = false;
+    livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
   }
 }
 
@@ -778,7 +728,7 @@ function statusClass(status: string): string {
 }
 
 function shortId(value: string): string {
-  return value.length > 14 ? `${value.slice(0, 10)}…` : value;
+  return value.length > 14 ? `${value.slice(0, 10)}...` : value;
 }
 
 function delay(ms: number): Promise<void> {

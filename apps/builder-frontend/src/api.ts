@@ -2,8 +2,6 @@ import type {
   HealthResponse,
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandResponse,
-  LayoutBuilderBrandSchemaResponse,
-  LayoutBuilderConfigureResponse,
   LayoutBuilderDeleteBrandResponse,
   ReceiptRecognitionModel,
   ReceiptRecognizerRawTextResponse,
@@ -112,11 +110,6 @@ export const api = {
       });
     },
     recent: () => requestJson<LayoutBuilderBrandListItem[]>(apiBases.layout, "/brands/recent"),
-    schema: (brandId: string) =>
-      requestJson<LayoutBuilderBrandSchemaResponse>(
-        apiBases.layout,
-        `/brands/${encodeURIComponent(brandId)}/schema`
-      ),
     deleteBrand: (brandId: string) =>
       requestJson<LayoutBuilderDeleteBrandResponse>(
         apiBases.layout,
@@ -125,19 +118,6 @@ export const api = {
           method: "DELETE"
         }
       ),
-    fetchContract: (endpoint: string) =>
-      requestJson<unknown>(apiBases.layout, endpointPath(endpoint), {
-        method: "GET"
-      }),
-    configure: (endpoint: string, payload: unknown) =>
-      requestJson<LayoutBuilderConfigureResponse>(apiBases.layout, endpointPath(endpoint), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      }),
-    layoutUrl: (brandId: string) =>
-      `${apiBases.layout}/brands/${encodeURIComponent(brandId)}/layout?ts=${Date.now()}`
+    publicUrl: (endpoint: string) => `${apiBases.layout}${endpointPath(endpoint)}`,
   }
 };

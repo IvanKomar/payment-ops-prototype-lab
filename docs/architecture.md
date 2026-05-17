@@ -182,14 +182,15 @@ Logo support:
 - Raster palettes use `node-vibrant`.
 - SVG palettes use local color extraction from sanitized SVG markup.
 - Rendered SVG embeds the stored logo as base64.
-- Layout profiles are deterministic by brand id and vary element placement,
-  table column order, column labels, and status badge style.
+- Template profiles are stable per brand and are chosen against recent brands to
+  vary element placement, navigation style, metric/filter composition, table
+  density, table column order, column labels, actions, and status badge style.
 
 Layout reference:
 
 - One template must reproduce the logic of the provided KOI-style payments
-  dashboard: top bar, balance badge, filters, report actions, refresh action, and
-  a scrollable payments table.
+  dashboard: top bar, balance badge, report actions, refresh action, and a
+  scrollable payments table.
 
 ## Implementation Phases
 

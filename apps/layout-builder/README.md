@@ -90,8 +90,9 @@ Returns a self-contained SVG with the logo embedded as base64.
 
 - Gemini is not used in V1. The KOI-style dashboard is rendered by deterministic
   local logic.
-- Brands get different deterministic layout profiles. The renderer varies block
-  positions, table column order, column labels, and status badge style.
+- Brands get stable generated template profiles. New brands are scored against
+  recent brands so nearby creations vary layout variant, navigation style, table
+  column order, column labels, density, actions, and status badge style.
 - Raster palettes use `node-vibrant`.
 - SVG palettes use basic color extraction from SVG markup.
 - Uploaded SVGs are rejected if they contain scripts, `foreignObject`, inline

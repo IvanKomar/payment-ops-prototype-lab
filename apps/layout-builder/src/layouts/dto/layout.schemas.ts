@@ -14,7 +14,7 @@ export const brandIdSchema = z
 export const slugSchema = z
   .string()
   .trim()
-  .regex(/^[a-z0-9_]{12,40}$/, "slug must be lowercase alphanumeric with underscores");
+  .regex(/^[a-z0-9][a-z0-9_-]{6,80}$/, "slug must be lowercase URL-safe text");
 
 export const createBrandSchema = z.object({
   brandName: z.string().trim().min(1).max(80)
@@ -27,8 +27,23 @@ export class CreateBrandResponseDto {
   @ApiProperty({ type: String, example: "sch_01d9326390ac4c1898da7c6cd25b66e1" })
   schemaId!: string;
 
+  @ApiProperty({ type: String, example: "KOI" })
+  name!: string;
+
+  @ApiProperty({ type: String, example: "image/svg+xml" })
+  logoMimeType!: string;
+
+  @ApiProperty({ type: Object })
+  palette!: Record<string, string>;
+
   @ApiProperty({ type: String, example: "/brands/br_.../configure_ab12cd34ef56" })
   endpoint!: string;
+
+  @ApiProperty({ type: String, example: "/brands/br_.../koi_ab12cd34ef56/data" })
+  dataEndpoint!: string;
+
+  @ApiProperty({ type: String, example: "/brands/br_.../koi_ab12cd34ef56/app" })
+  appUrl!: string;
 
   @ApiProperty({ type: String, example: "POST" })
   method!: "POST";
@@ -53,15 +68,6 @@ export class CreateBrandResponseDto {
 }
 
 export class BrandResponseDto extends CreateBrandResponseDto {
-  @ApiProperty({ type: String, example: "KOI" })
-  name!: string;
-
-  @ApiProperty({ type: String, example: "image/svg+xml" })
-  logoMimeType!: string;
-
-  @ApiProperty({ type: Object })
-  palette!: Record<string, string>;
-
   @ApiProperty({ type: String, example: "2026-05-15T10:00:00.000Z" })
   createdAt!: string;
 
@@ -81,6 +87,12 @@ export class BrandListItemDto {
 
   @ApiProperty({ type: Object })
   palette!: Record<string, string>;
+
+  @ApiProperty({ type: String, example: "/brands/br_.../koi_ab12cd34ef56/data" })
+  dataEndpoint!: string;
+
+  @ApiProperty({ type: String, example: "/brands/br_.../koi_ab12cd34ef56/app" })
+  appUrl!: string;
 
   @ApiProperty({ type: String, example: "2026-05-15T10:00:00.000Z" })
   createdAt!: string;

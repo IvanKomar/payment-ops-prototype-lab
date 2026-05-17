@@ -3,7 +3,7 @@ import type { LayoutBuilderPaymentRow } from "@payment-ops/shared-types";
 import { readFile } from "node:fs/promises";
 
 import type { RenderLayoutInput } from "../layout.types.js";
-import { createLayoutProfile, type LayoutProfile, type PaymentColumnProfile } from "./layout-profile.js";
+import type { LayoutProfile, PaymentColumnProfile } from "./layout-profile.js";
 
 @Injectable()
 export class SvgRendererService {
@@ -11,17 +11,11 @@ export class SvgRendererService {
     const logoDataUri = await this.logoDataUri(input.brand.logoPath, input.brand.logoMimeType);
     const palette = input.brand.palette;
     const config = input.config;
-    const profile = createLayoutProfile(input.brand.id);
+    const profile = input.brand.schema.templateProfile;
     const rows = config.payments.slice(0, Math.max(1, Math.min(config.pageSize, 8)));
     const width = 1180;
     const height = profile.tableTop + 62 + rows.length * profile.rowHeight;
     const text = readableText(palette.primary);
-    const filters = [
-      ["Method", config.filters.method],
-      ["Type", config.filters.type],
-      ["Status", config.filters.status],
-      ["Window", `${config.filters.dateFrom} - ${config.filters.dateTo}`]
-    ] as const;
 
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(config.title)} dashboard">
   <rect width="${width}" height="${height}" fill="${escapeXml(palette.background)}"/>
@@ -29,16 +23,10 @@ export class SvgRendererService {
   <rect x="28" y="24" width="1124" height="72" rx="8" fill="${escapeXml(palette.primary)}"/>
   <image href="${escapeXml(logoDataUri)}" x="54" y="42" width="38" height="38" preserveAspectRatio="xMidYMid meet"/>
   <text x="106" y="67" fill="${text}" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">${escapeXml(input.brand.name)}</text>
-  <rect x="832" y="43" width="132" height="34" rx="17" fill="${escapeXml(config.mode === "P2P" ? palette.accent : "rgba(255,255,255,0.16)")}" opacity="0.95"/>
-  <text x="873" y="65" fill="${text}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">P2P</text>
-  <rect x="970" y="43" width="132" height="34" rx="17" fill="${escapeXml(config.mode === "INTENT" ? palette.accent : "rgba(255,255,255,0.16)")}" opacity="0.95"/>
-  <text x="1010" y="65" fill="${text}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">INTENT</text>
   <text x="${profile.titleX}" y="${profile.titleY}" fill="${escapeXml(palette.text)}" font-family="Inter, Arial, sans-serif" font-size="${profile.variant === "dense-ops" ? 28 : 32}" font-weight="760">${escapeXml(config.title)}</text>
-  ${balanceCard(profile.balanceX, profile.balanceY, profile.variant, config.balance, config.currency, palette.secondary)}
-  ${searchBox(profile.searchX, profile.searchY, config.searchTransactionId)}
-  ${filters.map(([label, value], index) => filterChip(profile.filterStartX + index * profile.filterStepX, profile.filterStartY, label, value, profile.variant === "dense-ops" ? 136 : 154)).join("\n  ")}
+  ${balanceCard(profile.balanceX, profile.balanceY, profile.variant, profile.balanceLabel, config.balance, config.currency, palette.secondary)}
   ${renderActions(profile, config.pageSize, palette.primary, palette.secondary, palette.accent)}
-  <text x="${profile.paymentsTitleX}" y="${profile.paymentsTitleY}" fill="${escapeXml(palette.text)}" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="740">${profile.variant === "dense-ops" ? "Payment operations" : "Payments"}</text>
+  <text x="${profile.paymentsTitleX}" y="${profile.paymentsTitleY}" fill="${escapeXml(palette.text)}" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="740">${escapeXml(profile.tableTitle)}</text>
   ${tableHeader(profile)}
   ${rows.map((row, index) => tableRow(profile.tableTop + 52 + index * profile.rowHeight, row, config.currency, profile)).join("\n  ")}
 </svg>`;
@@ -54,27 +42,16 @@ function balanceCard(
   x: number,
   y: number,
   variant: LayoutProfile["variant"],
+  label: string,
   balance: number,
   currency: string,
   color: string
 ): string {
   const width = variant === "summary-left" ? 238 : 210;
-  const label = variant === "summary-left" ? "AVAILABLE BALANCE" : "BALANCE";
 
   return `<rect x="${x}" y="${y}" width="${width}" height="56" rx="8" fill="${escapeXml(color)}"/>
-  <text x="${x + 18}" y="${y + 23}" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${label}</text>
+  <text x="${x + 18}" y="${y + 23}" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(label.toUpperCase())}</text>
   <text x="${x + 18}" y="${y + 46}" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="760">${escapeXml(formatMoney(balance, currency))}</text>`;
-}
-
-function searchBox(x: number, y: number, transactionId: string): string {
-  return `<rect x="${x}" y="${y}" width="274" height="42" rx="6" fill="#f7f9fc" stroke="#d4dbe6"/>
-  <text x="${x + 18}" y="${y + 26}" fill="#647184" font-family="Inter, Arial, sans-serif" font-size="14">Search: ${escapeXml(transactionId || "transaction id")}</text>`;
-}
-
-function filterChip(x: number, y: number, label: string, value: string, width: number): string {
-  return `<rect x="${x}" y="${y}" width="${width}" height="42" rx="6" fill="#ffffff" stroke="#d4dbe6"/>
-  <text x="${x + 12}" y="${y + 17}" fill="#6c7788" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="700">${escapeXml(label)}</text>
-  <text x="${x + 12}" y="${y + 33}" fill="#202b39" font-family="Inter, Arial, sans-serif" font-size="13">${escapeXml(value)}</text>`;
 }
 
 function renderActions(
@@ -85,9 +62,7 @@ function renderActions(
   accent: string
 ): string {
   const labels =
-    profile.variant === "dense-ops"
-      ? [`Rows ${pageSize}`, "Support", "Finance CSV", "Sync"]
-      : [`${pageSize} / page`, "Support report", "Finance reconciliation", "Refresh"];
+    profile.actionLabels.length > 0 ? profile.actionLabels : [`${pageSize} / page`, "Support report", "Refresh"];
   const colors = [primary, secondary, secondary, accent];
   let x = profile.actionStartX;
 
@@ -161,10 +136,6 @@ function paymentColumnValue(
 
   if (key === "paidAt") {
     return row.paidAt ? formatShortDate(row.paidAt) : "-";
-  }
-
-  if (key === "type") {
-    return row.type.toUpperCase();
   }
 
   return String(row[key] ?? "");

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { createDefaultDashboardConfig } from "../src/layouts/default-dashboard.js";
+import { createLayoutProfile } from "../src/layouts/render/layout-profile.js";
 import { SvgRendererService } from "../src/layouts/render/svg-renderer.service.js";
 import type { BrandWithSchema } from "../src/layouts/layout.types.js";
 
@@ -35,7 +36,8 @@ describe("SvgRendererService", () => {
         slug: "configure_abc",
         fieldsStyle: "snake_case",
         structure: "flat",
-        fields: {}
+        fields: {},
+        templateProfile: createLayoutProfile("br_00000000000000000000000000000001")
       }
     };
 
@@ -45,7 +47,7 @@ describe("SvgRendererService", () => {
     });
 
     expect(svg).toContain("data:image/svg+xml;base64");
-    expect(svg).toContain("Payment ref");
-    expect(svg).toContain("State");
+    expect(svg).toContain("Payments");
+    expect(svg).toContain("Transaction ID");
   });
 });

@@ -26,8 +26,9 @@ Phase 5 Builder Frontend are in place:
   PostgreSQL persistence, SVG rendering, Swagger, and a small local browser UI
   with a brand sidebar.
 - `apps/builder-frontend` Vite demo console that brings SMS sending, receipt
-  upload/history, brand creation, dynamic payload submission, and SVG layout
-  preview into one local UI.
+  upload/history, brand creation, dynamic payload submission, and live branded
+  Layout Builder preview into one local UI. The preview is loaded as an SSR
+  brand app and calls only the generated brand data endpoint from the browser.
 
 ## Prerequisites
 

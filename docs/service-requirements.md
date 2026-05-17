@@ -244,7 +244,9 @@ Example flat schema:
 
 ```json
 {
-  "endpoint": "/brands/br_abc123/configure_x9k2",
+  "endpoint": "/brands/br_abc123/koi-payments_x9k2",
+  "dataEndpoint": "/brands/br_abc123/koi-payments_x9k2/data",
+  "appUrl": "/brands/br_abc123/koi-payments_x9k2/app",
   "method": "POST",
   "fieldsStyle": "snake_case",
   "structure": "flat",
@@ -266,22 +268,22 @@ Example flat schema:
 - Gemini is not used for V1 template generation; the KOI-style dashboard is
   rendered by deterministic local logic.
 - The renderer must vary the actual layout by brand id: element positions,
-  table column order, table labels, and status badge style should not be fixed
-  across all brands.
+  navigation style, metric/filter composition, table column order, table labels,
+  density, actions, and status badge style should not be fixed across all
+  brands.
+- Template selection should compare candidates against recent brands so the
+  nearest five to six created brands are visually distinct where possible.
 
 ### Dashboard Layout Reference
 
 One template must be based on the provided KOI-style payments dashboard:
 
 - top bar with logo/name;
-- `P2P / INTENT` segmented control;
 - date and user icon;
 - `Payments` title and balance badge;
-- search by transaction id;
-- filters for method, type, status, date from, date to;
 - actions for page size, support report, finance reconciliation report, refresh;
 - payments table with transaction id, status, requested amount, paid amount,
-  created time, paid time, type, and method;
+  created time, and paid time;
 - compact status badges;
 - copy icon near transaction id;
 - scrollable table body.
@@ -291,4 +293,8 @@ One template must be based on the provided KOI-style payments dashboard:
 - Static browser UI at `/`.
 - Left sidebar lists recent brands and lets the user switch between them.
 - Main view includes brand creation, generated schema details, editable sample
-  payload, dynamic endpoint submit, and SVG preview.
+  payload, dynamic endpoint submit, and a live SPA preview rendered from the
+  brand GET response.
+- Live preview loads through a server-rendered brand app URL and the preview
+  browser runtime only calls the generated public data endpoint. The generated
+  schema remains server-side for preview rendering.

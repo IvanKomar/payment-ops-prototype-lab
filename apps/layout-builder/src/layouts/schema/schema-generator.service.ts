@@ -9,13 +9,18 @@ import { createHash, randomUUID } from "node:crypto";
 import { CANONICAL_FIELDS } from "../layout.constants.js";
 import type { GeneratedSchema } from "../layout.types.js";
 import { createDefaultDashboardConfig } from "../default-dashboard.js";
+import { createLayoutProfile, type LayoutProfile } from "../render/layout-profile.js";
 
 const FIELD_STYLES: LayoutBuilderFieldStyle[] = ["camelCase", "snake_case", "kebab-case"];
 const STRUCTURES: LayoutBuilderPayloadStructure[] = ["flat", "nested", "key-value-array"];
 
 @Injectable()
 export class SchemaGeneratorService {
-  generate(brandId: string, brandName: string): GeneratedSchema {
+  generate(
+    brandId: string,
+    brandName: string,
+    recentProfiles: readonly LayoutProfile[] = []
+  ): GeneratedSchema {
     const seed = hashToNumber(brandId);
     const fieldsStyle = FIELD_STYLES[seed % FIELD_STYLES.length]!;
     const structure = STRUCTURES[Math.floor(seed / FIELD_STYLES.length) % STRUCTURES.length]!;
@@ -26,15 +31,19 @@ export class SchemaGeneratorService {
     return {
       id: `sch_${randomUUID().replaceAll("-", "")}`,
       brandId,
-      slug: `configure_${createHash("sha1").update(`${brandId}:${brandName}`).digest("hex").slice(0, 16)}`,
+      slug: `${brandSlug(brandName)}_${createHash("sha1").update(`${brandId}:${brandName}`).digest("hex").slice(0, 16)}`,
       fieldsStyle,
       structure,
-      fields
+      fields,
+      templateProfile: createLayoutProfile(brandId, recentProfiles)
     };
   }
 
-  samplePayload(schema: Pick<GeneratedSchema, "fields" | "structure">, brandName: string): unknown {
-    const config = createDefaultDashboardConfig(brandName);
+  samplePayload(
+    schema: Pick<GeneratedSchema, "brandId" | "fields" | "structure">,
+    brandName: string
+  ): unknown {
+    const config = createDefaultDashboardConfig(brandName, schema.brandId);
 
     if (schema.structure === "flat") {
       return toExternalFlat(schema.fields, config);
@@ -47,6 +56,61 @@ export class SchemaGeneratorService {
     return Object.entries(toExternalFlat(schema.fields, config)).map(([key, value]) => ({ key, value }));
   }
 }
+
+export function brandSlug(value: string): string {
+  const transliterated = [...value.trim().toLowerCase()]
+    .map((char) => CYRILLIC_TO_LATIN[char] ?? char)
+    .join("");
+  const normalized = transliterated
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .replace(/-{2,}/gu, "-")
+    .slice(0, 42);
+
+  return normalized || "brand";
+}
+
+const CYRILLIC_TO_LATIN: Record<string, string> = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "e",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "y",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "h",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "sch",
+  ъ: "",
+  ы: "y",
+  ь: "",
+  э: "e",
+  ю: "yu",
+  я: "ya",
+  є: "ye",
+  і: "i",
+  ї: "yi",
+  ґ: "g"
+};
 
 function hashToNumber(value: string): number {
   return Number.parseInt(createHash("sha1").update(value).digest("hex").slice(0, 8), 16);
@@ -103,16 +167,7 @@ function toExternalNested(
       [external(fields, "title")]: config.title,
       [external(fields, "balance")]: config.balance,
       [external(fields, "currency")]: config.currency,
-      [external(fields, "mode")]: config.mode,
-      [external(fields, "searchTransactionId")]: config.searchTransactionId,
       [external(fields, "pageSize")]: config.pageSize
-    },
-    filters: {
-      [external(fields, "filters.method")]: config.filters.method,
-      [external(fields, "filters.type")]: config.filters.type,
-      [external(fields, "filters.status")]: config.filters.status,
-      [external(fields, "filters.dateFrom")]: config.filters.dateFrom,
-      [external(fields, "filters.dateTo")]: config.filters.dateTo
     },
     [external(fields, "payments")]: config.payments
   };
@@ -129,10 +184,5 @@ function external(fields: Record<string, string>, canonical: string): string {
 }
 
 function getCanonicalValue(config: LayoutBuilderDashboardConfig, field: string): unknown {
-  if (field.startsWith("filters.")) {
-    const filterKey = field.slice("filters.".length) as keyof LayoutBuilderDashboardConfig["filters"];
-    return config.filters[filterKey];
-  }
-
   return config[field as keyof LayoutBuilderDashboardConfig];
 }

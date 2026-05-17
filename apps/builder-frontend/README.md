@@ -35,6 +35,7 @@ cross-origin calls to the NestJS services.
 - SMS: queue a mock-provider SMS, poll status, and show recent messages.
 - Receipts: upload a PhonePe screenshot, choose `tesseract` or `gemini`, and
   inspect normalized fields plus raw OCR text.
-- Layouts: create a brand with an uploaded logo or generated SVG mark, inspect
-  the generated brand API contract, send real `GET` and `POST` requests against
-  the dynamic endpoint, delete demo brands, and preview the rendered SVG layout.
+- Layouts: create a brand with an uploaded logo or generated SVG mark, manage
+  recent demo brands, and preview a live branded SPA built from the brand data
+  response. The preview itself is served through an SSR app URL and only calls
+  the public brand data endpoint from the browser.

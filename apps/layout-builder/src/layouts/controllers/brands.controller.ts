@@ -113,8 +113,29 @@ export class BrandsController {
     return this.layoutService.renderBrandLayout(id);
   }
 
+  @Get(":id/:slug/app")
+  @Header("Content-Type", "text/html; charset=utf-8")
+  @ApiOkResponse({ description: "Server-rendered brand preview application" })
+  @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
+  renderBrandApp(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+  ): Promise<string> {
+    return this.layoutService.renderBrandApp(id, slug);
+  }
+
+  @Get(":id/:slug/data")
+  @ApiOkResponse({ description: "Latest dashboard data for the public brand app" })
+  @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
+  getBrandAppData(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+  ): Promise<unknown> {
+    return this.layoutService.getBrandContractData(id, slug);
+  }
+
   @Get(":id/:slug")
-  @ApiOkResponse({ description: "Latest dashboard data in the generated brand API contract" })
+  @ApiOkResponse({ description: "Latest dashboard data for the generated brand endpoint" })
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
   getBrandContractData(
     @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,

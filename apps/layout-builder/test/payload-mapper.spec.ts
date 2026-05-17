@@ -7,11 +7,12 @@ import type { GeneratedSchema } from "../src/layouts/layout.types.js";
 
 const generator = new SchemaGeneratorService();
 const mapper = new PayloadMapperService();
-const config = createDefaultDashboardConfig("KOI");
+const brandId = "br_22222222222222222222222222222222";
+const config = createDefaultDashboardConfig("KOI", brandId);
 
 function schema(structure: GeneratedSchema["structure"]): GeneratedSchema {
   return {
-    ...generator.generate("br_22222222222222222222222222222222", "KOI"),
+    ...generator.generate(brandId, "KOI"),
     structure
   };
 }
@@ -24,7 +25,7 @@ describe("PayloadMapperService", () => {
     expect(mapper.toCanonical(generated, payload)).toMatchObject({
       title: config.title,
       currency: config.currency,
-      payments: expect.arrayContaining([expect.objectContaining({ transactionId: "txn_10291" })])
+      payments: expect.arrayContaining([expect.objectContaining({ transactionId: config.payments[0]?.transactionId })])
     });
     expect(mapper.toExternal(generated, config)).toEqual(payload);
   });
@@ -32,8 +33,13 @@ describe("PayloadMapperService", () => {
   it("maps nested payloads into canonical dashboard config", () => {
     const generated = schema("nested");
     const payload = generator.samplePayload(generated, "KOI");
+    const canonical = mapper.toCanonical(generated, payload);
 
-    expect(mapper.toCanonical(generated, payload).filters).toMatchObject(config.filters);
+    expect(canonical).toMatchObject({
+      balance: config.balance,
+      pageSize: config.pageSize,
+      payments: expect.arrayContaining([expect.objectContaining({ status: config.payments[0]?.status })])
+    });
     expect(mapper.toExternal(generated, config)).toEqual(payload);
   });
 

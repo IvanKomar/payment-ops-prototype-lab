@@ -11,13 +11,6 @@ export const CANONICAL_FIELDS = [
   "title",
   "balance",
   "currency",
-  "mode",
-  "searchTransactionId",
-  "filters.method",
-  "filters.type",
-  "filters.status",
-  "filters.dateFrom",
-  "filters.dateTo",
   "pageSize",
   "payments"
 ] as const;
