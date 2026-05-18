@@ -7,6 +7,7 @@ import type {
   LayoutBuilderDeleteBrandResponse
 } from "@payment-ops/shared-types";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 import type { LayoutBuilderEnv } from "../config/env.schema.js";
 import { ACCEPTED_LOGO_MIME_TYPES, LAYOUT_BUILDER_CONFIG } from "./layout.constants.js";
@@ -135,6 +136,7 @@ export class LayoutService {
       brand: {
         brandId: brand.id,
         name: brand.name,
+        logoDataUri: await logoDataUri(brand.logoPath, brand.logoMimeType),
         palette: brand.palette
       },
       data,
@@ -230,6 +232,7 @@ interface PublicBrandAppInput {
   brand: {
     brandId: string;
     name: string;
+    logoDataUri: string;
     palette: BrandWithSchema["palette"];
   };
   data: unknown;
@@ -260,7 +263,8 @@ function renderPublicBrandApp(input: PublicBrandAppInput): string {
       .spa-nav { background: ${input.brand.palette.secondary}; color: #fff; display: flex; flex-direction: column; gap: 10px; padding: 18px; }
       .nav-top .spa-nav { align-items: center; flex-direction: row; min-height: 76px; }
       .nav-rail .spa-nav { align-items: center; padding: 14px 10px; }
-      .spa-brand-mark { align-items: center; background: ${input.brand.palette.primary}; border: 2px solid rgba(255,255,255,.28); border-radius: 8px; display: flex; font-size: 19px; font-weight: 900; height: 48px; justify-content: center; width: 48px; }
+      .spa-brand-mark { align-items: center; background: ${input.brand.palette.primary}; border: 2px solid rgba(255,255,255,.28); border-radius: 8px; display: flex; height: 48px; justify-content: center; overflow: hidden; width: 48px; }
+      .spa-brand-mark img { display: block; height: 100%; object-fit: contain; padding: 5px; width: 100%; }
       .spa-nav strong { overflow-wrap: anywhere; }
       .spa-nav-item, .spa-refresh { border: 0; border-radius: 6px; font-weight: 800; min-height: 36px; }
       .spa-nav-item { background: rgba(255,255,255,.12); color: #fff; text-align: left; padding: 0 10px; }
@@ -316,7 +320,7 @@ function renderPublicBrandApp(input: PublicBrandAppInput): string {
         app.innerHTML = \`
           <div class="spa-shell variant-\${escapeHtml(profile.variant)} nav-\${escapeHtml(profile.navStyle)} metric-\${escapeHtml(profile.metricLayout)} density-\${escapeHtml(profile.tableDensity)}">
             <aside class="spa-nav">
-              <div class="spa-brand-mark">\${escapeHtml(initials(appContext.brand.name))}</div>
+              <div class="spa-brand-mark"><img src="\${escapeHtml(appContext.brand.logoDataUri)}" alt="\${escapeHtml(appContext.brand.name)} logo" /></div>
               <strong>\${escapeHtml(appContext.brand.name)}</strong>
               <button class="spa-nav-item active" type="button">\${escapeHtml(profile.tableTitle)}</button>
               <button class="spa-nav-item" type="button">Balances</button>
@@ -372,13 +376,17 @@ function renderPublicBrandApp(input: PublicBrandAppInput): string {
       function stringValue(value) { return typeof value === "string" ? value : String(value ?? ""); }
       function numberValue(value) { const parsed = Number(value); if (!Number.isFinite(parsed)) throw new Error("Expected finite number"); return parsed; }
       function statusClass(status) { return status === "paid" ? "ok" : status === "failed" ? "bad" : status === "pending" || status === "created" ? "warn" : "muted"; }
-      function initials(value) { return value.trim().split(/\\s+/u).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "PO"; }
       function formatCurrency(amount, currency) { return new Intl.NumberFormat(undefined, { currency, maximumFractionDigits: 2, style: "currency" }).format(amount); }
       function formatDateTime(value) { return new Intl.DateTimeFormat(undefined, { day: "2-digit", hour: "2-digit", minute: "2-digit", month: "short" }).format(new Date(value)); }
       function escapeHtml(value) { return String(value).replace(/[&<>"']/gu, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\"": "&quot;", "'": "&#039;" })[char]); }
     </script>
   </body>
 </html>`;
+}
+
+async function logoDataUri(path: string, mimeType: string): Promise<string> {
+  const buffer = await readFile(path);
+  return `data:${mimeType};base64,${buffer.toString("base64")}`;
 }
 
 function escapeHtml(value: string): string {

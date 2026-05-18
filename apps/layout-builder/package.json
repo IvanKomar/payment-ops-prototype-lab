@@ -14,27 +14,27 @@
     "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma"
   },
   "dependencies": {
-    "@nestjs/common": "^11.1.9",
-    "@nestjs/core": "^11.1.9",
-    "@nestjs/platform-express": "^11.1.9",
-    "@nestjs/swagger": "^11.2.3",
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/platform-express": "catalog:",
+    "@nestjs/swagger": "catalog:",
     "@payment-ops/shared-config": "workspace:*",
     "@payment-ops/shared-logger": "workspace:*",
     "@payment-ops/shared-types": "workspace:*",
-    "@prisma/client": "^6.19.0",
-    "node-vibrant": "^4.0.3",
-    "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2",
-    "zod": "^4.1.13"
+    "@prisma/client": "catalog:",
+    "node-vibrant": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@nestjs/testing": "^11.1.9",
+    "@nestjs/testing": "catalog:",
     "@payment-ops/eslint-config": "workspace:*",
     "@payment-ops/tsconfig": "workspace:*",
-    "@types/node": "^24.10.1",
-    "prisma": "^6.19.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.15"
+    "@types/node": "catalog:",
+    "prisma": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

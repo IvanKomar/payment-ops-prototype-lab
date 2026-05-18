@@ -20,12 +20,12 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "zod": "^4.1.12"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@payment-ops/eslint-config": "workspace:*",
     "@payment-ops/tsconfig": "workspace:*",
-    "@types/node": "^24.10.1",
-    "typescript": "^5.9.3"
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   }
 }

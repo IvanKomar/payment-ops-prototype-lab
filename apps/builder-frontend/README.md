@@ -11,7 +11,7 @@ From the repository root:
 pnpm run up
 ```
 
-The frontend starts on `http://localhost:3000`.
+The frontend starts on `http://localhost:5173`.
 
 To run only the frontend against already-running backend services:
 

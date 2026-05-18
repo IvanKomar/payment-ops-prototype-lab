@@ -61,7 +61,7 @@ pnpm run up
 
 This starts:
 
-- Builder Frontend: `http://localhost:3000`
+- Builder Frontend: `http://localhost:5173`
 - SMS Gateway: `http://localhost:3001`
 - Receipt Recognizer: `http://localhost:3002`
 - Layout Builder: `http://localhost:3003`
@@ -81,7 +81,7 @@ Docker Compose runs only PostgreSQL on `localhost:5432` and Redis on
 
 Open the combined Phase 5 demo console:
 
-- Builder Frontend: `http://localhost:3000`
+- Builder Frontend: `http://localhost:5173`
 
 The frontend talks to the backend services through Vite proxy routes
 (`/sms-api`, `/receipt-api`, and `/layout-api`), so the browser stays on one
@@ -268,7 +268,7 @@ pnpm run docker:logs
   demo brands, renders KOI-style SVG layouts, and serves SSR brand preview apps.
 - `builder-frontend`: implemented in Phase 5. It provides a compact Vite demo
   UI for the backend flows and uses local proxy routes so the browser can drive
-  all services from `http://localhost:3000`.
+  all services from `http://localhost:5173`.
 
 ## Offline By Default
 

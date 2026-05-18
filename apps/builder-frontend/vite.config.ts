@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
   return {
     server: {
       host: "0.0.0.0",
-      port: Number(env.BUILDER_FRONTEND_PORT ?? 3000),
+      port: Number(env.BUILDER_FRONTEND_PORT ?? 5173),
       strictPort: true,
       proxy: {
         "/sms-api": {
