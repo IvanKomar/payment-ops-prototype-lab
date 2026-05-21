@@ -98,6 +98,93 @@ model BrandRequest {
   @@map("brand_requests")
 }
 
+model PaymentUser {
+  id           String           @id
+  brandId      String
+  email        String
+  passwordHash String
+  displayName  String
+  accounts     PaymentAccount[]
+  sessions     PaymentSession[]
+  payments     Payment[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([brandId, email])
+  @@map("payment_users")
+}
+
+model PaymentAccount {
+  id        String      @id
+  brandId   String
+  userId    String
+  user      PaymentUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Float       @default(0)
+  currency  String
+  payments  Payment[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([brandId, userId])
+  @@map("payment_accounts")
+}
+
+model PaymentSession {
+  id        String      @id
+  brandId   String
+  userId    String
+  user      PaymentUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String      @unique
+  expiresAt DateTime
+  createdAt DateTime    @default(now())
+
+  @@index([brandId, userId])
+  @@map("payment_sessions")
+}
+
+model Payment {
+  id                String            @id
+  externalReference String            @unique
+  brandId           String
+  accountId         String
+  account           PaymentAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId            String
+  user              PaymentUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            PaymentStatus
+  amount            Float
+  currency          String
+  payerLabel        String
+  destinationLabel  String
+  methodType        PaymentMethodType
+  provider          String
+  failureCode       String?
+  events            PaymentEvent[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  authorizedAt      DateTime?
+  capturedAt        DateTime?
+  settledAt         DateTime?
+  refundedAt        DateTime?
+
+  @@index([brandId, accountId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("payments")
+}
+
+model PaymentEvent {
+  id         String         @id
+  paymentId  String
+  payment    Payment        @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  fromStatus PaymentStatus?
+  toStatus   PaymentStatus
+  reason     String
+  createdAt  DateTime       @default(now())
+
+  @@index([paymentId, createdAt])
+  @@map("payment_events")
+}
+
 enum SmsStatus {
   queued
   processing
@@ -114,4 +201,25 @@ enum ReceiptNormalizerKind {
 enum ReceiptRecognitionModel {
   tesseract
   gemini
+}
+
+enum PaymentStatus {
+  created
+  requires_payment_method
+  requires_confirmation
+  processing
+  authorized
+  captured
+  settled
+  failed
+  canceled
+  refunded
+}
+
+enum PaymentMethodType {
+  card
+  bank_transfer
+  wallet
+  crypto
+  manual
 }

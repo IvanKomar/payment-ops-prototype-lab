@@ -56,6 +56,18 @@ platform/
 
 ## Services
 
+### Phase 6 Target: AI-Generated Brand Payment Platform
+
+The next project direction is documented separately in
+[phase-6-ai-brand-payment-platform.md](./phase-6-ai-brand-payment-platform.md).
+The key pivot is to move payment ownership out of Layout Builder into a
+dedicated payment core, then let AI-generated brand interfaces talk only to
+brand-specific API facades that map back to the canonical payment service.
+
+`apps/payment-core` now exists as the Phase 6 foundation service. It provides
+brand-scoped auth, session tokens, account-scoped payment history, local payment
+simulation, and the initial 10-status state machine.
+
 ### SMS Gateway
 
 Purpose: send SMS through country-based provider routing.
@@ -233,6 +245,13 @@ Vite demo UI, root README demo scripts, ADRs, and final walkthrough. The
 frontend lives in `apps/builder-frontend`, runs on `http://localhost:3000`, and
 uses local Vite proxy routes for the SMS Gateway, Receipt Recognizer, and Layout
 Builder services.
+
+### Phase 6: AI-Generated Brand Payment Platform
+
+Extract a payment core, evolve Layout Builder into a brand runtime facade, add
+an AI generation gateway for OpenAI/Gemini/Claude/local providers, and update
+the admin console so every generated brand interface can be inspected and
+tested against the shared payment system.
 
 ## Non-Goals
 

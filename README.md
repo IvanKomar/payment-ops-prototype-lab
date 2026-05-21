@@ -65,6 +65,7 @@ This starts:
 - SMS Gateway: `http://localhost:3001`
 - Receipt Recognizer: `http://localhost:3002`
 - Layout Builder: `http://localhost:3003`
+- Payment Core: `http://localhost:3005`
 
 ### 3. Or run setup and apps separately
 
@@ -269,6 +270,63 @@ pnpm run docker:logs
 - `builder-frontend`: implemented in Phase 5. It provides a compact Vite demo
   UI for the backend flows and uses local proxy routes so the browser can drive
   all services from `http://localhost:5173`.
+- `payment-core`: Phase 6 foundation service. It supports brand-scoped user
+  registration/login, session tokens, account payment history, simulated local
+  payments, and a Stripe-like 10-status state machine.
+- Phase 6 is planned as a pivot from deterministic layout generation to an
+  AI-generated brand payment platform: a payment core, brand-specific API
+  facades, AI generation gateway, and admin console for inspecting every
+  generated brand interface.
+
+## Payment Core
+
+To run only the payment core while developing:
+
+```bash
+pnpm --filter @payment-ops/payment-core prisma:generate
+pnpm --filter @payment-ops/payment-core prisma:deploy
+pnpm --filter @payment-ops/payment-core dev
+```
+
+- Health check: `http://localhost:3005/health`
+- Swagger UI: `http://localhost:3005/docs`
+- Local clickable UI: `http://localhost:3005/`
+
+Register a brand-scoped user:
+
+```bash
+curl -X POST http://localhost:3005/auth/register \
+  -H "content-type: application/json" \
+  -d '{
+    "brandId": "br_koi_demo",
+    "email": "alex@example.com",
+    "password": "local-demo-password",
+    "displayName": "Alex Merchant",
+    "currency": "USD"
+  }'
+```
+
+Use the returned `sessionToken` as a bearer token to create a local simulated
+payment:
+
+```bash
+curl -X POST http://localhost:3005/payments \
+  -H "content-type: application/json" \
+  -H "authorization: Bearer <sessionToken>" \
+  -d '{
+    "amount": 49.99,
+    "destinationLabel": "settle-demo-address",
+    "methodType": "card",
+    "scenario": "settle"
+  }'
+```
+
+Read the account's payment history:
+
+```bash
+curl http://localhost:3005/payments/history \
+  -H "authorization: Bearer <sessionToken>"
+```
 
 ## Offline By Default
 
@@ -280,6 +338,7 @@ missing, quotas are exhausted, or providers fail.
 ## Documentation
 
 - [Architecture](./docs/architecture.md)
+- [Phase 6 AI-Generated Brand Payment Platform](./docs/phase-6-ai-brand-payment-platform.md)
 - [ADR 0001: Builder Frontend Uses Vite Proxy Routes](./docs/adr/0001-builder-frontend-vite-proxy.md)
 - [Phase 2 SMS Gateway Plan](./docs/phase-2-sms-gateway.md)
 - [Service Requirements](./docs/service-requirements.md)

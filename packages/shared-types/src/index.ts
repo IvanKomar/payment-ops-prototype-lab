@@ -16,3 +16,4 @@ export interface MoneyAmount {
 export type * from "./sms-gateway.js";
 export type * from "./receipt-recognizer.js";
 export type * from "./layout-builder.js";
+export type * from "./payment-core.js";

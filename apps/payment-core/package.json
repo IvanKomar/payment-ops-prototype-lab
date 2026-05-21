@@ -1,0 +1,38 @@
+{
+  "name": "@payment-ops/payment-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm prisma:generate && tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/main.ts",
+    "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
+    "test": "vitest run",
+    "typecheck": "pnpm prisma:generate && tsc --noEmit -p tsconfig.json",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "prisma:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "@payment-ops/shared-config": "workspace:*",
+    "@payment-ops/shared-logger": "workspace:*",
+    "@payment-ops/shared-types": "workspace:*",
+    "@prisma/client": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "catalog:",
+    "@payment-ops/eslint-config": "workspace:*",
+    "@payment-ops/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "prisma": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
