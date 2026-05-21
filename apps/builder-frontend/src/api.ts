@@ -109,6 +109,23 @@ export const api = {
         body: formData
       });
     },
+    createAiBrand: (input: {
+      brandName: string;
+      logo: File | Blob;
+      aiPrompt: string;
+      systemPrompt: string;
+    }) => {
+      const formData = new FormData();
+      formData.set("brandName", input.brandName);
+      formData.set("aiPrompt", input.aiPrompt);
+      formData.set("systemPrompt", input.systemPrompt);
+      formData.set("logo", input.logo, input.logo instanceof File ? input.logo.name : "demo-mark.svg");
+
+      return requestJson<LayoutBuilderBrandResponse>(apiBases.layout, "/brands/ai", {
+        method: "POST",
+        body: formData
+      });
+    },
     recent: () => requestJson<LayoutBuilderBrandListItem[]>(apiBases.layout, "/brands/recent"),
     deleteBrand: (brandId: string) =>
       requestJson<LayoutBuilderDeleteBrandResponse>(

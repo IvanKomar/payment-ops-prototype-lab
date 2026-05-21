@@ -37,7 +37,8 @@ describe("SvgRendererService", () => {
         fieldsStyle: "snake_case",
         structure: "flat",
         fields: {},
-        templateProfile: createLayoutProfile("br_00000000000000000000000000000001")
+        templateProfile: createLayoutProfile("br_00000000000000000000000000000001"),
+        generationProfile: null
       }
     };
 

@@ -235,6 +235,25 @@ actions, visual brand inputs, and UX constraints. It must not include internal
 payment-core DTO names, database schema, service names, or canonical enum names
 unless those names are explicitly intended to be public.
 
+Current MVP implementation:
+
+- `apps/layout-builder` exposes `POST /brands/ai`;
+- the admin UI sends a brand brief plus an editable system prompt;
+- the backend uses `AiBrandGeneratorService` with provider `local` to generate
+  a `generationProfile`;
+- `generationProfile` is stored in `BrandSchema.fields` metadata next to the
+  field mapping and template profile;
+- the public preview uses the generated resource alias, action labels, and
+  status labels;
+- AI-created brands serve a runtime app instead of the old static dashboard
+  preview. The runtime app lets a user register/login, create a simulated
+  payment, and view brand-scoped payment history;
+- brand runtime endpoints proxy to `payment-core` through
+  `PAYMENT_CORE_BASE_URL` and map responses back to brand-specific field names
+  and status labels;
+- OpenAI/Gemini/Claude adapters can replace the local provider behind the same
+  service boundary later.
+
 ### 4. Admin Console
 
 Evolve `apps/builder-frontend`.
@@ -333,6 +352,19 @@ Admin creates brand
 - add `ContractVersion` persistence;
 - keep logo/palette extraction;
 - remove payment data ownership from brand requests.
+
+MVP progress:
+
+- admin-facing AI brand creation is available through the builder frontend and
+  `POST /brands/ai`;
+- the local generator creates brand runtime metadata: resource alias, status
+  map, action labels, visual direction, contract summary, admin prompt, and
+  system prompt;
+- existing deterministic dashboard preview now reads generated metadata when it
+  exists.
+- brand runtime facade endpoints are available under
+  `/brands/:id/:slug/runtime/*` and integrate generated brands with
+  `payment-core` for registration, login, payment creation, and history.
 
 ### Phase 6.3: AI Gateway MVP
 

@@ -24,6 +24,13 @@ const layoutState: LayoutState = {
 let recentLayoutBrands: LayoutBuilderBrandListItem[] = [];
 
 const app = document.querySelector<HTMLDivElement>("#app");
+const DEFAULT_BRAND_SYSTEM_PROMPT = [
+  "Generate a brand runtime contract for a payment platform.",
+  "The generated brand must integrate only through the public brand runtime API.",
+  "Do not expose internal payment-core DTO names, database tables, service names, or shared backend details.",
+  "Return distinct resource naming, payment status labels, action labels, and visual direction.",
+  "The user-facing interface must support registration, login, payment creation, refunds, and transaction history."
+].join("\n");
 
 if (!app) {
   throw new Error("Missing #app root");
@@ -158,6 +165,7 @@ app.innerHTML = `
               <div>
                 <h3>Live SPA preview</h3>
                 <div class="selected-brand" id="selected-brand-title">No brand selected</div>
+                <div class="contract-inspector" id="contract-inspector"></div>
               </div>
             </div>
             <div class="live-preview" id="live-preview">
@@ -179,13 +187,30 @@ app.innerHTML = `
       <form id="brand-form" class="form-grid">
         <label>
           Brand name
-          <input name="brandName" value="KOI Demo" required />
+          <input name="brandName" value="Nova Ledger" required />
+        </label>
+        <label>
+          AI brand brief
+          <textarea name="aiPrompt" rows="5" required>Create a premium treasury payment portal for enterprise merchants. Use settlement-focused wording, compact history tables, and status names that do not look like a generic payment processor.</textarea>
+        </label>
+        <details class="prompt-details" open>
+          <summary>System prompt</summary>
+          <textarea name="systemPrompt" rows="7" required>${escapeHtml(DEFAULT_BRAND_SYSTEM_PROMPT)}</textarea>
+        </details>
+        <label>
+          Provider
+          <select name="aiProvider">
+            <option value="local">local runtime generator</option>
+            <option value="openai" disabled>OpenAI adapter placeholder</option>
+            <option value="gemini" disabled>Gemini adapter placeholder</option>
+            <option value="anthropic" disabled>Claude adapter placeholder</option>
+          </select>
         </label>
         <label>
           Logo
           <input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
         </label>
-        <button class="button" type="submit">Create brand</button>
+        <button class="button" type="submit">Generate brand</button>
         <span class="hint">No file selected uses a generated SVG mark.</span>
         <span class="modal-status" id="brand-modal-status"></span>
       </form>
@@ -206,6 +231,7 @@ const brandModal = required<HTMLElement>("#brand-modal");
 const brandModalStatus = required<HTMLElement>("#brand-modal-status");
 const brandList = required<HTMLElement>("#brand-list");
 const selectedBrandTitle = required<HTMLElement>("#selected-brand-title");
+const contractInspector = required<HTMLElement>("#contract-inspector");
 const deleteBrandButton = required<HTMLButtonElement>("#delete-brand");
 const livePreview = required<HTMLElement>("#live-preview");
 
@@ -547,16 +573,25 @@ function closeBrandModal(): void {
 async function createBrand(): Promise<void> {
   const formData = new FormData(brandForm);
   const brandName = String(formData.get("brandName") ?? "").trim();
+  const aiPrompt = String(formData.get("aiPrompt") ?? "").trim();
+  const systemPrompt = String(formData.get("systemPrompt") ?? "").trim();
   const logoInput = brandForm.elements.namedItem("logo");
   const selectedLogo =
     logoInput instanceof HTMLInputElement && logoInput.files?.[0] ? logoInput.files[0] : null;
   const logo = selectedLogo ?? createDemoLogo(brandName);
 
   setBusy(brandForm, true);
-  brandModalStatus.textContent = "Creating brand...";
+  brandModalStatus.textContent = "Generating brand runtime...";
 
   try {
-    const brand = await api.layout.createBrand(brandName, logo);
+    const brand = aiPrompt
+      ? await api.layout.createAiBrand({
+          brandName,
+          logo,
+          aiPrompt,
+          systemPrompt: systemPrompt || DEFAULT_BRAND_SYSTEM_PROMPT
+        })
+      : await api.layout.createBrand(brandName, logo);
     await setActiveBrand(brand);
     await refreshBrands();
     closeBrandModal();
@@ -646,6 +681,7 @@ function applyBrandPreview(
   brandName?: string
 ): void {
   selectedBrandTitle.textContent = `${brandName ?? brand.name} · ${brand.brandId}`;
+  renderContractInspector(brand);
   deleteBrandButton.disabled = false;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `
@@ -666,9 +702,25 @@ function renderBrandListSelection(brandId: string): void {
 function clearLayoutSelection(): void {
   layoutState.activeBrand = null;
   selectedBrandTitle.textContent = "No brand selected";
+  contractInspector.innerHTML = "";
   deleteBrandButton.disabled = true;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `<div class="empty">Select a brand to load the preview.</div>`;
+}
+
+function renderContractInspector(brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem): void {
+  const profile = brand.generationProfile;
+
+  if (!profile) {
+    contractInspector.innerHTML = `<span>deterministic layout contract</span>`;
+    return;
+  }
+
+  contractInspector.innerHTML = `
+    <span>${escapeHtml(profile.provider)} · ${escapeHtml(profile.model)}</span>
+    <strong>${escapeHtml(profile.resourceAlias)}</strong>
+    <small>${escapeHtml(profile.contractSummary)}</small>
+  `;
 }
 
 async function deleteActiveBrand(): Promise<void> {

@@ -366,10 +366,21 @@ td small {
   margin-top: 12px;
 }
 
-.raw-block summary {
+.raw-block summary,
+.prompt-details summary {
   color: #1769aa;
   cursor: pointer;
   font-weight: 800;
+}
+
+.prompt-details {
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.prompt-details textarea {
+  margin-top: 10px;
 }
 
 pre,
@@ -502,6 +513,20 @@ pre {
   font-size: 13px;
   margin-top: 3px;
   overflow-wrap: anywhere;
+}
+
+.contract-inspector {
+  color: #637181;
+  display: grid;
+  font-size: 12px;
+  gap: 2px;
+  margin-top: 8px;
+  max-width: 740px;
+}
+
+.contract-inspector strong {
+  color: #17202a;
+  font-size: 13px;
 }
 
 .code-input {

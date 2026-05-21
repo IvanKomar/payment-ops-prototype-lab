@@ -28,7 +28,8 @@ export const layoutBuilderEnvSchema = createEnvSchema({
     .default("postgresql://postgres:postgres@localhost:5432/payment_ops?schema=public"),
   LOG_LEVEL: z.string().default("info"),
   LAYOUT_LOGO_UPLOAD_DIR: z.string().default("uploads/logos"),
-  LAYOUT_MAX_UPLOAD_BYTES: numberFromString(3 * 1024 * 1024)
+  LAYOUT_MAX_UPLOAD_BYTES: numberFromString(3 * 1024 * 1024),
+  PAYMENT_CORE_BASE_URL: z.string().url().default("http://localhost:3005")
 });
 
 export type LayoutBuilderEnv = z.infer<typeof layoutBuilderEnvSchema>;

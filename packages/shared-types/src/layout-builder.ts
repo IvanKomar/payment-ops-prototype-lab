@@ -1,3 +1,5 @@
+import type { PaymentCoreStatus } from "./payment-core.js";
+
 export type LayoutBuilderFieldStyle = "camelCase" | "snake_case" | "kebab-case";
 export type LayoutBuilderPayloadStructure = "flat" | "nested" | "key-value-array";
 export type LayoutBuilderLayoutVariant =
@@ -7,6 +9,25 @@ export type LayoutBuilderLayoutVariant =
   | "command-center"
   | "finance-ledger"
   | "compact-review";
+
+export interface LayoutBuilderAiGenerationProfile {
+  provider: "local" | "openai" | "gemini" | "anthropic" | "codex";
+  model: string;
+  adminPrompt: string;
+  systemPrompt: string;
+  resourceAlias: string;
+  visualDirection: string;
+  contractSummary: string;
+  statusMap: Record<PaymentCoreStatus, string>;
+  actionLabels: {
+    register: string;
+    login: string;
+    createPayment: string;
+    history: string;
+    refund: string;
+  };
+  generatedAt: string;
+}
 
 export interface LayoutBuilderPalette {
   primary: string;
@@ -54,6 +75,7 @@ export interface LayoutBuilderBrandSchemaResponse {
   structure: LayoutBuilderPayloadStructure;
   layoutVariant: LayoutBuilderLayoutVariant;
   fields: Record<string, string>;
+  generationProfile: LayoutBuilderAiGenerationProfile | null;
   samplePayload: unknown;
 }
 
@@ -72,6 +94,7 @@ export interface LayoutBuilderBrandListItem {
   palette: LayoutBuilderPalette;
   dataEndpoint: string;
   appUrl: string;
+  generationProfile: LayoutBuilderAiGenerationProfile | null;
   createdAt: string;
   updatedAt: string;
 }

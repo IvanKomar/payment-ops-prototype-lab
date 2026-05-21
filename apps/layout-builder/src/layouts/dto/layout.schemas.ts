@@ -16,8 +16,16 @@ export const slugSchema = z
   .trim()
   .regex(/^[a-z0-9][a-z0-9_-]{6,80}$/, "slug must be lowercase URL-safe text");
 
+export const authHeaderSchema = z
+  .string()
+  .trim()
+  .regex(/^Bearer\s+\S+$/u, "Authorization must use Bearer token")
+  .transform((value) => value.replace(/^Bearer\s+/iu, ""));
+
 export const createBrandSchema = z.object({
-  brandName: z.string().trim().min(1).max(80)
+  brandName: z.string().trim().min(1).max(80),
+  aiPrompt: z.string().trim().min(1).max(4000).optional(),
+  systemPrompt: z.string().trim().min(1).max(6000).optional()
 });
 
 export class CreateBrandResponseDto {
@@ -63,6 +71,9 @@ export class CreateBrandResponseDto {
   @ApiProperty({ type: Object })
   fields!: Record<string, string>;
 
+  @ApiProperty({ type: Object, nullable: true })
+  generationProfile!: unknown | null;
+
   @ApiProperty({ type: Object })
   samplePayload!: unknown;
 }
@@ -93,6 +104,9 @@ export class BrandListItemDto {
 
   @ApiProperty({ type: String, example: "/brands/br_.../koi_ab12cd34ef56/app" })
   appUrl!: string;
+
+  @ApiProperty({ type: Object, nullable: true })
+  generationProfile!: unknown | null;
 
   @ApiProperty({ type: String, example: "2026-05-15T10:00:00.000Z" })
   createdAt!: string;
@@ -139,4 +153,8 @@ export class ZodValidationPipe<TOutput> implements PipeTransform<unknown, TOutpu
 
     return result.data;
   }
+}
+
+export function parseBearerToken(value: unknown): string {
+  return new ZodValidationPipe(authHeaderSchema).transform(value);
 }

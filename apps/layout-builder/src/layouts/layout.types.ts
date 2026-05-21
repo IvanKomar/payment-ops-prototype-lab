@@ -1,5 +1,6 @@
 import type {
   LayoutBuilderDashboardConfig,
+  LayoutBuilderAiGenerationProfile,
   LayoutBuilderFieldStyle,
   LayoutBuilderPalette,
   LayoutBuilderPayloadStructure
@@ -28,6 +29,7 @@ export interface GeneratedSchema {
   structure: LayoutBuilderPayloadStructure;
   fields: Record<string, string>;
   templateProfile: LayoutProfile;
+  generationProfile: LayoutBuilderAiGenerationProfile | null;
 }
 
 export interface BrandWithSchema {
@@ -48,6 +50,12 @@ export interface CreateBrandInput {
   logo: StoredLogo;
   palette: LayoutBuilderPalette;
   schema: GeneratedSchema;
+}
+
+export interface CreateBrandRequestInput {
+  brandName: string;
+  aiPrompt?: string;
+  systemPrompt?: string;
 }
 
 export interface SaveBrandRequestInput {

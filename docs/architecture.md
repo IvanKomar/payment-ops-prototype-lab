@@ -68,6 +68,14 @@ brand-specific API facades that map back to the canonical payment service.
 brand-scoped auth, session tokens, account-scoped payment history, local payment
 simulation, and the initial 10-status state machine.
 
+`apps/layout-builder` also now exposes the first admin-facing AI workflow:
+`POST /brands/ai` accepts a brand brief and editable system prompt, runs the
+local brand runtime generator, and stores generated resource aliases, status
+labels, action labels, and visual direction in brand schema metadata. For
+AI-created brands, the served brand app uses `/brands/:id/:slug/runtime/*`
+facade endpoints to register/login users and create/list payments through
+`payment-core` while returning brand-specific field names and status labels.
+
 ### SMS Gateway
 
 Purpose: send SMS through country-based provider routing.

@@ -67,6 +67,19 @@ This starts:
 - Layout Builder: `http://localhost:3003`
 - Payment Core: `http://localhost:3005`
 
+For only the AI brand runtime path, use:
+
+```bash
+pnpm run up:brand-runtime
+```
+
+This refreshes pnpm workspace links if needed, starts PostgreSQL/Redis, applies
+the Layout Builder and Payment Core migrations, then runs:
+
+- Builder Frontend: `http://localhost:3004`
+- Layout Builder: `http://localhost:3003`
+- Payment Core: `http://localhost:3005`
+
 ### 3. Or run setup and apps separately
 
 ```bash
@@ -153,10 +166,14 @@ Root setup scripts:
 pnpm run demo            # alias for pnpm run up
 pnpm run prisma:generate # generate the shared Prisma client
 pnpm run db:deploy       # apply service migrations
+pnpm run db:deploy:brand-runtime # apply only Layout Builder + Payment Core migrations
 pnpm run setup           # docker:up + prisma:generate + db:deploy
+pnpm run setup:brand-runtime # docker:up + prisma:generate + brand runtime migrations
 pnpm run dev             # run implemented services and frontend in parallel
+pnpm run dev:brand-runtime # run Payment Core, Layout Builder, and frontend
 pnpm run dev:frontend    # run only the Vite demo UI
 pnpm run up              # setup, then run implemented services and frontend
+pnpm run up:brand-runtime # setup, then run AI brand runtime services
 ```
 
 ## Receipt Recognizer
@@ -212,6 +229,29 @@ curl -X POST http://localhost:3003/brands \
   -F logo=@/path/to/logo.svg
 ```
 
+Create a brand through the local AI generation path:
+
+```bash
+curl -X POST http://localhost:3003/brands/ai \
+  -F brandName="Nova Ledger" \
+  -F aiPrompt="Create a premium treasury payment portal with settlement-focused wording" \
+  -F systemPrompt="Generate a brand runtime contract that integrates only through the public facade" \
+  -F logo=@/path/to/logo.svg
+```
+
+Open the returned `appUrl` to use the generated brand as a user. AI-generated
+brand apps call:
+
+- `GET /brands/:id/:slug/runtime/config`
+- `POST /brands/:id/:slug/runtime/register`
+- `POST /brands/:id/:slug/runtime/login`
+- `GET /brands/:id/:slug/runtime/payments`
+- `POST /brands/:id/:slug/runtime/payments`
+
+The runtime facade maps these calls to `payment-core` through
+`PAYMENT_CORE_BASE_URL`, then maps payment fields and statuses back to the
+brand-specific contract.
+
 The service accepts JPEG, PNG, WebP, and SVG logos. Gemini is not used for V1
 template generation; SVG layouts are rendered by deterministic local logic.
 
@@ -238,11 +278,15 @@ Root scripts:
 pnpm build
 pnpm run demo
 pnpm run up
+pnpm run up:brand-runtime
 pnpm run setup
+pnpm run setup:brand-runtime
 pnpm run dev
+pnpm run dev:brand-runtime
 pnpm run dev:frontend
 pnpm run prisma:generate
 pnpm run db:deploy
+pnpm run db:deploy:brand-runtime
 pnpm run lint
 pnpm run test
 pnpm run typecheck
@@ -267,6 +311,12 @@ pnpm run docker:logs
   contracts, stores uploaded logos, extracts brand palettes, accepts and returns
   dashboard data through the generated brand API endpoint, supports deleting
   demo brands, renders KOI-style SVG layouts, and serves SSR brand preview apps.
+  Phase 6 extends it with AI-first brand creation through `POST /brands/ai` and
+  an editable admin system prompt. The current generator is local/deterministic
+  and stores generated runtime metadata for later OpenAI/Gemini/Claude adapters.
+  AI-created brands now serve a user-facing runtime app that can register/login
+  users and create/list payments through brand-specific facade endpoints backed
+  by `payment-core`.
 - `builder-frontend`: implemented in Phase 5. It provides a compact Vite demo
   UI for the backend flows and uses local proxy routes so the browser can drive
   all services from `http://localhost:5173`.

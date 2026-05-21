@@ -69,6 +69,14 @@ export class BrandsController {
         brandName: {
           type: "string",
           example: "KOI"
+        },
+        aiPrompt: {
+          type: "string",
+          example: "Create a premium merchant dashboard with settlement-oriented wording"
+        },
+        systemPrompt: {
+          type: "string",
+          example: "Generate a brand runtime contract that integrates with the public payment facade"
         }
       }
     }
@@ -77,6 +85,47 @@ export class BrandsController {
   createBrand(
     @UploadedFile() file: UploadedLogoFile | undefined,
     @Body(new ZodValidationPipe(createBrandSchema)) body: { brandName: string }
+  ): Promise<LayoutBuilderBrandResponse> {
+    return this.layoutService.createBrand(file, body);
+  }
+
+  @Post("ai")
+  @UseInterceptors(
+    FileInterceptor("logo", {
+      limits: {
+        fileSize: config.LAYOUT_MAX_UPLOAD_BYTES
+      }
+    })
+  )
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["logo", "brandName", "aiPrompt"],
+      properties: {
+        logo: {
+          type: "string",
+          format: "binary"
+        },
+        brandName: {
+          type: "string",
+          example: "Nova Ledger"
+        },
+        aiPrompt: {
+          type: "string",
+          example: "Create a risk-review payment portal for enterprise merchants"
+        },
+        systemPrompt: {
+          type: "string",
+          example: "Generate a brand runtime contract that maps to Payment Core without exposing internals"
+        }
+      }
+    }
+  })
+  @ApiOkResponse({ type: BrandResponseDto })
+  createAiBrand(
+    @UploadedFile() file: UploadedLogoFile | undefined,
+    @Body(new ZodValidationPipe(createBrandSchema)) body: { brandName: string; aiPrompt?: string; systemPrompt?: string }
   ): Promise<LayoutBuilderBrandResponse> {
     return this.layoutService.createBrand(file, body);
   }

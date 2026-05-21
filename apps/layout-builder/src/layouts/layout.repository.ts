@@ -1,6 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Brand, BrandRequest, BrandSchema, Prisma } from "@prisma/client";
-import type { LayoutBuilderDashboardConfig, LayoutBuilderPalette } from "@payment-ops/shared-types";
+import type {
+  LayoutBuilderAiGenerationProfile,
+  LayoutBuilderDashboardConfig,
+  LayoutBuilderPalette
+} from "@payment-ops/shared-types";
 
 import { PrismaService } from "../prisma/prisma.service.js";
 import { createLayoutProfile, type LayoutProfile } from "./render/layout-profile.js";
@@ -37,7 +41,8 @@ export class LayoutRepository {
             structure: input.schema.structure,
             fields: {
               mappings: input.schema.fields,
-              templateProfile: input.schema.templateProfile
+              templateProfile: input.schema.templateProfile,
+              generationProfile: input.schema.generationProfile
             } as unknown as Prisma.InputJsonValue
           }
         }
@@ -145,7 +150,8 @@ function toBrandWithSchema(brand: BrandWithRelations): BrandWithSchema {
       fieldsStyle: schema.fieldsStyle as GeneratedSchema["fieldsStyle"],
       structure: schema.structure as GeneratedSchema["structure"],
       fields: parsedFields.mappings,
-      templateProfile: parsedFields.templateProfile
+      templateProfile: parsedFields.templateProfile,
+      generationProfile: parsedFields.generationProfile
     } satisfies GeneratedSchema
   };
 }
@@ -153,18 +159,32 @@ function toBrandWithSchema(brand: BrandWithRelations): BrandWithSchema {
 function parseSchemaFields(
   value: unknown,
   brandId: string
-): { mappings: Record<string, string>; templateProfile: LayoutProfile } {
+): {
+  mappings: Record<string, string>;
+  templateProfile: LayoutProfile;
+  generationProfile: LayoutBuilderAiGenerationProfile | null;
+} {
   if (isObject(value) && isObject(value.mappings)) {
     return {
       mappings: stringRecord(value.mappings),
-      templateProfile: normalizeLayoutProfile(value.templateProfile, brandId)
+      templateProfile: normalizeLayoutProfile(value.templateProfile, brandId),
+      generationProfile: normalizeGenerationProfile(value.generationProfile)
     };
   }
 
   return {
     mappings: stringRecord(value),
-    templateProfile: createLayoutProfile(brandId)
+    templateProfile: createLayoutProfile(brandId),
+    generationProfile: null
   };
+}
+
+function normalizeGenerationProfile(value: unknown): LayoutBuilderAiGenerationProfile | null {
+  if (!isObject(value) || typeof value.provider !== "string" || typeof value.resourceAlias !== "string") {
+    return null;
+  }
+
+  return value as unknown as LayoutBuilderAiGenerationProfile;
 }
 
 function normalizeLayoutProfile(value: unknown, brandId: string): LayoutProfile {

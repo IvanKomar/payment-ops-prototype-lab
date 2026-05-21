@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type {
+  LayoutBuilderAiGenerationProfile,
   LayoutBuilderDashboardConfig,
   LayoutBuilderFieldStyle,
   LayoutBuilderPayloadStructure
@@ -19,7 +20,8 @@ export class SchemaGeneratorService {
   generate(
     brandId: string,
     brandName: string,
-    recentProfiles: readonly LayoutProfile[] = []
+    recentProfiles: readonly LayoutProfile[] = [],
+    generationProfile: LayoutBuilderAiGenerationProfile | null = null
   ): GeneratedSchema {
     const seed = hashToNumber(brandId);
     const fieldsStyle = FIELD_STYLES[seed % FIELD_STYLES.length]!;
@@ -35,7 +37,8 @@ export class SchemaGeneratorService {
       fieldsStyle,
       structure,
       fields,
-      templateProfile: createLayoutProfile(brandId, recentProfiles)
+      templateProfile: createLayoutProfile(brandId, recentProfiles),
+      generationProfile
     };
   }
 
