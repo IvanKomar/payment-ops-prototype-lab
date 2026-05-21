@@ -2,6 +2,7 @@ import type {
   HealthResponse,
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandResponse,
+  LayoutBuilderBrandSchemaResponse,
   ReceiptRecognitionModel,
   ReceiptRecognizerReceiptResponse
 } from "@payment-ops/shared-types";
@@ -12,6 +13,20 @@ import "./styles.css";
 
 interface LayoutState {
   activeBrand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem | null;
+  activeSchema: LayoutBuilderBrandSchemaResponse | null;
+  activeRuntimeContract: BrandRuntimeContract | null;
+}
+
+interface BrandRuntimeContract {
+  brandId: string;
+  brandName: string;
+  resourceAlias: string;
+  statusMap: Record<string, string>;
+  actionLabels: Record<string, string>;
+  fields: Record<string, string>;
+  accountFields: Record<string, string>;
+  userFields: Record<string, string>;
+  endpoints: Record<string, string>;
 }
 
 type DemoRoute = "sms" | "receipts" | "layouts";
@@ -19,7 +34,9 @@ type DemoRoute = "sms" | "receipts" | "layouts";
 const ROUTES: readonly DemoRoute[] = ["sms", "receipts", "layouts"];
 
 const layoutState: LayoutState = {
-  activeBrand: null
+  activeBrand: null,
+  activeSchema: null,
+  activeRuntimeContract: null
 };
 let recentLayoutBrands: LayoutBuilderBrandListItem[] = [];
 
@@ -666,14 +683,20 @@ async function selectBrand(brandId: string): Promise<void> {
   }
 
   layoutState.activeBrand = brand;
+  layoutState.activeSchema = null;
+  layoutState.activeRuntimeContract = null;
   applyBrandPreview(brand);
   renderBrandListSelection(brandId);
+  void loadBrandContract(brandId);
 }
 
 async function setActiveBrand(brand: LayoutBuilderBrandResponse): Promise<void> {
   layoutState.activeBrand = brand;
+  layoutState.activeSchema = brand;
+  layoutState.activeRuntimeContract = null;
   applyBrandPreview(brand, brand.name);
   renderBrandListSelection(brand.brandId);
+  void loadBrandContract(brand.brandId);
 }
 
 function applyBrandPreview(
@@ -681,7 +704,7 @@ function applyBrandPreview(
   brandName?: string
 ): void {
   selectedBrandTitle.textContent = `${brandName ?? brand.name} · ${brand.brandId}`;
-  renderContractInspector(brand);
+  renderContractInspector(brand, layoutState.activeSchema, layoutState.activeRuntimeContract);
   deleteBrandButton.disabled = false;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `
@@ -693,6 +716,36 @@ function applyBrandPreview(
   `;
 }
 
+async function loadBrandContract(brandId: string): Promise<void> {
+  const activeBrand = layoutState.activeBrand;
+
+  if (!activeBrand || activeBrand.brandId !== brandId) {
+    return;
+  }
+
+  renderContractLoading(activeBrand);
+
+  try {
+    const schema = await api.layout.schema(brandId);
+    const runtimeContract = await api.layout.runtimeConfig<BrandRuntimeContract>(schema.endpoint);
+
+    if (layoutState.activeBrand?.brandId !== brandId) {
+      return;
+    }
+
+    layoutState.activeSchema = schema;
+    layoutState.activeRuntimeContract = runtimeContract;
+    renderContractInspector(activeBrand, schema, runtimeContract);
+  } catch (error) {
+    contractInspector.innerHTML = `
+      <div class="contract-card">
+        <strong>Contract unavailable</strong>
+        <small>${escapeHtml(errorMessage(error))}</small>
+      </div>
+    `;
+  }
+}
+
 function renderBrandListSelection(brandId: string): void {
   brandList.querySelectorAll<HTMLButtonElement>("[data-brand-id]").forEach((button) => {
     button.classList.toggle("active", button.dataset.brandId === brandId);
@@ -701,6 +754,8 @@ function renderBrandListSelection(brandId: string): void {
 
 function clearLayoutSelection(): void {
   layoutState.activeBrand = null;
+  layoutState.activeSchema = null;
+  layoutState.activeRuntimeContract = null;
   selectedBrandTitle.textContent = "No brand selected";
   contractInspector.innerHTML = "";
   deleteBrandButton.disabled = true;
@@ -708,7 +763,7 @@ function clearLayoutSelection(): void {
   livePreview.innerHTML = `<div class="empty">Select a brand to load the preview.</div>`;
 }
 
-function renderContractInspector(brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem): void {
+function renderContractLoading(brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem): void {
   const profile = brand.generationProfile;
 
   if (!profile) {
@@ -717,9 +772,92 @@ function renderContractInspector(brand: LayoutBuilderBrandResponse | LayoutBuild
   }
 
   contractInspector.innerHTML = `
-    <span>${escapeHtml(profile.provider)} · ${escapeHtml(profile.model)}</span>
-    <strong>${escapeHtml(profile.resourceAlias)}</strong>
-    <small>${escapeHtml(profile.contractSummary)}</small>
+    <div class="contract-card">
+      <span>${escapeHtml(profile.provider)} · ${escapeHtml(profile.model)}</span>
+      <strong>${escapeHtml(profile.resourceAlias)}</strong>
+      <small>Loading runtime contract...</small>
+    </div>
+  `;
+}
+
+function renderContractInspector(
+  brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem,
+  schema: LayoutBuilderBrandSchemaResponse | null,
+  runtimeContract: BrandRuntimeContract | null
+): void {
+  const profile = schema?.generationProfile ?? brand.generationProfile;
+
+  if (!profile || !schema || !runtimeContract) {
+    renderContractLoading(brand);
+    return;
+  }
+
+  contractInspector.innerHTML = `
+    <div class="contract-card">
+      <span>${escapeHtml(profile.provider)} · ${escapeHtml(profile.model)}</span>
+      <strong>${escapeHtml(runtimeContract.resourceAlias)}</strong>
+      <small>${escapeHtml(profile.contractSummary)}</small>
+    </div>
+    <div class="contract-grid">
+      <div class="contract-card">
+        <h4>Endpoints</h4>
+        ${endpointRows(schema, runtimeContract)}
+      </div>
+      <div class="contract-card">
+        <h4>Payment fields</h4>
+        ${mappingRows(runtimeContract.fields)}
+      </div>
+      <div class="contract-card">
+        <h4>Status map</h4>
+        ${mappingRows(runtimeContract.statusMap)}
+      </div>
+      <div class="contract-card">
+        <h4>Actions</h4>
+        ${mappingRows(runtimeContract.actionLabels)}
+      </div>
+    </div>
+    <details class="contract-json">
+      <summary>System prompt</summary>
+      <pre>${escapeHtml(profile.systemPrompt)}</pre>
+    </details>
+    <details class="contract-json">
+      <summary>Runtime contract JSON</summary>
+      <pre>${escapeHtml(JSON.stringify(runtimeContract, null, 2))}</pre>
+    </details>
+  `;
+}
+
+function endpointRows(
+  schema: LayoutBuilderBrandSchemaResponse,
+  runtimeContract: BrandRuntimeContract
+): string {
+  const rows: Array<[string, string]> = [
+    ["app", schema.appUrl],
+    ["config", runtimeEndpoint(schema.endpoint, runtimeContract, "config")],
+    ["register", runtimeEndpoint(schema.endpoint, runtimeContract, "register")],
+    ["login", runtimeEndpoint(schema.endpoint, runtimeContract, "login")],
+    ["payments", runtimeEndpoint(schema.endpoint, runtimeContract, "payments")]
+  ];
+
+  return rows.map(([label, value]) => contractRow(label, value)).join("");
+}
+
+function runtimeEndpoint(baseEndpoint: string, contract: BrandRuntimeContract, key: string): string {
+  return `${baseEndpoint}/${contract.endpoints[key] ?? key}`;
+}
+
+function mappingRows(mapping: Record<string, string>): string {
+  return Object.entries(mapping)
+    .map(([label, value]) => contractRow(label, value))
+    .join("");
+}
+
+function contractRow(label: string, value: string): string {
+  return `
+    <div class="contract-row">
+      <span>${escapeHtml(label)}</span>
+      <code>${escapeHtml(value)}</code>
+    </div>
   `;
 }
 

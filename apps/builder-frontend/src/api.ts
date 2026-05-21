@@ -2,6 +2,7 @@ import type {
   HealthResponse,
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandResponse,
+  LayoutBuilderBrandSchemaResponse,
   LayoutBuilderDeleteBrandResponse,
   ReceiptRecognitionModel,
   ReceiptRecognizerRawTextResponse,
@@ -127,6 +128,13 @@ export const api = {
       });
     },
     recent: () => requestJson<LayoutBuilderBrandListItem[]>(apiBases.layout, "/brands/recent"),
+    schema: (brandId: string) =>
+      requestJson<LayoutBuilderBrandSchemaResponse>(
+        apiBases.layout,
+        `/brands/${encodeURIComponent(brandId)}/schema`
+      ),
+    runtimeConfig: <TContract>(endpoint: string) =>
+      requestJson<TContract>(apiBases.layout, `${endpointPath(endpoint)}/runtime/config`),
     deleteBrand: (brandId: string) =>
       requestJson<LayoutBuilderDeleteBrandResponse>(
         apiBases.layout,

@@ -519,14 +519,71 @@ pre {
   color: #637181;
   display: grid;
   font-size: 12px;
-  gap: 2px;
+  gap: 8px;
   margin-top: 8px;
-  max-width: 740px;
+  max-width: 980px;
 }
 
 .contract-inspector strong {
   color: #17202a;
   font-size: 13px;
+}
+
+.contract-card {
+  background: #f8fafc;
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.contract-card h4 {
+  color: #17202a;
+  font-size: 12px;
+  line-height: 1.2;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.contract-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.contract-row {
+  align-items: start;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(88px, 0.4fr) minmax(0, 1fr);
+}
+
+.contract-row span {
+  color: #637181;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.contract-row code {
+  background: #eef3f8;
+  border-radius: 5px;
+  color: #26323f;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  padding: 3px 5px;
+}
+
+.contract-json summary {
+  color: #1769aa;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.contract-json pre {
+  max-height: 180px;
 }
 
 .code-input {
@@ -599,6 +656,7 @@ pre {
 
 @media (max-width: 980px) {
   .layout-workbench,
+  .contract-grid,
   .form-grid.two-col {
     grid-template-columns: 1fr;
   }
