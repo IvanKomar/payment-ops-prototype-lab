@@ -4,6 +4,7 @@ interface ImportMetaEnv {
   readonly VITE_SMS_API_BASE?: string;
   readonly VITE_RECEIPT_API_BASE?: string;
   readonly VITE_LAYOUT_API_BASE?: string;
+  readonly VITE_BRAND_RUNTIME_BASE?: string;
 }
 
 interface ImportMeta {

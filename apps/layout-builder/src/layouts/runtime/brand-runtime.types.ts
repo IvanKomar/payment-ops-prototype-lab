@@ -39,6 +39,12 @@ export interface BrandRuntimeContract {
     email: string;
     displayName: string;
   };
+  authFields: {
+    email: string;
+    password: string;
+    displayName: string;
+    currency: string;
+  };
   endpoints: {
     register: string;
     login: string;
@@ -76,6 +82,12 @@ export function createBrandRuntimeContract(brand: BrandWithSchema): BrandRuntime
       userId: runtimeField(brand, "userId"),
       email: runtimeField(brand, "email"),
       displayName: runtimeField(brand, "displayName")
+    },
+    authFields: {
+      email: runtimeField(brand, "authEmail"),
+      password: runtimeField(brand, "authPassword"),
+      displayName: runtimeField(brand, "authDisplayName"),
+      currency: runtimeField(brand, "authCurrency")
     },
     endpoints: {
       register: "runtime/register",

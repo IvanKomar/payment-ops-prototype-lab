@@ -26,6 +26,7 @@ interface BrandRuntimeContract {
   fields: Record<string, string>;
   accountFields: Record<string, string>;
   userFields: Record<string, string>;
+  authFields: Record<string, string>;
   endpoints: Record<string, string>;
 }
 
@@ -184,6 +185,7 @@ app.innerHTML = `
                 <div class="selected-brand" id="selected-brand-title">No brand selected</div>
                 <div class="contract-inspector" id="contract-inspector"></div>
               </div>
+              <button class="button secondary" id="open-brand-app" type="button" disabled>Open user app</button>
             </div>
             <div class="live-preview" id="live-preview">
               <div class="empty">Select a brand to load the preview.</div>
@@ -249,6 +251,7 @@ const brandModalStatus = required<HTMLElement>("#brand-modal-status");
 const brandList = required<HTMLElement>("#brand-list");
 const selectedBrandTitle = required<HTMLElement>("#selected-brand-title");
 const contractInspector = required<HTMLElement>("#contract-inspector");
+const openBrandAppButton = required<HTMLButtonElement>("#open-brand-app");
 const deleteBrandButton = required<HTMLButtonElement>("#delete-brand");
 const livePreview = required<HTMLElement>("#live-preview");
 
@@ -303,6 +306,14 @@ brandForm.addEventListener("submit", (event) => {
 
 deleteBrandButton.addEventListener("click", () => {
   void deleteActiveBrand();
+});
+
+openBrandAppButton.addEventListener("click", () => {
+  const appUrl = layoutState.activeBrand?.appUrl;
+
+  if (appUrl) {
+    window.open(api.layout.brandRuntimeUrl(appUrl), "_blank", "noopener,noreferrer");
+  }
 });
 
 void setActiveRoute(routeFromHash());
@@ -706,12 +717,13 @@ function applyBrandPreview(
   selectedBrandTitle.textContent = `${brandName ?? brand.name} · ${brand.brandId}`;
   renderContractInspector(brand, layoutState.activeSchema, layoutState.activeRuntimeContract);
   deleteBrandButton.disabled = false;
+  openBrandAppButton.disabled = false;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `
     <iframe
       class="preview-frame"
       title="${escapeHtml(brand.name)} live preview"
-      src="${escapeHtml(api.layout.publicUrl(brand.appUrl))}"
+      src="${escapeHtml(api.layout.brandRuntimeUrl(brand.appUrl))}"
     ></iframe>
   `;
 }
@@ -759,6 +771,7 @@ function clearLayoutSelection(): void {
   selectedBrandTitle.textContent = "No brand selected";
   contractInspector.innerHTML = "";
   deleteBrandButton.disabled = true;
+  openBrandAppButton.disabled = true;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `<div class="empty">Select a brand to load the preview.</div>`;
 }
@@ -815,6 +828,10 @@ function renderContractInspector(
         <h4>Actions</h4>
         ${mappingRows(runtimeContract.actionLabels)}
       </div>
+      <div class="contract-card">
+        <h4>Auth fields</h4>
+        ${mappingRows(runtimeContract.authFields)}
+      </div>
     </div>
     <details class="contract-json">
       <summary>System prompt</summary>
@@ -832,7 +849,7 @@ function endpointRows(
   runtimeContract: BrandRuntimeContract
 ): string {
   const rows: Array<[string, string]> = [
-    ["app", schema.appUrl],
+    ["app", api.layout.brandRuntimeUrl(schema.appUrl)],
     ["config", runtimeEndpoint(schema.endpoint, runtimeContract, "config")],
     ["register", runtimeEndpoint(schema.endpoint, runtimeContract, "register")],
     ["login", runtimeEndpoint(schema.endpoint, runtimeContract, "login")],

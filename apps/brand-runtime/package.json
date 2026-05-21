@@ -1,0 +1,26 @@
+{
+  "name": "@payment-ops/brand-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && vite build",
+    "dev": "vite",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" vite.config.ts",
+    "test": "node -e \"console.log('No tests yet for brand-runtime')\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@payment-ops/eslint-config": "workspace:*",
+    "@payment-ops/tsconfig": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

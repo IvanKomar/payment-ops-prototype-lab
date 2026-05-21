@@ -153,31 +153,33 @@ export class LayoutService {
   async registerRuntimeUser(id: string, slug: string, payload: unknown): Promise<unknown> {
     const brand = await this.getExistingBrand(id);
     this.assertBrandApiSlug(brand, slug);
+    const contract = createBrandRuntimeContract(brand);
     const body = objectPayload(payload);
-    const displayName = optionalStringPayload(body.displayName);
-    const currency = optionalStringPayload(body.currency);
+    const displayName = optionalStringPayload(body.displayName ?? body[contract.authFields.displayName]);
+    const currency = optionalStringPayload(body.currency ?? body[contract.authFields.currency]);
     const response = await this.paymentCoreClient.register({
       brandId: brand.id,
-      email: stringPayload(body.email),
-      password: stringPayload(body.password),
+      email: stringPayload(body.email ?? body[contract.authFields.email]),
+      password: stringPayload(body.password ?? body[contract.authFields.password]),
       ...(displayName ? { displayName } : {}),
       ...(currency ? { currency } : {})
     });
 
-    return toRuntimeAuthResponse(createBrandRuntimeContract(brand), response);
+    return toRuntimeAuthResponse(contract, response);
   }
 
   async loginRuntimeUser(id: string, slug: string, payload: unknown): Promise<unknown> {
     const brand = await this.getExistingBrand(id);
     this.assertBrandApiSlug(brand, slug);
+    const contract = createBrandRuntimeContract(brand);
     const body = objectPayload(payload);
     const response = await this.paymentCoreClient.login({
       brandId: brand.id,
-      email: stringPayload(body.email),
-      password: stringPayload(body.password)
+      email: stringPayload(body.email ?? body[contract.authFields.email]),
+      password: stringPayload(body.password ?? body[contract.authFields.password])
     });
 
-    return toRuntimeAuthResponse(createBrandRuntimeContract(brand), response);
+    return toRuntimeAuthResponse(contract, response);
   }
 
   async getRuntimePayments(id: string, slug: string, sessionToken: string): Promise<unknown> {
@@ -315,7 +317,7 @@ export class LayoutService {
   }
 
   private brandAppUrl(brand: BrandWithSchema): string {
-    return `/brands/${brand.id}/${brand.schema.slug}/app`;
+    return `/brand-runtime/brands/${brand.id}/${brand.schema.slug}/dashboard`;
   }
 }
 
@@ -372,22 +374,30 @@ function renderRuntimeBrandApp(input: RuntimeBrandAppInput): string {
     <style>
       :root { color: ${input.brand.palette.text}; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       * { box-sizing: border-box; }
-      body { margin: 0; background: ${input.brand.palette.background}; }
+      body { margin: 0; background: #f6f8fb; }
       button, input, select { font: inherit; }
       button { cursor: pointer; }
-      .shell { display: grid; grid-template-columns: 220px minmax(620px, 1fr); min-height: 100vh; }
-      .nav { background: ${input.brand.palette.secondary}; color: #fff; display: flex; flex-direction: column; gap: 12px; padding: 20px; }
-      .mark { align-items: center; background: ${input.brand.palette.primary}; border: 2px solid rgba(255,255,255,.3); border-radius: 8px; display: flex; height: 52px; justify-content: center; width: 52px; }
+      .shell { display: grid; grid-template-columns: 248px minmax(680px, 1fr); min-height: 100vh; }
+      .nav { background: ${input.brand.palette.surface}; border-right: 1px solid #dde5ee; color: ${input.brand.palette.text}; display: flex; flex-direction: column; gap: 18px; padding: 22px 16px; }
+      .brand-lockup { align-items: center; display: grid; gap: 11px; grid-template-columns: 42px minmax(0, 1fr); padding: 0 6px 10px; }
+      .mark { align-items: center; background: ${input.brand.palette.primary}; border-radius: 8px; display: flex; height: 42px; justify-content: center; width: 42px; }
       .mark img { height: 100%; object-fit: contain; padding: 5px; width: 100%; }
-      .nav strong { font-size: 18px; overflow-wrap: anywhere; }
-      .nav button { background: rgba(255,255,255,.12); border: 0; border-radius: 6px; color: #fff; font-weight: 800; min-height: 38px; text-align: left; padding: 0 12px; }
-      .main { display: grid; gap: 16px; padding: 22px; }
+      .nav strong { display: block; font-size: 15px; overflow-wrap: anywhere; }
+      .nav small { color: #6a7787; display: block; font-size: 12px; font-weight: 700; margin-top: 2px; }
+      .nav-section { display: grid; gap: 4px; }
+      .nav-label { color: #8a96a8; font-size: 11px; font-weight: 800; padding: 0 10px 5px; text-transform: uppercase; }
+      .nav button { align-items: center; background: transparent; border: 0; border-radius: 7px; color: #405066; display: flex; font-weight: 800; gap: 10px; min-height: 38px; text-align: left; padding: 0 10px; }
+      .nav button.active { background: #eef4fb; color: ${input.brand.palette.primary}; }
+      .nav-footer { border-top: 1px solid #e7edf4; color: #697789; font-size: 12px; margin-top: auto; padding: 14px 8px 0; }
+      .main { display: grid; gap: 18px; padding: 24px; }
       .topline { align-items: start; display: flex; gap: 16px; justify-content: space-between; }
+      .top-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
       h1, h2 { line-height: 1.1; margin: 0; }
-      h1 { font-size: 24px; }
-      h2 { font-size: 18px; }
-      .kicker { color: #667484; display: block; font-size: 12px; font-weight: 800; margin-bottom: 5px; text-transform: uppercase; }
-      .grid { display: grid; gap: 14px; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); align-items: start; }
+      h1 { font-size: 28px; letter-spacing: 0; }
+      h2 { font-size: 16px; }
+      .kicker { color: #667484; display: block; font-size: 12px; font-weight: 800; margin-bottom: 7px; text-transform: uppercase; }
+      .subtle { color: #677587; font-size: 13px; line-height: 1.45; margin: 7px 0 0; max-width: 680px; }
+      .grid { align-items: start; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 360px; }
       .panel { background: ${input.brand.palette.surface}; border: 1px solid #dce4ec; border-radius: 8px; padding: 16px; }
       form { display: grid; gap: 10px; margin-top: 12px; }
       label { color: #4b5968; display: grid; font-size: 13px; font-weight: 700; gap: 5px; }
@@ -396,19 +406,28 @@ function renderRuntimeBrandApp(input: RuntimeBrandAppInput): string {
       .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
       .primary { background: ${input.brand.palette.primary}; border: 0; border-radius: 6px; color: #fff; font-weight: 800; min-height: 40px; padding: 0 13px; }
       .secondary { background: #eef3f8; border: 0; border-radius: 6px; color: ${input.brand.palette.text}; font-weight: 800; min-height: 40px; padding: 0 13px; }
-      .status { background: #f4f7fb; border: 1px solid #dce4ec; border-radius: 8px; color: #536273; font-size: 13px; min-height: 46px; padding: 11px; overflow-wrap: anywhere; }
-      .summary { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-      .metric { background: #f8fafc; border: 1px solid #dce4ec; border-radius: 8px; display: grid; gap: 4px; padding: 12px; }
+      .status { background: #f4f7fb; border: 1px solid #dce4ec; border-radius: 8px; color: #536273; font-size: 13px; min-height: 42px; padding: 10px; overflow-wrap: anywhere; }
+      .summary { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .metric { background: ${input.brand.palette.surface}; border: 1px solid #dce4ec; border-radius: 8px; display: grid; gap: 5px; min-height: 92px; padding: 14px; }
       .metric span { color: #667484; font-size: 12px; font-weight: 800; text-transform: uppercase; }
-      .metric strong { font-size: 18px; overflow-wrap: anywhere; }
+      .metric strong { font-size: 22px; overflow-wrap: anywhere; }
+      .metric small { color: #748296; font-size: 12px; }
+      .account-card { display: grid; gap: 11px; }
+      .identity-row { align-items: center; border-top: 1px solid #edf1f5; display: flex; gap: 10px; justify-content: space-between; min-width: 0; padding-top: 10px; }
+      .identity-row span { color: #667484; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+      .identity-row strong { font-size: 13px; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .table-wrap { border: 1px solid #dce4ec; border-radius: 8px; overflow: auto; }
-      table { border-collapse: collapse; min-width: 760px; width: 100%; }
+      table { border-collapse: collapse; min-width: 720px; width: 100%; }
       th, td { border-bottom: 1px solid #edf1f5; padding: 10px 12px; text-align: left; vertical-align: top; }
       th { background: #f8fafc; color: #637181; font-size: 12px; text-transform: uppercase; }
+      td strong { display: block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .badge { border-radius: 999px; color: #fff; display: inline-flex; font-size: 12px; font-weight: 800; justify-content: center; min-width: 84px; padding: 4px 8px; }
       .ok { background: #1d8f61; } .warn { background: #d88b18; } .bad { background: #c0392b; } .muted { background: #8492a3; }
-      .empty { color: #657384; padding: 16px; }
-      @media (max-width: 860px) { .shell, .grid { grid-template-columns: 1fr; } .nav { min-height: auto; } .summary { grid-template-columns: 1fr; } }
+      .empty { color: #657384; padding: 18px; }
+      .section-title { align-items: center; display: flex; justify-content: space-between; margin-bottom: 12px; }
+      .side-stack { display: grid; gap: 16px; }
+      @media (max-width: 960px) { .shell, .grid { grid-template-columns: 1fr; } .nav { min-height: auto; } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 640px) { .summary, .row { grid-template-columns: 1fr; } .topline { display: grid; } }
     </style>
   </head>
   <body>
@@ -421,6 +440,7 @@ function renderRuntimeBrandApp(input: RuntimeBrandAppInput): string {
       const sessionKey = "brand-runtime-session:" + appContext.brand.brandId;
       let runtimeContract = null;
       let sessionToken = localStorage.getItem(sessionKey) || "";
+      let identityState = null;
       let historyState = null;
 
       boot().catch((error) => renderError(error));
@@ -434,56 +454,90 @@ function renderRuntimeBrandApp(input: RuntimeBrandAppInput): string {
       function renderShell(message = "Register or sign in to use this brand.") {
         const labels = runtimeContract.actionLabels;
         const resourceAlias = runtimeContract.resourceAlias;
+        const account = historyState?.account || identityState?.account || null;
+        const user = identityState?.user || null;
         const payments = historyState?.[resourceAlias] || [];
+        const metrics = paymentMetrics(payments);
         app.innerHTML = \`
           <div class="shell">
             <aside class="nav">
-              <div class="mark"><img src="\${escapeHtml(appContext.brand.logoDataUri)}" alt="\${escapeHtml(appContext.brand.name)} logo" /></div>
-              <strong>\${escapeHtml(appContext.brand.name)}</strong>
-              <button type="button">\${escapeHtml(resourceAlias)}</button>
-              <button type="button">Account</button>
-              <button type="button">Support</button>
+              <div class="brand-lockup">
+                <div class="mark"><img src="\${escapeHtml(appContext.brand.logoDataUri)}" alt="\${escapeHtml(appContext.brand.name)} logo" /></div>
+                <div><strong>\${escapeHtml(appContext.brand.name)}</strong><small>Payments OS</small></div>
+              </div>
+              <div class="nav-section">
+                <span class="nav-label">Operations</span>
+                <button class="active" type="button">Overview</button>
+                <button type="button">\${escapeHtml(labels.history)}</button>
+                <button type="button">Balances</button>
+                <button type="button">Customers</button>
+              </div>
+              <div class="nav-section">
+                <span class="nav-label">Platform</span>
+                <button type="button">Developers</button>
+                <button type="button">Risk rules</button>
+                <button type="button">Settings</button>
+              </div>
+              <div class="nav-footer">Brand runtime is connected to a live payment account for this workspace.</div>
             </aside>
             <section class="main">
               <header class="topline">
-                <div><span class="kicker">\${escapeHtml(appContext.generationProfile.contractSummary)}</span><h1>\${escapeHtml(resourceAlias)}</h1></div>
-                <button class="secondary" id="refresh" type="button">\${escapeHtml(labels.history)}</button>
+                <div>
+                  <span class="kicker">\${escapeHtml(appContext.generationProfile.contractSummary)}</span>
+                  <h1>Payments dashboard</h1>
+                  <p class="subtle">\${escapeHtml(appContext.generationProfile.visualDirection)}</p>
+                </div>
+                <div class="top-actions">
+                  <button class="secondary" id="refresh" type="button">\${escapeHtml(labels.history)}</button>
+                  \${sessionToken ? '<button class="secondary" id="logout" type="button">Close session</button>' : ''}
+                </div>
               </header>
+              <div class="summary">
+                \${metric("Available balance", account ? formatAmount(account[runtimeContract.accountFields.balance], account[runtimeContract.accountFields.currency]) : formatAmount(0, "USD"), account ? "Live account" : "Create an account to activate")}
+                \${metric("Gross volume", formatAmount(metrics.volume, metrics.currency), "Current workspace")}
+                \${metric(resourceAlias, String(payments.length), metrics.successful + " successful")}
+                \${metric("Needs attention", String(metrics.review), "Review, failed, or pending")}
+              </div>
               <div class="grid">
                 <section class="panel">
-                  <h2>\${escapeHtml(labels.register)} / \${escapeHtml(labels.login)}</h2>
-                  <form id="auth-form">
-                    <label>Email <input name="email" value="client@example.com" type="email" required /></label>
-                    <label>Password <input name="password" value="local-demo-password" type="password" required /></label>
-                    <label>Name <input name="displayName" value="Client User" /></label>
-                    <div class="button-row">
-                      <button class="primary" data-auth="register" type="submit">\${escapeHtml(labels.register)}</button>
-                      <button class="secondary" data-auth="login" type="button">\${escapeHtml(labels.login)}</button>
-                    </div>
-                  </form>
-                  <div class="status" id="status">\${escapeHtml(message)}</div>
-                  <h2 style="margin-top: 18px;">\${escapeHtml(labels.createPayment)}</h2>
-                  <form id="payment-form">
-                    <div class="row">
-                      <label>Amount <input name="amount" value="49.99" type="number" step="0.01" required /></label>
-                      <label>Currency <input name="currency" value="USD" required /></label>
-                    </div>
-                    <label>Destination <input name="destinationLabel" value="settle-demo-address" required /></label>
-                    <div class="row">
-                      <label>Method <select name="methodType"><option value="card">card</option><option value="wallet">wallet</option><option value="bank_transfer">bank transfer</option><option value="manual">manual</option></select></label>
-                      <label>Scenario <select name="scenario"><option value="settle">settle</option><option value="review">review</option><option value="reserve">reserve</option><option value="fail">fail</option><option value="refund">refund</option><option value="demo">demo</option></select></label>
-                    </div>
-                    <button class="primary" type="submit">\${escapeHtml(labels.createPayment)}</button>
-                  </form>
+                  <div class="section-title">
+                    <h2>\${escapeHtml(labels.history)}</h2>
+                    <button class="secondary" id="secondary-refresh" type="button">Refresh</button>
+                  </div>
+                  <div class="table-wrap">\${paymentsTable(payments)}</div>
                 </section>
                 <section class="panel">
-                  <div class="summary">
-                    \${metric("Items", String(payments.length))}
-                    \${metric("Resource", resourceAlias)}
-                    \${metric("Session", sessionToken ? "active" : "none")}
+                  <div class="side-stack">
+                    <div class="account-card">
+                      <h2>\${sessionToken ? "Account" : "Access this workspace"}</h2>
+                      <div class="status" id="status">\${escapeHtml(message)}</div>
+                      \${identityPanel(user, account)}
+                      <form id="auth-form">
+                        <label>Email <input name="\${escapeHtml(runtimeContract.authFields.email)}" value="client@example.com" type="email" required /></label>
+                        <label>Password <input name="\${escapeHtml(runtimeContract.authFields.password)}" value="local-demo-password" type="password" required /></label>
+                        <label>Display name <input name="\${escapeHtml(runtimeContract.authFields.displayName)}" value="Client User" /></label>
+                        <div class="button-row">
+                          <button class="primary" data-auth="register" type="submit">\${escapeHtml(labels.register)}</button>
+                          <button class="secondary" data-auth="login" type="button">\${escapeHtml(labels.login)}</button>
+                        </div>
+                      </form>
+                    </div>
+                    <div>
+                      <h2>\${escapeHtml(labels.createPayment)}</h2>
+                      <form id="payment-form">
+                        <div class="row">
+                          <label>Amount <input name="\${escapeHtml(runtimeContract.fields.amount)}" value="49.99" type="number" step="0.01" required /></label>
+                          <label>Currency <input name="\${escapeHtml(runtimeContract.fields.currency)}" value="USD" required /></label>
+                        </div>
+                        <label>Customer or destination <input name="\${escapeHtml(runtimeContract.fields.destinationLabel)}" value="settle-demo-address" required /></label>
+                        <div class="row">
+                          <label>Payment method <select name="\${escapeHtml(runtimeContract.fields.methodType)}"><option value="card">Card</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank transfer</option><option value="manual">Manual</option></select></label>
+                          <label>Flow <select name="scenario"><option value="settle">Settle now</option><option value="review">Hold for review</option><option value="reserve">Reserve funds</option><option value="fail">Decline</option><option value="refund">Refund</option><option value="demo">Demo route</option></select></label>
+                        </div>
+                        <button class="primary" type="submit">\${escapeHtml(labels.createPayment)}</button>
+                      </form>
+                    </div>
                   </div>
-                  <h2 style="margin-top: 16px;">\${escapeHtml(labels.history)}</h2>
-                  <div class="table-wrap">\${paymentsTable(payments)}</div>
                 </section>
               </div>
             </section>
@@ -493,18 +547,22 @@ function renderRuntimeBrandApp(input: RuntimeBrandAppInput): string {
         document.querySelector("[data-auth='login']").addEventListener("click", () => authenticate("login"));
         document.querySelector("#payment-form").addEventListener("submit", (event) => { event.preventDefault(); createPayment(); });
         document.querySelector("#refresh").addEventListener("click", () => refreshHistory().catch((error) => setStatus(error.message)));
+        document.querySelector("#secondary-refresh").addEventListener("click", () => refreshHistory().catch((error) => setStatus(error.message)));
+        document.querySelector("#logout")?.addEventListener("click", logout);
       }
 
       async function authenticate(mode) {
         const form = new FormData(document.querySelector("#auth-form"));
+        const authFields = runtimeContract.authFields;
         const payload = {
-          email: String(form.get("email") || ""),
-          password: String(form.get("password") || ""),
-          displayName: String(form.get("displayName") || ""),
-          currency: "USD"
+          [authFields.email]: String(form.get(authFields.email) || ""),
+          [authFields.password]: String(form.get(authFields.password) || ""),
+          [authFields.displayName]: String(form.get(authFields.displayName) || ""),
+          [authFields.currency]: "USD"
         };
         const response = await request(new URL("runtime/" + mode, window.location.href), { method: "POST", body: JSON.stringify(payload) }, false);
         sessionToken = response.sessionToken;
+        identityState = response;
         localStorage.setItem(sessionKey, sessionToken);
         await refreshHistory(mode === "register" ? "Account created." : "Signed in.");
       }
@@ -514,10 +572,10 @@ function renderRuntimeBrandApp(input: RuntimeBrandAppInput): string {
         const form = new FormData(document.querySelector("#payment-form"));
         const fields = runtimeContract.fields;
         const payload = {
-          [fields.amount]: Number(form.get("amount")),
-          [fields.currency]: String(form.get("currency") || "USD"),
-          [fields.destinationLabel]: String(form.get("destinationLabel") || ""),
-          [fields.methodType]: String(form.get("methodType") || "card"),
+          [fields.amount]: Number(form.get(fields.amount)),
+          [fields.currency]: String(form.get(fields.currency) || "USD"),
+          [fields.destinationLabel]: String(form.get(fields.destinationLabel) || ""),
+          [fields.methodType]: String(form.get(fields.methodType) || "card"),
           scenario: String(form.get("scenario") || "demo")
         };
         await request(new URL("runtime/payments", window.location.href), { method: "POST", body: JSON.stringify(payload) }, true);
@@ -527,7 +585,16 @@ function renderRuntimeBrandApp(input: RuntimeBrandAppInput): string {
       async function refreshHistory(message = "History refreshed.") {
         if (!sessionToken) { renderShell("Sign in first."); return; }
         historyState = await request(new URL("runtime/payments", window.location.href), { method: "GET" }, true);
+        if (identityState && historyState?.account) identityState = { ...identityState, account: historyState.account };
         renderShell(message);
+      }
+
+      function logout() {
+        sessionToken = "";
+        identityState = null;
+        historyState = null;
+        localStorage.removeItem(sessionKey);
+        renderShell("Session closed.");
       }
 
       async function request(url, init, authorized) {
@@ -546,20 +613,45 @@ function renderRuntimeBrandApp(input: RuntimeBrandAppInput): string {
       function paymentsTable(payments) {
         if (!payments.length) return '<div class="empty">No activity yet.</div>';
         const f = runtimeContract.fields;
-        return \`<table><thead><tr><th>Reference</th><th>Status</th><th>Amount</th><th>Destination</th><th>Created</th></tr></thead><tbody>\${payments.map((payment) => \`
+        return \`<table><thead><tr><th>Payment</th><th>Status</th><th>Amount</th><th>Customer</th><th>Created</th></tr></thead><tbody>\${payments.map((payment) => \`
           <tr>
             <td><strong>\${escapeHtml(payment[f.externalReference])}</strong></td>
             <td><span class="badge \${statusClass(String(payment[f.status]))}">\${escapeHtml(payment[f.status])}</span></td>
-            <td>\${escapeHtml(payment[f.currency])} \${Number(payment[f.amount]).toFixed(2)}</td>
+            <td>\${formatAmount(payment[f.amount], payment[f.currency])}</td>
             <td>\${escapeHtml(payment[f.destinationLabel])}</td>
             <td>\${formatDateTime(payment[f.createdAt])}</td>
           </tr>\`).join("")}</tbody></table>\`;
       }
 
-      function metric(label, value) { return \`<div class="metric"><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(value)}</strong></div>\`; }
+      function identityPanel(user, account) {
+        if (!user && !account) return "";
+        const userFields = runtimeContract.userFields;
+        const accountFields = runtimeContract.accountFields;
+        return \`<div class="account-card">
+          \${user ? identityRow("Email", user[userFields.email]) : ""}
+          \${user ? identityRow("Owner", user[userFields.displayName]) : ""}
+          \${account ? identityRow("Account", account[accountFields.accountId]) : ""}
+          \${account ? identityRow("Currency", account[accountFields.currency]) : ""}
+        </div>\`;
+      }
+
+      function identityRow(label, value) {
+        return \`<div class="identity-row"><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(value)}</strong></div>\`;
+      }
+
+      function metric(label, value, caption = "") { return \`<div class="metric"><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(value)}</strong><small>\${escapeHtml(caption)}</small></div>\`; }
+      function paymentMetrics(payments) {
+        const fields = runtimeContract.fields;
+        const firstCurrency = payments[0]?.[fields.currency] || "USD";
+        const successful = payments.filter((payment) => statusClass(String(payment[fields.status])) === "ok").length;
+        const review = payments.filter((payment) => statusClass(String(payment[fields.status])) !== "ok").length;
+        const volume = payments.reduce((sum, payment) => sum + Number(payment[fields.amount] || 0), 0);
+        return { currency: firstCurrency, review, successful, volume };
+      }
       function setStatus(value) { const element = document.querySelector("#status"); if (element) element.textContent = value; }
       function renderError(error) { app.innerHTML = \`<div class="empty">\${escapeHtml(error.message)}</div>\`; }
       function statusClass(status) { const lower = status.toLowerCase(); if (lower.includes("fail") || lower.includes("reject") || lower.includes("declin")) return "bad"; if (lower.includes("clear") || lower.includes("paid") || lower.includes("settle") || lower.includes("complete")) return "ok"; if (lower.includes("review") || lower.includes("process") || lower.includes("queue")) return "warn"; return "muted"; }
+      function formatAmount(amount, currency) { return new Intl.NumberFormat(undefined, { currency: String(currency || "USD"), maximumFractionDigits: 2, style: "currency" }).format(Number(amount || 0)); }
       function formatDateTime(value) { return new Intl.DateTimeFormat(undefined, { day: "2-digit", hour: "2-digit", minute: "2-digit", month: "short" }).format(new Date(value)); }
       function escapeHtml(value) { return String(value).replace(/[&<>"']/gu, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\"": "&quot;", "'": "&#039;" })[char]); }
     </script>

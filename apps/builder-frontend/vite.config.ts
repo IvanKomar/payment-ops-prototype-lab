@@ -40,6 +40,11 @@ export default defineConfig(({ mode }) => {
           target: serviceTarget(env, "VITE_PAYMENT_PROXY_TARGET", "http://localhost:3005"),
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/payment-api/u, "")
+        },
+        "/brand-runtime": {
+          target: serviceTarget(env, "VITE_BRAND_RUNTIME_PROXY_TARGET", "http://localhost:3006"),
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/brand-runtime/u, "")
         }
       }
     }

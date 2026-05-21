@@ -365,6 +365,26 @@ MVP progress:
 - brand runtime facade endpoints are available under
   `/brands/:id/:slug/runtime/*` and integrate generated brands with
   `payment-core` for registration, login, payment creation, and history.
+- `apps/brand-runtime` now hosts the user-facing React/Vite merchant
+  application for generated brands. It provides merchant login/registration,
+  overview, payments, customers, and balances routes and calls only the brand
+  runtime facade.
+
+Immediate next actions:
+
+1. Normalize `payment-core` around a real payment-gateway domain:
+   `MerchantAccount`, `Customer`, `PaymentMethod`, `Card`, `BankAccount`,
+   `PaymentIntent`/`Charge`, refunds, and balance movements.
+2. Replace the current `destinationLabel`-based customer/card encoding with
+   structured payment requests and responses.
+3. Extend the brand runtime contract with generated field maps for customers,
+   payment methods, merchant accounts, balance rows, and payment statuses.
+4. Update `apps/brand-runtime` to consume the structured contract and remove
+   remaining local assumptions about customer/payment-method shape.
+5. Add seed/demo scenarios for successful card payment, declined card, bank
+   account pending, refund, review/hold, and saved customer payment method.
+6. Add admin tools to inspect brand merchant accounts, reset seed data, and open
+   each brand as a merchant user.
 
 ### Phase 6.3: AI Gateway MVP
 

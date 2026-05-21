@@ -59,13 +59,20 @@ database, and then runs all implemented apps:
 pnpm run up
 ```
 
-This starts:
+This starts the full local stack:
 
-- Builder Frontend: `http://localhost:5173`
 - SMS Gateway: `http://localhost:3001`
 - Receipt Recognizer: `http://localhost:3002`
 - Layout Builder: `http://localhost:3003`
+- Builder Frontend: `http://localhost:3004`
 - Payment Core: `http://localhost:3005`
+- Brand Runtime: `http://localhost:3006`
+
+The explicit full-stack command is:
+
+```bash
+pnpm run up:all
+```
 
 For only the AI brand runtime path, use:
 
@@ -77,6 +84,7 @@ This refreshes pnpm workspace links if needed, starts PostgreSQL/Redis, applies
 the Layout Builder and Payment Core migrations, then runs:
 
 - Builder Frontend: `http://localhost:3004`
+- Brand Runtime: `http://localhost:3006`
 - Layout Builder: `http://localhost:3003`
 - Payment Core: `http://localhost:3005`
 
@@ -164,15 +172,18 @@ Root setup scripts:
 
 ```bash
 pnpm run demo            # alias for pnpm run up
-pnpm run prisma:generate # generate the shared Prisma client
+pnpm run prisma:generate # generate Prisma clients for all backend services
 pnpm run db:deploy       # apply service migrations
 pnpm run db:deploy:brand-runtime # apply only Layout Builder + Payment Core migrations
-pnpm run setup           # docker:up + prisma:generate + db:deploy
+pnpm run setup           # alias for setup:all
+pnpm run setup:all       # docker:up + prisma:generate + db:deploy
 pnpm run setup:brand-runtime # docker:up + prisma:generate + brand runtime migrations
-pnpm run dev             # run implemented services and frontend in parallel
-pnpm run dev:brand-runtime # run Payment Core, Layout Builder, and frontend
+pnpm run dev             # alias for dev:all
+pnpm run dev:all         # run every local service/app in parallel
+pnpm run dev:brand-runtime # run Payment Core, Layout Builder, Brand Runtime, and admin frontend
 pnpm run dev:frontend    # run only the Vite demo UI
-pnpm run up              # setup, then run implemented services and frontend
+pnpm run up              # alias for up:all
+pnpm run up:all          # install, setup, then run every local service/app
 pnpm run up:brand-runtime # setup, then run AI brand runtime services
 ```
 
@@ -239,8 +250,9 @@ curl -X POST http://localhost:3003/brands/ai \
   -F logo=@/path/to/logo.svg
 ```
 
-Open the returned `appUrl` to use the generated brand as a user. AI-generated
-brand apps call:
+Open the returned `appUrl` to use the generated brand as a user. The app is a
+React/Vite payments dashboard with routes for login, overview, payments,
+customers, and balances. It calls:
 
 - `GET /brands/:id/:slug/runtime/config`
 - `POST /brands/:id/:slug/runtime/register`
@@ -250,7 +262,11 @@ brand apps call:
 
 The runtime facade maps these calls to `payment-core` through
 `PAYMENT_CORE_BASE_URL`, then maps payment fields and statuses back to the
-brand-specific contract.
+brand-specific contract. Runtime contracts include generated request fields for
+auth payloads and payment payloads, while the user-facing React app presents a
+Stripe-like payments workspace instead of exposing those field keys. The admin
+UI shows the live runtime contract and opens the selected brand as a standalone
+user app.
 
 The service accepts JPEG, PNG, WebP, and SVG logos. Gemini is not used for V1
 template generation; SVG layouts are rendered by deterministic local logic.
@@ -310,13 +326,16 @@ pnpm run docker:logs
 - `layout-builder`: implemented in Phase 4. It creates per-brand dynamic API
   contracts, stores uploaded logos, extracts brand palettes, accepts and returns
   dashboard data through the generated brand API endpoint, supports deleting
-  demo brands, renders KOI-style SVG layouts, and serves SSR brand preview apps.
+  demo brands, renders KOI-style SVG layouts, and exposes runtime facade APIs.
   Phase 6 extends it with AI-first brand creation through `POST /brands/ai` and
   an editable admin system prompt. The current generator is local/deterministic
   and stores generated runtime metadata for later OpenAI/Gemini/Claude adapters.
   AI-created brands now serve a user-facing runtime app that can register/login
   users and create/list payments through brand-specific facade endpoints backed
   by `payment-core`.
+- `brand-runtime`: React/Vite client app for generated brands. It owns the
+  merchant-facing routes for login, dashboard, payment ledger, customers, and
+  balances.
 - `builder-frontend`: implemented in Phase 5. It provides a compact Vite demo
   UI for the backend flows and uses local proxy routes so the browser can drive
   all services from `http://localhost:5173`.

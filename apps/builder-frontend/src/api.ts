@@ -37,6 +37,7 @@ export interface SmsRecentMessageResponse extends SmsStatusResponse {
 export type SmsStatus = "queued" | "processing" | "sent" | "failed";
 
 const apiBases = {
+  brandRuntime: import.meta.env.VITE_BRAND_RUNTIME_BASE ?? "/brand-runtime",
   sms: import.meta.env.VITE_SMS_API_BASE ?? "/sms-api",
   receipt: import.meta.env.VITE_RECEIPT_API_BASE ?? "/receipt-api",
   layout: import.meta.env.VITE_LAYOUT_API_BASE ?? "/layout-api"
@@ -55,6 +56,21 @@ async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit)
 
 function endpointPath(endpoint: string): string {
   return endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+}
+
+function publicUrl(baseUrl: string, endpoint: string): string {
+  if (/^https?:\/\//u.test(endpoint)) {
+    return endpoint;
+  }
+
+  return `${baseUrl}${endpointPath(endpoint)}`;
+}
+
+function brandRuntimePath(appUrl: string): string {
+  const path = endpointPath(appUrl);
+  const withoutProxyPrefix = path.replace(/^\/brand-runtime/u, "");
+
+  return withoutProxyPrefix.replace(/\/app$/u, "/dashboard");
 }
 
 export const api = {
@@ -143,6 +159,7 @@ export const api = {
           method: "DELETE"
         }
       ),
-    publicUrl: (endpoint: string) => `${apiBases.layout}${endpointPath(endpoint)}`,
+    brandRuntimeUrl: (appUrl: string) => publicUrl(apiBases.brandRuntime, brandRuntimePath(appUrl)),
+    publicUrl: (endpoint: string) => publicUrl(apiBases.layout, endpoint),
   }
 };
