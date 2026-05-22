@@ -59,6 +59,7 @@ model Brand {
   palette              Json
   schemas              BrandSchema[]
   requests             BrandRequest[]
+  bffRequestLogs       BrandBffRequestLog[]
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
@@ -74,6 +75,7 @@ model BrandSchema {
   structure   String
   fields      Json
   requests    BrandRequest[]
+  bffRequestLogs BrandBffRequestLog[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
@@ -96,6 +98,28 @@ model BrandRequest {
   @@index([brandId, createdAt])
   @@index([schemaId])
   @@map("brand_requests")
+}
+
+model BrandBffRequestLog {
+  id                 String      @id
+  brandId            String
+  brand              Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  schemaId           String
+  schema             BrandSchema @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+  method             String
+  alias              String
+  publicEndpoint     String
+  operation          String
+  status             String
+  requestPayload     Json?
+  responseSummary    Json?
+  errorMessage       String?
+  durationMs         Int
+  createdAt          DateTime    @default(now())
+
+  @@index([brandId, createdAt])
+  @@index([schemaId, createdAt])
+  @@map("brand_bff_request_logs")
 }
 
 model PaymentUser {

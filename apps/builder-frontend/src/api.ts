@@ -153,6 +153,8 @@ export const api = {
       requestJson<TContract>(apiBases.layout, `${endpointPath(endpoint)}/runtime/config`),
     runtimeAdminResources: <TResources>(endpoint: string) =>
       requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/resources`),
+    runtimeRequestLogs: <TLogs>(endpoint: string) =>
+      requestJson<TLogs>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/request-logs`),
     seedRuntimeDemoData: <TResources>(endpoint: string) =>
       requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/seed`, {
         method: "POST"

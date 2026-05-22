@@ -475,6 +475,10 @@ MVP progress:
   `/brands/:id/:slug/generated/preview`. The preview renders from the stored
   artifact/contract metadata and calls only BFF alias endpoints for auth,
   payment creation, and payment history.
+- BFF alias requests are now logged per brand with method, alias, mapped
+  operation, duration, redacted request payload, response summary, and error
+  message. The admin inspector can read the recent log from
+  `/brands/:id/:slug/runtime/admin/request-logs`.
 
 Immediate next actions:
 
@@ -484,11 +488,9 @@ Immediate next actions:
 2. Persist contract versions separately from brand metadata and expose a BFF
    contract inspector with endpoint aliases, field maps, payload structure, and
    status/action labels.
-3. Add request logging at the facade layer so the admin can see which generated
-   UI endpoint called which internal canonical operation.
-4. Start extracting shared auth semantics: one auth/session model, admin roles,
+3. Start extracting shared auth semantics: one auth/session model, admin roles,
    merchant brand memberships, and brand-scoped runtime sessions.
-5. Replace the fallback hand-built brand runtime with generated artifacts as the
+4. Replace the fallback hand-built brand runtime with generated artifacts as the
    primary user-facing route once preview validation is stable.
 
 ### Phase 6.3: AI Gateway MVP

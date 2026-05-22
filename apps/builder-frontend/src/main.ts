@@ -16,6 +16,7 @@ interface LayoutState {
   activeSchema: LayoutBuilderBrandSchemaResponse | null;
   activeRuntimeContract: BrandRuntimeContract | null;
   activeRuntimeResources: BrandRuntimeResources | null;
+  activeRuntimeRequestLogs: BrandRuntimeRequestLog[];
 }
 
 interface BrandRuntimeContract {
@@ -45,6 +46,18 @@ interface BrandRuntimeResources {
   users: Array<Record<string, unknown>>;
 }
 
+interface BrandRuntimeRequestLog {
+  requestLogId: string;
+  method: "GET" | "POST";
+  alias: string;
+  publicEndpoint: string;
+  operation: string;
+  status: "success" | "error";
+  durationMs: number;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
 type DemoRoute = "sms" | "receipts" | "layouts";
 
 const ROUTES: readonly DemoRoute[] = ["sms", "receipts", "layouts"];
@@ -53,7 +66,8 @@ const layoutState: LayoutState = {
   activeBrand: null,
   activeSchema: null,
   activeRuntimeContract: null,
-  activeRuntimeResources: null
+  activeRuntimeResources: null,
+  activeRuntimeRequestLogs: []
 };
 let recentLayoutBrands: LayoutBuilderBrandListItem[] = [];
 
@@ -733,6 +747,7 @@ async function selectBrand(brandId: string): Promise<void> {
   layoutState.activeSchema = null;
   layoutState.activeRuntimeContract = null;
   layoutState.activeRuntimeResources = null;
+  layoutState.activeRuntimeRequestLogs = [];
   applyBrandPreview(brand);
   renderBrandListSelection(brandId);
   void loadBrandContract(brandId);
@@ -743,6 +758,7 @@ async function setActiveBrand(brand: LayoutBuilderBrandResponse): Promise<void> 
   layoutState.activeSchema = brand;
   layoutState.activeRuntimeContract = null;
   layoutState.activeRuntimeResources = null;
+  layoutState.activeRuntimeRequestLogs = [];
   applyBrandPreview(brand, brand.name);
   renderBrandListSelection(brand.brandId);
   void loadBrandContract(brand.brandId);
@@ -757,7 +773,8 @@ function applyBrandPreview(
     brand,
     layoutState.activeSchema,
     layoutState.activeRuntimeContract,
-    layoutState.activeRuntimeResources
+    layoutState.activeRuntimeResources,
+    layoutState.activeRuntimeRequestLogs
   );
   deleteBrandButton.disabled = false;
   openBrandAppButton.disabled = false;
@@ -785,9 +802,10 @@ async function loadBrandContract(brandId: string): Promise<void> {
 
   try {
     const schema = await api.layout.schema(brandId);
-    const [runtimeContract, runtimeResources] = await Promise.all([
+    const [runtimeContract, runtimeResources, runtimeRequestLogs] = await Promise.all([
       api.layout.runtimeConfig<BrandRuntimeContract>(schema.endpoint),
-      api.layout.runtimeAdminResources<BrandRuntimeResources>(schema.endpoint)
+      api.layout.runtimeAdminResources<BrandRuntimeResources>(schema.endpoint),
+      api.layout.runtimeRequestLogs<BrandRuntimeRequestLog[]>(schema.endpoint)
     ]);
 
     if (layoutState.activeBrand?.brandId !== brandId) {
@@ -797,8 +815,9 @@ async function loadBrandContract(brandId: string): Promise<void> {
     layoutState.activeSchema = schema;
     layoutState.activeRuntimeContract = runtimeContract;
     layoutState.activeRuntimeResources = runtimeResources;
+    layoutState.activeRuntimeRequestLogs = runtimeRequestLogs;
     openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
-    renderContractInspector(activeBrand, schema, runtimeContract, runtimeResources);
+    renderContractInspector(activeBrand, schema, runtimeContract, runtimeResources, runtimeRequestLogs);
   } catch (error) {
     contractInspector.innerHTML = `
       <div class="contract-card">
@@ -820,6 +839,7 @@ function clearLayoutSelection(): void {
   layoutState.activeSchema = null;
   layoutState.activeRuntimeContract = null;
   layoutState.activeRuntimeResources = null;
+  layoutState.activeRuntimeRequestLogs = [];
   selectedBrandTitle.textContent = "No brand selected";
   contractInspector.innerHTML = "";
   deleteBrandButton.disabled = true;
@@ -852,7 +872,8 @@ function renderContractInspector(
   brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem,
   schema: LayoutBuilderBrandSchemaResponse | null,
   runtimeContract: BrandRuntimeContract | null,
-  runtimeResources: BrandRuntimeResources | null
+  runtimeResources: BrandRuntimeResources | null,
+  runtimeRequestLogs: BrandRuntimeRequestLog[] = []
 ): void {
   const profile = schema?.generationProfile ?? brand.generationProfile;
 
@@ -902,7 +923,7 @@ function renderContractInspector(
         ${mappingRows(runtimeContract.authFields)}
       </div>
     </div>
-    ${runtimeResources ? runtimeResourcesHtml(runtimeContract, runtimeResources) : ""}
+    ${runtimeResources ? runtimeResourcesHtml(runtimeContract, runtimeResources, runtimeRequestLogs) : ""}
     <details class="contract-json">
       <summary>System prompt</summary>
       <pre>${escapeHtml(profile.systemPrompt)}</pre>
@@ -949,7 +970,8 @@ function generatedArtifactHtml(artifact: NonNullable<LayoutBuilderBrandSchemaRes
 
 function runtimeResourcesHtml(
   runtimeContract: BrandRuntimeContract,
-  resources: BrandRuntimeResources
+  resources: BrandRuntimeResources,
+  requestLogs: BrandRuntimeRequestLog[]
 ): string {
   const recentPayments = resources.payments.slice(0, 5);
   const recentCustomers = resources.customers.slice(0, 5);
@@ -985,7 +1007,34 @@ function runtimeResourcesHtml(
           ? `<details class="contract-json"><summary>Recent customers</summary><pre>${escapeHtml(JSON.stringify(recentCustomers, null, 2))}</pre></details>`
           : ""
       }
+      ${requestLogsHtml(requestLogs)}
     </div>
+  `;
+}
+
+function requestLogsHtml(requestLogs: BrandRuntimeRequestLog[]): string {
+  if (requestLogs.length === 0) {
+    return `<small>No BFF requests have been logged for this brand yet.</small>`;
+  }
+
+  return `
+    <details class="contract-json" open>
+      <summary>BFF request log</summary>
+      <div class="mini-table request-log-table">
+        ${requestLogs
+          .slice(0, 8)
+          .map(
+            (log) => `
+              <div>
+                <strong>${escapeHtml(`${log.method} ${log.alias}`)}</strong>
+                <span>${escapeHtml(`${log.operation} · ${log.status} · ${log.durationMs}ms`)}</span>
+                <code>${escapeHtml(log.errorMessage ?? new Date(log.createdAt).toLocaleTimeString())}</code>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </details>
   `;
 }
 
@@ -1015,7 +1064,8 @@ function endpointRows(
     ["balance transactions", runtimeEndpoint(schema.endpoint, runtimeContract, "balanceTransactions")],
     ["admin resources", `${schema.endpoint}/runtime/admin/resources`],
     ["seed demo data", `${schema.endpoint}/runtime/admin/seed`],
-    ["reset demo data", `${schema.endpoint}/runtime/admin/reset-demo`]
+    ["reset demo data", `${schema.endpoint}/runtime/admin/reset-demo`],
+    ["request logs", `${schema.endpoint}/runtime/admin/request-logs`]
   ];
 
   return rows.map(([label, value]) => contractRow(label, value)).join("");
@@ -1090,7 +1140,7 @@ async function seedActiveBrandDemoData(): Promise<void> {
     const runtimeResources = await api.layout.seedRuntimeDemoData<BrandRuntimeResources>(schema.endpoint);
     layoutState.activeRuntimeResources = runtimeResources;
     openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
-    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources);
+    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources, layoutState.activeRuntimeRequestLogs);
   } catch (error) {
     livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
   } finally {
@@ -1114,7 +1164,7 @@ async function resetActiveBrandDemoData(): Promise<void> {
     const runtimeResources = await api.layout.resetRuntimeDemoData<BrandRuntimeResources>(schema.endpoint);
     layoutState.activeRuntimeResources = runtimeResources;
     openDemoMerchantButton.disabled = true;
-    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources);
+    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources, layoutState.activeRuntimeRequestLogs);
   } catch (error) {
     livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
   } finally {

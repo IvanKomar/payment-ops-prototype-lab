@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { Brand, BrandRequest, BrandSchema, Prisma } from "@prisma/client";
+import type { Brand, BrandBffRequestLog, BrandRequest, BrandSchema, Prisma } from "@prisma/client";
 import type {
   LayoutBuilderAiGenerationProfile,
   LayoutBuilderDashboardConfig,
@@ -13,6 +13,7 @@ import type {
   BrandWithSchema,
   CreateBrandInput,
   GeneratedSchema,
+  SaveBffRequestLogInput,
   SaveBrandRequestInput
 } from "./layout.types.js";
 
@@ -116,6 +117,35 @@ export class LayoutRepository {
         canonicalPayload: input.canonicalPayload as unknown as Prisma.InputJsonValue,
         renderedSvg: input.renderedSvg
       }
+    });
+  }
+
+  async saveBffRequestLog(input: SaveBffRequestLogInput): Promise<BrandBffRequestLog> {
+    return this.prisma.brandBffRequestLog.create({
+      data: {
+        id: input.id,
+        brandId: input.brandId,
+        schemaId: input.schemaId,
+        method: input.method,
+        alias: input.alias,
+        publicEndpoint: input.publicEndpoint,
+        operation: input.operation,
+        status: input.status,
+        requestPayload: input.requestPayload as Prisma.InputJsonValue,
+        responseSummary: input.responseSummary as Prisma.InputJsonValue,
+        errorMessage: input.errorMessage,
+        durationMs: input.durationMs
+      }
+    });
+  }
+
+  async findRecentBffRequestLogs(brandId: string, limit: number): Promise<BrandBffRequestLog[]> {
+    return this.prisma.brandBffRequestLog.findMany({
+      where: { brandId },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: limit
     });
   }
 

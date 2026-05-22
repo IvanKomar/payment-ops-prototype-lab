@@ -66,6 +66,22 @@ export interface LayoutBuilderGeneratedBrandArtifact {
   generatedAt: string;
 }
 
+export interface LayoutBuilderBffRequestLog {
+  requestLogId: string;
+  brandId: string;
+  schemaId: string;
+  method: "GET" | "POST";
+  alias: string;
+  publicEndpoint: string;
+  operation: string;
+  status: "success" | "error";
+  requestPayload: unknown;
+  responseSummary: unknown;
+  errorMessage: string | null;
+  durationMs: number;
+  createdAt: string;
+}
+
 export interface LayoutBuilderPalette {
   primary: string;
   secondary: string;

@@ -3,6 +3,7 @@ import type {
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
+  LayoutBuilderBffRequestLog,
   LayoutBuilderConfigureResponse,
   LayoutBuilderDeleteBrandResponse,
   LayoutBuilderAiGenerationProfile,
@@ -199,13 +200,55 @@ export class LayoutService {
     this.assertBrandApiSlug(brand, slug);
     const contract = createBrandRuntimeContract(brand);
     const operation = resolveBrandRuntimeGatewayOperation(contract, method, alias);
+    const startedAt = Date.now();
 
     if (!operation) {
       throw new NotFoundException(`Brand BFF endpoint was not found: ${alias}`);
     }
 
+    try {
+      const result = await this.executeRuntimeGatewayOperation(id, slug, method, operation, authorization, payload);
+      await this.logRuntimeGatewayRequest(brand, method, alias, operation, startedAt, payload, result, null);
+
+      return result;
+    } catch (error) {
+      await this.logRuntimeGatewayRequest(brand, method, alias, operation, startedAt, payload, null, error);
+      throw error;
+    }
+  }
+
+  async getRuntimeGatewayRequestLogs(id: string, slug: string): Promise<LayoutBuilderBffRequestLog[]> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const logs = await this.repository.findRecentBffRequestLogs(brand.id, 30);
+
+    return logs.map((log) => ({
+      requestLogId: log.id,
+      brandId: log.brandId,
+      schemaId: log.schemaId,
+      method: log.method as "GET" | "POST",
+      alias: log.alias,
+      publicEndpoint: log.publicEndpoint,
+      operation: log.operation,
+      status: log.status as "success" | "error",
+      requestPayload: log.requestPayload,
+      responseSummary: log.responseSummary,
+      errorMessage: log.errorMessage,
+      durationMs: log.durationMs,
+      createdAt: log.createdAt.toISOString()
+    }));
+  }
+
+  private async executeRuntimeGatewayOperation(
+    id: string,
+    slug: string,
+    method: "GET" | "POST",
+    operation: NonNullable<ReturnType<typeof resolveBrandRuntimeGatewayOperation>>,
+    authorization: string | undefined,
+    payload: unknown
+  ): Promise<unknown> {
     if (operation === "config") {
-      return contract;
+      return this.getBrandRuntimeConfig(id, slug);
     }
 
     if (operation === "register") {
@@ -241,6 +284,34 @@ export class LayoutService {
     }
 
     return this.getRuntimeBalanceTransactions(id, slug, sessionToken);
+  }
+
+  private async logRuntimeGatewayRequest(
+    brand: BrandWithSchema,
+    method: "GET" | "POST",
+    alias: string,
+    operation: string,
+    startedAt: number,
+    requestPayload: unknown,
+    response: unknown,
+    error: unknown
+  ): Promise<void> {
+    await this.repository
+      .saveBffRequestLog({
+        id: `bfflog_${randomUUID().replaceAll("-", "")}`,
+        brandId: brand.id,
+        schemaId: brand.schema.id,
+        method,
+        alias,
+        publicEndpoint: `/brands/${brand.id}/${brand.schema.slug}/bff/${alias}`,
+        operation,
+        status: error ? "error" : "success",
+        requestPayload: sanitizeRequestPayload(requestPayload),
+        responseSummary: summarizeResponse(response),
+        errorMessage: errorMessage(error),
+        durationMs: Date.now() - startedAt
+      })
+      .catch(() => undefined);
   }
 
   async registerRuntimeUser(id: string, slug: string, payload: unknown): Promise<unknown> {
@@ -565,6 +636,47 @@ function bearerTokenPayload(value: unknown): string {
   }
 
   return match[1]!;
+}
+
+function sanitizeRequestPayload(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value ?? null;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entryValue]) => [
+      key,
+      /password|token|secret/iu.test(key) ? "[redacted]" : entryValue
+    ])
+  );
+}
+
+function summarizeResponse(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value === undefined ? null : value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entryValue]) => {
+      if (Array.isArray(entryValue)) {
+        return [key, { type: "array", count: entryValue.length }];
+      }
+
+      if (entryValue && typeof entryValue === "object") {
+        return [key, { type: "object", keys: Object.keys(entryValue).slice(0, 8) }];
+      }
+
+      return [key, /token|secret/iu.test(key) ? "[redacted]" : entryValue];
+    })
+  );
+}
+
+function errorMessage(error: unknown): string | null {
+  if (!error) {
+    return null;
+  }
+
+  return error instanceof Error ? error.message : String(error);
 }
 
 interface PublicBrandAppInput {

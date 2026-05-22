@@ -69,6 +69,21 @@ export interface SaveBrandRequestInput {
   renderedSvg: string;
 }
 
+export interface SaveBffRequestLogInput {
+  id: string;
+  brandId: string;
+  schemaId: string;
+  method: "GET" | "POST";
+  alias: string;
+  publicEndpoint: string;
+  operation: string;
+  status: "success" | "error";
+  requestPayload: unknown;
+  responseSummary: unknown;
+  errorMessage: string | null;
+  durationMs: number;
+}
+
 export interface RenderLayoutInput {
   brand: BrandWithSchema;
   config: LayoutBuilderDashboardConfig;

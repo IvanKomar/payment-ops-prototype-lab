@@ -135,6 +135,16 @@ export class BrandRuntimeController {
     return this.layoutService.getRuntimeAdminResources(id, slug);
   }
 
+  @Get("admin/request-logs")
+  @ApiOkResponse({ description: "Recent BFF request logs for this brand" })
+  @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
+  getAdminRequestLogs(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+  ): Promise<unknown> {
+    return this.layoutService.getRuntimeGatewayRequestLogs(id, slug);
+  }
+
   @Post("admin/seed")
   @ApiOkResponse({ description: "Create prototype demo data for this brand" })
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
