@@ -403,16 +403,17 @@ MVP progress:
   balance counts plus recent payments.
 - local admin links now open the React brand runtime directly on
   `http://localhost:3006` instead of the builder proxy path.
+- the admin console can seed a selected brand with demo merchant data covering
+  settled card payment, bank review, declined card, authorization reserve, and
+  refunded wallet scenarios.
 
 Immediate next actions:
 
 1. Add explicit create/update endpoints for saved customers and payment methods
    once the merchant UX needs saved reusable instruments.
-2. Add seed/demo scenarios for successful card payment, declined card, bank
-   account pending, refund, review/hold, and saved customer payment method.
-3. Add admin tools to reset seed data and open each brand as a merchant user
+2. Add admin tools to reset seed data and open each brand as a merchant user
    from a known demo account.
-4. Split `PaymentUser` into clearer merchant-owner and future customer auth
+3. Split `PaymentUser` into clearer merchant-owner and future customer auth
    boundaries once the prototype needs customer-side checkout sessions.
 
 ### Phase 6.3: AI Gateway MVP

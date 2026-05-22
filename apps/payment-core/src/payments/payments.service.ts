@@ -16,6 +16,7 @@ import type {
   PaymentCoreMethodType,
   PaymentCorePaymentIntentsResponse,
   PaymentCorePaymentMethodsResponse,
+  PaymentCoreSeedBrandDemoResponse,
   PaymentCoreStatus
 } from "@payment-ops/shared-types";
 import type { Payment, PaymentAccount, PaymentCustomer, PaymentMethod, PaymentUser, Prisma } from "@prisma/client";
@@ -331,6 +332,107 @@ export class PaymentsService {
     };
   }
 
+  async seedBrandDemoData(brandId: string): Promise<PaymentCoreSeedBrandDemoResponse> {
+    const { user, account } = await this.ensureDemoMerchant(brandId);
+    const sessionToken = await this.createSession(user);
+    const demoPayments: CreatePaymentInput[] = [
+      {
+        amount: 49.99,
+        currency: account.currency,
+        methodType: "card",
+        customer: {
+          email: "ava.customer@example.com",
+          name: "Ava Customer"
+        },
+        paymentMethod: {
+          brand: "visa",
+          label: "Visa ending 4242",
+          last4: "4242",
+          type: "card"
+        },
+        scenario: "settle"
+      },
+      {
+        amount: 128.5,
+        currency: account.currency,
+        methodType: "bank_transfer",
+        customer: {
+          email: "mason.review@example.com",
+          name: "Mason Review"
+        },
+        paymentMethod: {
+          bankName: "Demo Bank",
+          label: "Demo Bank account ending 1100",
+          last4: "1100",
+          type: "bank_transfer"
+        },
+        scenario: "review"
+      },
+      {
+        amount: 24.25,
+        currency: account.currency,
+        methodType: "card",
+        customer: {
+          email: "nora.decline@example.com",
+          name: "Nora Decline"
+        },
+        paymentMethod: {
+          brand: "mastercard",
+          label: "Mastercard ending 0002",
+          last4: "0002",
+          type: "card"
+        },
+        scenario: "fail"
+      },
+      {
+        amount: 300,
+        currency: account.currency,
+        methodType: "card",
+        customer: {
+          email: "leo.reserve@example.com",
+          name: "Leo Reserve"
+        },
+        paymentMethod: {
+          brand: "visa",
+          label: "Visa ending 1881",
+          last4: "1881",
+          type: "card"
+        },
+        scenario: "reserve"
+      },
+      {
+        amount: 64,
+        currency: account.currency,
+        methodType: "wallet",
+        customer: {
+          email: "ivy.refund@example.com",
+          name: "Ivy Refund"
+        },
+        paymentMethod: {
+          label: "Wallet customer token 7788",
+          last4: "7788",
+          type: "wallet"
+        },
+        scenario: "refund"
+      }
+    ];
+    const createdPayments: PaymentCoreSeedBrandDemoResponse["createdPayments"] = [];
+
+    for (const demoPayment of demoPayments) {
+      const response = await this.createPayment(sessionToken, demoPayment);
+      createdPayments.push(response.payment);
+    }
+
+    const resources = await this.brandResources(brandId);
+
+    return {
+      ...resources,
+      createdPayments,
+      demoAccount: toAccountResponse(account),
+      demoUser: toUserResponse(user)
+    };
+  }
+
   async createPayment(
     sessionToken: string,
     input: CreatePaymentInput
@@ -520,6 +622,59 @@ export class PaymentsService {
     });
 
     return sessionToken;
+  }
+
+  private async ensureDemoMerchant(brandId: string): Promise<{ user: PaymentUser; account: PaymentAccount }> {
+    const email = `demo-merchant+${brandId}@payment-ops.local`;
+    const existing = await this.prisma.paymentUser.findUnique({
+      where: {
+        brandId_email: {
+          brandId,
+          email
+        }
+      },
+      include: {
+        accounts: {
+          orderBy: {
+            createdAt: "asc"
+          },
+          take: 1
+        }
+      }
+    });
+
+    if (existing?.accounts[0]) {
+      return {
+        user: existing,
+        account: existing.accounts[0]
+      };
+    }
+
+    const userId = `usr_${randomId()}`;
+    const accountId = `acct_${randomId()}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.paymentUser.create({
+        data: {
+          id: userId,
+          brandId,
+          email,
+          passwordHash: hashPassword("local-demo-password"),
+          displayName: "Demo Merchant"
+        }
+      });
+      const account = await tx.paymentAccount.create({
+        data: {
+          id: accountId,
+          brandId,
+          userId,
+          balance: 0,
+          currency: "USD"
+        }
+      });
+
+      return { user, account };
+    });
   }
 
   private async authenticate(sessionToken: string): Promise<AuthenticatedPaymentUser> {

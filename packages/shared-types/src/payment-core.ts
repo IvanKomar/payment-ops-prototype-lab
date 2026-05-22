@@ -176,6 +176,12 @@ export interface PaymentCoreBrandResourcesResponse {
   balanceTransactions: PaymentCoreBalanceTransaction[];
 }
 
+export interface PaymentCoreSeedBrandDemoResponse extends PaymentCoreBrandResourcesResponse {
+  demoAccount: PaymentCoreAccount;
+  demoUser: PaymentCoreUser;
+  createdPayments: PaymentCorePayment[];
+}
+
 export interface PaymentCoreCreatePaymentRequest {
   amount: number;
   currency?: string;

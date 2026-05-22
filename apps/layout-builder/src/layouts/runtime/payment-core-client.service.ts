@@ -8,7 +8,8 @@ import type {
   PaymentCoreCustomersResponse,
   PaymentCoreHistoryResponse,
   PaymentCorePaymentIntentsResponse,
-  PaymentCorePaymentMethodsResponse
+  PaymentCorePaymentMethodsResponse,
+  PaymentCoreSeedBrandDemoResponse
 } from "@payment-ops/shared-types";
 
 import type { LayoutBuilderEnv } from "../../config/env.schema.js";
@@ -84,6 +85,12 @@ export class PaymentCoreClientService {
   brandResources(brandId: string): Promise<PaymentCoreBrandResourcesResponse> {
     return this.request(`/admin/brands/${encodeURIComponent(brandId)}/resources`, {
       method: "GET"
+    });
+  }
+
+  seedBrandDemoData(brandId: string): Promise<PaymentCoreSeedBrandDemoResponse> {
+    return this.request(`/admin/brands/${encodeURIComponent(brandId)}/seed`, {
+      method: "POST"
     });
   }
 

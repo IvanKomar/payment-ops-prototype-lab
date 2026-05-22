@@ -1,11 +1,12 @@
-import { Controller, Get, Headers, Inject, Param } from "@nestjs/common";
+import { Controller, Get, Headers, Inject, Param, Post } from "@nestjs/common";
 import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type {
   PaymentCoreBalanceTransactionsResponse,
   PaymentCoreBrandResourcesResponse,
   PaymentCoreCustomersResponse,
   PaymentCorePaymentIntentsResponse,
-  PaymentCorePaymentMethodsResponse
+  PaymentCorePaymentMethodsResponse,
+  PaymentCoreSeedBrandDemoResponse
 } from "@payment-ops/shared-types";
 
 import { parseBearerToken } from "./dto/payment.schemas.js";
@@ -50,5 +51,11 @@ export class GatewayResourcesController {
   @ApiOkResponse({ description: "Prototype admin resource snapshot for a brand" })
   brandResources(@Param("brandId") brandId: string): Promise<PaymentCoreBrandResourcesResponse> {
     return this.paymentsService.brandResources(brandId);
+  }
+
+  @Post("admin/brands/:brandId/seed")
+  @ApiOkResponse({ description: "Create prototype demo data for a brand" })
+  seedBrandDemoData(@Param("brandId") brandId: string): Promise<PaymentCoreSeedBrandDemoResponse> {
+    return this.paymentsService.seedBrandDemoData(brandId);
   }
 }

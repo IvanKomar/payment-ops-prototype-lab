@@ -516,6 +516,14 @@ pre {
   flex: 0 0 auto;
 }
 
+.preview-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .selected-brand {
   color: #637181;
   font-size: 13px;

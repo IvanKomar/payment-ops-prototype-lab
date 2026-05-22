@@ -200,7 +200,10 @@ app.innerHTML = `
                 <div class="selected-brand" id="selected-brand-title">No brand selected</div>
                 <div class="contract-inspector" id="contract-inspector"></div>
               </div>
-              <button class="button secondary" id="open-brand-app" type="button" disabled>Open user app</button>
+              <div class="button-row preview-actions">
+                <button class="button secondary" id="seed-brand-demo" type="button" disabled>Seed demo data</button>
+                <button class="button secondary" id="open-brand-app" type="button" disabled>Open user app</button>
+              </div>
             </div>
             <div class="live-preview" id="live-preview">
               <div class="empty">Select a brand to load the preview.</div>
@@ -267,6 +270,7 @@ const brandList = required<HTMLElement>("#brand-list");
 const selectedBrandTitle = required<HTMLElement>("#selected-brand-title");
 const contractInspector = required<HTMLElement>("#contract-inspector");
 const openBrandAppButton = required<HTMLButtonElement>("#open-brand-app");
+const seedBrandDemoButton = required<HTMLButtonElement>("#seed-brand-demo");
 const deleteBrandButton = required<HTMLButtonElement>("#delete-brand");
 const livePreview = required<HTMLElement>("#live-preview");
 
@@ -321,6 +325,10 @@ brandForm.addEventListener("submit", (event) => {
 
 deleteBrandButton.addEventListener("click", () => {
   void deleteActiveBrand();
+});
+
+seedBrandDemoButton.addEventListener("click", () => {
+  void seedActiveBrandDemoData();
 });
 
 openBrandAppButton.addEventListener("click", () => {
@@ -740,6 +748,7 @@ function applyBrandPreview(
   );
   deleteBrandButton.disabled = false;
   openBrandAppButton.disabled = false;
+  seedBrandDemoButton.disabled = false;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `
     <iframe
@@ -799,6 +808,7 @@ function clearLayoutSelection(): void {
   contractInspector.innerHTML = "";
   deleteBrandButton.disabled = true;
   openBrandAppButton.disabled = true;
+  seedBrandDemoButton.disabled = true;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `<div class="empty">Select a brand to load the preview.</div>`;
 }
@@ -950,7 +960,8 @@ function endpointRows(
     ["payment methods", runtimeEndpoint(schema.endpoint, runtimeContract, "paymentMethods")],
     ["payment intents", runtimeEndpoint(schema.endpoint, runtimeContract, "paymentIntents")],
     ["balance transactions", runtimeEndpoint(schema.endpoint, runtimeContract, "balanceTransactions")],
-    ["admin resources", `${schema.endpoint}/runtime/admin/resources`]
+    ["admin resources", `${schema.endpoint}/runtime/admin/resources`],
+    ["seed demo data", `${schema.endpoint}/runtime/admin/seed`]
   ];
 
   return rows.map(([label, value]) => contractRow(label, value)).join("");
@@ -1007,6 +1018,29 @@ async function deleteActiveBrand(): Promise<void> {
   } catch (error) {
     deleteBrandButton.disabled = false;
     livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
+  }
+}
+
+async function seedActiveBrandDemoData(): Promise<void> {
+  const schema = layoutState.activeSchema;
+  const brand = layoutState.activeBrand;
+
+  if (!schema || !brand) {
+    return;
+  }
+
+  seedBrandDemoButton.disabled = true;
+  seedBrandDemoButton.textContent = "Seeding...";
+
+  try {
+    const runtimeResources = await api.layout.seedRuntimeDemoData<BrandRuntimeResources>(schema.endpoint);
+    layoutState.activeRuntimeResources = runtimeResources;
+    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources);
+  } catch (error) {
+    livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
+  } finally {
+    seedBrandDemoButton.disabled = false;
+    seedBrandDemoButton.textContent = "Seed demo data";
   }
 }
 

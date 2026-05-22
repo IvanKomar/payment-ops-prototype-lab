@@ -153,6 +153,10 @@ export const api = {
       requestJson<TContract>(apiBases.layout, `${endpointPath(endpoint)}/runtime/config`),
     runtimeAdminResources: <TResources>(endpoint: string) =>
       requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/resources`),
+    seedRuntimeDemoData: <TResources>(endpoint: string) =>
+      requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/seed`, {
+        method: "POST"
+      }),
     deleteBrand: (brandId: string) =>
       requestJson<LayoutBuilderDeleteBrandResponse>(
         apiBases.layout,
