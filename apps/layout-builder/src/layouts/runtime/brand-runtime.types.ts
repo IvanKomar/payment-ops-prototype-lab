@@ -5,6 +5,7 @@ import type {
   PaymentCoreMethodType,
   PaymentCoreAuthResponse,
   PaymentCoreCreatePaymentRequest,
+  PaymentCoreBrandResourcesResponse,
   PaymentCoreCustomersResponse,
   PaymentCoreHistoryResponse,
   PaymentCorePayment,
@@ -236,6 +237,31 @@ export function toRuntimeBalanceTransactionsResponse(
   return {
     account: mapAccount(contract, response.account),
     balanceTransactions: response.balanceTransactions.map((transaction) => mapBalanceTransaction(contract, transaction))
+  };
+}
+
+export function toRuntimeAdminResourcesResponse(
+  contract: BrandRuntimeContract,
+  response: PaymentCoreBrandResourcesResponse
+): unknown {
+  return {
+    accounts: response.accounts.map((account) => mapAccount(contract, account)),
+    balanceTransactions: response.balanceTransactions.map((transaction) => mapBalanceTransaction(contract, transaction)),
+    brandId: response.brandId,
+    customers: response.customers.map((customer) => mapCustomer(contract, customer)),
+    paymentIntents: response.paymentIntents.map((intent) => ({
+      [contract.fields.paymentIntentId]: intent.paymentIntentId,
+      [contract.fields.externalReference]: intent.externalReference,
+      [contract.fields.customerId]: intent.customerId,
+      [contract.fields.paymentMethodId]: intent.paymentMethodId,
+      [contract.fields.status]: contract.statusMap[intent.status] ?? intent.status,
+      [contract.fields.amount]: intent.amount,
+      [contract.fields.currency]: intent.currency,
+      [contract.fields.createdAt]: intent.createdAt
+    })),
+    paymentMethods: response.paymentMethods.map((method) => mapPaymentMethod(contract, method)),
+    payments: response.payments.map((payment) => mapPayment(contract, payment)),
+    users: response.users.map((user) => mapUser(contract, user))
   };
 }
 

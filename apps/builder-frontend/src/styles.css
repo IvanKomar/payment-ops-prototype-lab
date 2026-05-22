@@ -561,6 +561,60 @@ pre {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.contract-grid.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.contract-metric {
+  background: #eef3f8;
+  border: 1px solid #dfe7ef;
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.contract-metric span {
+  color: #637181;
+  font-size: 11px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.contract-metric strong {
+  color: #17202a;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.mini-table {
+  border: 1px solid #dfe7ef;
+  border-radius: 6px;
+  display: grid;
+  overflow: hidden;
+}
+
+.mini-table div {
+  align-items: center;
+  border-bottom: 1px solid #dfe7ef;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.7fr);
+  padding: 7px 8px;
+}
+
+.mini-table div:last-child {
+  border-bottom: 0;
+}
+
+.mini-table span {
+  color: #637181;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 .contract-row {
   align-items: start;
   display: grid;
@@ -665,6 +719,7 @@ pre {
 @media (max-width: 980px) {
   .layout-workbench,
   .contract-grid,
+  .contract-grid.compact,
   .form-grid.two-col {
     grid-template-columns: 1fr;
   }

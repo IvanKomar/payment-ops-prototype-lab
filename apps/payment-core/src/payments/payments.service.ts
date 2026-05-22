@@ -9,6 +9,7 @@ import {
 import type {
   PaymentCoreAuthResponse,
   PaymentCoreBalanceTransactionsResponse,
+  PaymentCoreBrandResourcesResponse,
   PaymentCoreCreatePaymentResponse,
   PaymentCoreCustomersResponse,
   PaymentCoreHistoryResponse,
@@ -270,6 +271,63 @@ export class PaymentsService {
     return {
       account: toAccountResponse(account),
       balanceTransactions: balanceTransactions.map(toBalanceTransactionResponse)
+    };
+  }
+
+  async brandResources(brandId: string): Promise<PaymentCoreBrandResourcesResponse> {
+    const [users, accounts, payments, customers, paymentMethods, paymentIntents, balanceTransactions] =
+      await Promise.all([
+        this.prisma.paymentUser.findMany({
+          where: { brandId },
+          orderBy: { createdAt: "desc" },
+          take: 100
+        }),
+        this.prisma.paymentAccount.findMany({
+          where: { brandId },
+          orderBy: { createdAt: "desc" },
+          take: 100
+        }),
+        this.prisma.payment.findMany({
+          where: { brandId },
+          include: {
+            customer: true,
+            paymentIntent: true,
+            paymentMethod: true
+          },
+          orderBy: { createdAt: "desc" },
+          take: 100
+        }),
+        this.prisma.paymentCustomer.findMany({
+          where: { brandId },
+          orderBy: { createdAt: "desc" },
+          take: 100
+        }),
+        this.prisma.paymentMethod.findMany({
+          where: { brandId },
+          orderBy: { createdAt: "desc" },
+          take: 100
+        }),
+        this.prisma.paymentIntent.findMany({
+          where: { brandId },
+          orderBy: { createdAt: "desc" },
+          take: 100
+        }),
+        this.prisma.balanceTransaction.findMany({
+          where: { brandId },
+          orderBy: { createdAt: "desc" },
+          take: 100
+        })
+      ]);
+
+    return {
+      brandId,
+      accounts: accounts.map(toAccountResponse),
+      balanceTransactions: balanceTransactions.map(toBalanceTransactionResponse),
+      customers: customers.map(toCustomerResponse),
+      paymentIntents: paymentIntents.map(toPaymentIntentResponse),
+      paymentMethods: paymentMethods.map(toPaymentMethodResponse),
+      payments: payments.map(toPaymentResponse),
+      users: users.map(toUserResponse)
     };
   }
 

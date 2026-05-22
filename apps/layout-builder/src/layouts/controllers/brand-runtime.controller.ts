@@ -101,6 +101,16 @@ export class BrandRuntimeController {
     return this.layoutService.getRuntimeBalanceTransactions(id, slug, parseBearerToken(authorization));
   }
 
+  @Get("admin/resources")
+  @ApiOkResponse({ description: "Prototype admin resource snapshot for this brand" })
+  @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
+  getAdminResources(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+  ): Promise<unknown> {
+    return this.layoutService.getRuntimeAdminResources(id, slug);
+  }
+
   @Post("payments")
   @ApiOkResponse({ description: "Create a brand-specific payment" })
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })

@@ -165,6 +165,17 @@ export interface PaymentCoreBalanceTransactionsResponse {
   balanceTransactions: PaymentCoreBalanceTransaction[];
 }
 
+export interface PaymentCoreBrandResourcesResponse {
+  brandId: string;
+  users: PaymentCoreUser[];
+  accounts: PaymentCoreAccount[];
+  payments: PaymentCorePayment[];
+  customers: PaymentCoreCustomer[];
+  paymentMethods: PaymentCorePaymentMethod[];
+  paymentIntents: PaymentCorePaymentIntent[];
+  balanceTransactions: PaymentCoreBalanceTransaction[];
+}
+
 export interface PaymentCoreCreatePaymentRequest {
   amount: number;
   currency?: string;

@@ -2,6 +2,7 @@ import { BadGatewayException, Inject, Injectable } from "@nestjs/common";
 import type {
   PaymentCoreAuthResponse,
   PaymentCoreBalanceTransactionsResponse,
+  PaymentCoreBrandResourcesResponse,
   PaymentCoreCreatePaymentRequest,
   PaymentCoreCreatePaymentResponse,
   PaymentCoreCustomersResponse,
@@ -77,6 +78,12 @@ export class PaymentCoreClientService {
     return this.request("/balance-transactions", {
       method: "GET",
       sessionToken
+    });
+  }
+
+  brandResources(brandId: string): Promise<PaymentCoreBrandResourcesResponse> {
+    return this.request(`/admin/brands/${encodeURIComponent(brandId)}/resources`, {
+      method: "GET"
     });
   }
 

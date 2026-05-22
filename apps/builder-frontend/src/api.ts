@@ -37,7 +37,7 @@ export interface SmsRecentMessageResponse extends SmsStatusResponse {
 export type SmsStatus = "queued" | "processing" | "sent" | "failed";
 
 const apiBases = {
-  brandRuntime: import.meta.env.VITE_BRAND_RUNTIME_BASE ?? "/brand-runtime",
+  brandRuntime: import.meta.env.VITE_BRAND_RUNTIME_BASE ?? "http://localhost:3006",
   sms: import.meta.env.VITE_SMS_API_BASE ?? "/sms-api",
   receipt: import.meta.env.VITE_RECEIPT_API_BASE ?? "/receipt-api",
   layout: import.meta.env.VITE_LAYOUT_API_BASE ?? "/layout-api"
@@ -151,6 +151,8 @@ export const api = {
       ),
     runtimeConfig: <TContract>(endpoint: string) =>
       requestJson<TContract>(apiBases.layout, `${endpointPath(endpoint)}/runtime/config`),
+    runtimeAdminResources: <TResources>(endpoint: string) =>
+      requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/resources`),
     deleteBrand: (brandId: string) =>
       requestJson<LayoutBuilderDeleteBrandResponse>(
         apiBases.layout,

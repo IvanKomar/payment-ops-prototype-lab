@@ -25,6 +25,7 @@ import {
   createBrandRuntimeContract,
   toCorePaymentRequest,
   toRuntimeAuthResponse,
+  toRuntimeAdminResourcesResponse,
   toRuntimeBalanceTransactionsResponse,
   toRuntimeCustomersResponse,
   toRuntimeHistoryResponse,
@@ -224,6 +225,14 @@ export class LayoutService {
     const response = await this.paymentCoreClient.balanceTransactions(sessionToken);
 
     return toRuntimeBalanceTransactionsResponse(createBrandRuntimeContract(brand), response);
+  }
+
+  async getRuntimeAdminResources(id: string, slug: string): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const response = await this.paymentCoreClient.brandResources(brand.id);
+
+    return toRuntimeAdminResourcesResponse(createBrandRuntimeContract(brand), response);
   }
 
   async createRuntimePayment(

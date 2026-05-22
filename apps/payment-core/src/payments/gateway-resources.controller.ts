@@ -1,7 +1,8 @@
-import { Controller, Get, Headers, Inject } from "@nestjs/common";
+import { Controller, Get, Headers, Inject, Param } from "@nestjs/common";
 import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type {
   PaymentCoreBalanceTransactionsResponse,
+  PaymentCoreBrandResourcesResponse,
   PaymentCoreCustomersResponse,
   PaymentCorePaymentIntentsResponse,
   PaymentCorePaymentMethodsResponse
@@ -43,5 +44,11 @@ export class GatewayResourcesController {
     @Headers("authorization") authorization: string | undefined
   ): Promise<PaymentCoreBalanceTransactionsResponse> {
     return this.paymentsService.balanceTransactions(parseBearerToken(authorization));
+  }
+
+  @Get("admin/brands/:brandId/resources")
+  @ApiOkResponse({ description: "Prototype admin resource snapshot for a brand" })
+  brandResources(@Param("brandId") brandId: string): Promise<PaymentCoreBrandResourcesResponse> {
+    return this.paymentsService.brandResources(brandId);
   }
 }

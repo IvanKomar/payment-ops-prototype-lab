@@ -15,6 +15,7 @@ interface LayoutState {
   activeBrand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem | null;
   activeSchema: LayoutBuilderBrandSchemaResponse | null;
   activeRuntimeContract: BrandRuntimeContract | null;
+  activeRuntimeResources: BrandRuntimeResources | null;
 }
 
 interface BrandRuntimeContract {
@@ -33,6 +34,16 @@ interface BrandRuntimeContract {
   endpoints: Record<string, string>;
 }
 
+interface BrandRuntimeResources {
+  accounts: Array<Record<string, unknown>>;
+  balanceTransactions: Array<Record<string, unknown>>;
+  customers: Array<Record<string, unknown>>;
+  paymentIntents: Array<Record<string, unknown>>;
+  paymentMethods: Array<Record<string, unknown>>;
+  payments: Array<Record<string, unknown>>;
+  users: Array<Record<string, unknown>>;
+}
+
 type DemoRoute = "sms" | "receipts" | "layouts";
 
 const ROUTES: readonly DemoRoute[] = ["sms", "receipts", "layouts"];
@@ -40,7 +51,8 @@ const ROUTES: readonly DemoRoute[] = ["sms", "receipts", "layouts"];
 const layoutState: LayoutState = {
   activeBrand: null,
   activeSchema: null,
-  activeRuntimeContract: null
+  activeRuntimeContract: null,
+  activeRuntimeResources: null
 };
 let recentLayoutBrands: LayoutBuilderBrandListItem[] = [];
 
@@ -699,6 +711,7 @@ async function selectBrand(brandId: string): Promise<void> {
   layoutState.activeBrand = brand;
   layoutState.activeSchema = null;
   layoutState.activeRuntimeContract = null;
+  layoutState.activeRuntimeResources = null;
   applyBrandPreview(brand);
   renderBrandListSelection(brandId);
   void loadBrandContract(brandId);
@@ -708,6 +721,7 @@ async function setActiveBrand(brand: LayoutBuilderBrandResponse): Promise<void> 
   layoutState.activeBrand = brand;
   layoutState.activeSchema = brand;
   layoutState.activeRuntimeContract = null;
+  layoutState.activeRuntimeResources = null;
   applyBrandPreview(brand, brand.name);
   renderBrandListSelection(brand.brandId);
   void loadBrandContract(brand.brandId);
@@ -718,7 +732,12 @@ function applyBrandPreview(
   brandName?: string
 ): void {
   selectedBrandTitle.textContent = `${brandName ?? brand.name} · ${brand.brandId}`;
-  renderContractInspector(brand, layoutState.activeSchema, layoutState.activeRuntimeContract);
+  renderContractInspector(
+    brand,
+    layoutState.activeSchema,
+    layoutState.activeRuntimeContract,
+    layoutState.activeRuntimeResources
+  );
   deleteBrandButton.disabled = false;
   openBrandAppButton.disabled = false;
   livePreview.removeAttribute("style");
@@ -742,7 +761,10 @@ async function loadBrandContract(brandId: string): Promise<void> {
 
   try {
     const schema = await api.layout.schema(brandId);
-    const runtimeContract = await api.layout.runtimeConfig<BrandRuntimeContract>(schema.endpoint);
+    const [runtimeContract, runtimeResources] = await Promise.all([
+      api.layout.runtimeConfig<BrandRuntimeContract>(schema.endpoint),
+      api.layout.runtimeAdminResources<BrandRuntimeResources>(schema.endpoint)
+    ]);
 
     if (layoutState.activeBrand?.brandId !== brandId) {
       return;
@@ -750,7 +772,8 @@ async function loadBrandContract(brandId: string): Promise<void> {
 
     layoutState.activeSchema = schema;
     layoutState.activeRuntimeContract = runtimeContract;
-    renderContractInspector(activeBrand, schema, runtimeContract);
+    layoutState.activeRuntimeResources = runtimeResources;
+    renderContractInspector(activeBrand, schema, runtimeContract, runtimeResources);
   } catch (error) {
     contractInspector.innerHTML = `
       <div class="contract-card">
@@ -771,6 +794,7 @@ function clearLayoutSelection(): void {
   layoutState.activeBrand = null;
   layoutState.activeSchema = null;
   layoutState.activeRuntimeContract = null;
+  layoutState.activeRuntimeResources = null;
   selectedBrandTitle.textContent = "No brand selected";
   contractInspector.innerHTML = "";
   deleteBrandButton.disabled = true;
@@ -799,7 +823,8 @@ function renderContractLoading(brand: LayoutBuilderBrandResponse | LayoutBuilder
 function renderContractInspector(
   brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem,
   schema: LayoutBuilderBrandSchemaResponse | null,
-  runtimeContract: BrandRuntimeContract | null
+  runtimeContract: BrandRuntimeContract | null,
+  runtimeResources: BrandRuntimeResources | null
 ): void {
   const profile = schema?.generationProfile ?? brand.generationProfile;
 
@@ -848,6 +873,7 @@ function renderContractInspector(
         ${mappingRows(runtimeContract.authFields)}
       </div>
     </div>
+    ${runtimeResources ? runtimeResourcesHtml(runtimeContract, runtimeResources) : ""}
     <details class="contract-json">
       <summary>System prompt</summary>
       <pre>${escapeHtml(profile.systemPrompt)}</pre>
@@ -856,6 +882,57 @@ function renderContractInspector(
       <summary>Runtime contract JSON</summary>
       <pre>${escapeHtml(JSON.stringify(runtimeContract, null, 2))}</pre>
     </details>
+  `;
+}
+
+function runtimeResourcesHtml(
+  runtimeContract: BrandRuntimeContract,
+  resources: BrandRuntimeResources
+): string {
+  const recentPayments = resources.payments.slice(0, 5);
+  const recentCustomers = resources.customers.slice(0, 5);
+
+  return `
+    <div class="contract-card">
+      <h4>Live payment core data</h4>
+      <div class="contract-grid compact">
+        ${contractMetric("merchants", resources.users.length)}
+        ${contractMetric("accounts", resources.accounts.length)}
+        ${contractMetric(runtimeContract.resourceAlias, resources.payments.length)}
+        ${contractMetric("customers", resources.customers.length)}
+        ${contractMetric("methods", resources.paymentMethods.length)}
+        ${contractMetric("intents", resources.paymentIntents.length)}
+        ${contractMetric("balances", resources.balanceTransactions.length)}
+      </div>
+      ${
+        recentPayments.length > 0
+          ? `<div class="mini-table">${recentPayments
+              .map((payment) => {
+                const reference = stringCell(payment[runtimeContract.fields.externalReference ?? "externalReference"]);
+                const status = stringCell(payment[runtimeContract.fields.status ?? "status"]);
+                const amount = stringCell(payment[runtimeContract.fields.amount ?? "amount"]);
+                const currency = stringCell(payment[runtimeContract.fields.currency ?? "currency"]);
+
+                return `<div><strong>${escapeHtml(reference)}</strong><span>${escapeHtml(status)}</span><code>${escapeHtml(`${amount} ${currency}`)}</code></div>`;
+              })
+              .join("")}</div>`
+          : `<small>No live payments for this brand yet.</small>`
+      }
+      ${
+        recentCustomers.length > 0
+          ? `<details class="contract-json"><summary>Recent customers</summary><pre>${escapeHtml(JSON.stringify(recentCustomers, null, 2))}</pre></details>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function contractMetric(label: string, value: number): string {
+  return `
+    <div class="contract-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${value}</strong>
+    </div>
   `;
 }
 
@@ -872,7 +949,8 @@ function endpointRows(
     ["customers", runtimeEndpoint(schema.endpoint, runtimeContract, "customers")],
     ["payment methods", runtimeEndpoint(schema.endpoint, runtimeContract, "paymentMethods")],
     ["payment intents", runtimeEndpoint(schema.endpoint, runtimeContract, "paymentIntents")],
-    ["balance transactions", runtimeEndpoint(schema.endpoint, runtimeContract, "balanceTransactions")]
+    ["balance transactions", runtimeEndpoint(schema.endpoint, runtimeContract, "balanceTransactions")],
+    ["admin resources", `${schema.endpoint}/runtime/admin/resources`]
   ];
 
   return rows.map(([label, value]) => contractRow(label, value)).join("");
@@ -895,6 +973,18 @@ function contractRow(label: string, value: string): string {
       <code>${escapeHtml(value)}</code>
     </div>
   `;
+}
+
+function stringCell(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return "";
 }
 
 async function deleteActiveBrand(): Promise<void> {

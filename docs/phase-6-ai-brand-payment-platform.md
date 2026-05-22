@@ -398,18 +398,21 @@ MVP progress:
   facade for customers, payment methods, payment intents, and balance
   transactions. Payment creation still owns customer/payment-method creation in
   this MVP slice.
+- the admin contract inspector now loads a live resource snapshot for the
+  selected brand and shows merchant/account/payment/customer/method/intent/
+  balance counts plus recent payments.
+- local admin links now open the React brand runtime directly on
+  `http://localhost:3006` instead of the builder proxy path.
 
 Immediate next actions:
 
-1. Update the admin console contract inspector to show live payment core data
-   for each generated brand and merchant account.
-2. Add explicit create/update endpoints for saved customers and payment methods
+1. Add explicit create/update endpoints for saved customers and payment methods
    once the merchant UX needs saved reusable instruments.
-3. Add seed/demo scenarios for successful card payment, declined card, bank
+2. Add seed/demo scenarios for successful card payment, declined card, bank
    account pending, refund, review/hold, and saved customer payment method.
-4. Add admin tools to inspect brand merchant accounts, reset seed data, and open
-   each brand as a merchant user.
-5. Split `PaymentUser` into clearer merchant-owner and future customer auth
+3. Add admin tools to reset seed data and open each brand as a merchant user
+   from a known demo account.
+4. Split `PaymentUser` into clearer merchant-owner and future customer auth
    boundaries once the prototype needs customer-side checkout sessions.
 
 ### Phase 6.3: AI Gateway MVP
