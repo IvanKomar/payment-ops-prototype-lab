@@ -492,6 +492,9 @@ MVP progress:
   with configured `LAYOUT_ADMIN_EMAIL` / `LAYOUT_ADMIN_PASSWORD`, store the
   admin session token, or intentionally create a local dev session while
   `LAYOUT_DEV_ADMIN_FALLBACK=true`.
+- admin preview and "open user app" now prefer the generated artifact preview
+  URL when a generated artifact exists. The older hand-built brand runtime
+  remains available as fallback for non-AI brands.
 
 Immediate next actions:
 
@@ -505,8 +508,8 @@ Immediate next actions:
    the explicit admin login is the default local workflow.
 4. Decide whether merchant auth sessions remain owned by payment-core or move
    fully into the shared identity boundary.
-5. Replace the fallback hand-built brand runtime with generated artifacts as the
-   primary user-facing route once preview validation is stable.
+5. Move generated artifacts from HTML-preview rendering toward versioned,
+   deployable static assets once preview validation is stable.
 
 ### Phase 6.3: AI Gateway MVP
 

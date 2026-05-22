@@ -871,6 +871,12 @@ function renderGeneratedArtifactPreview(input: GeneratedArtifactPreviewInput): s
       const authFields = contract.authFields;
       const sessionKey = "generated-brand-session:" + contract.brandId;
       let sessionToken = localStorage.getItem(sessionKey) || "";
+      const querySessionToken = new URL(window.location.href).searchParams.get("sessionToken");
+      if (querySessionToken) {
+        sessionToken = querySessionToken;
+        localStorage.setItem(sessionKey, sessionToken);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
       let state = { payments: [], account: null };
 
       document.querySelector("#auth-form").addEventListener("submit", (event) => {

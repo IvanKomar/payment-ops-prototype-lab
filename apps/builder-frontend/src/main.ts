@@ -428,10 +428,10 @@ openDemoMerchantButton.addEventListener("click", () => {
 });
 
 openBrandAppButton.addEventListener("click", () => {
-  const appUrl = layoutState.activeBrand?.appUrl;
+  const brand = layoutState.activeBrand;
 
-  if (appUrl) {
-    window.open(api.layout.brandRuntimeUrl(appUrl), "_blank", "noopener,noreferrer");
+  if (brand) {
+    window.open(brandUserAppUrl(brand), "_blank", "noopener,noreferrer");
   }
 });
 
@@ -944,7 +944,7 @@ function applyBrandPreview(
     <iframe
       class="preview-frame"
       title="${escapeHtml(brand.name)} live preview"
-      src="${escapeHtml(api.layout.brandRuntimeUrl(brand.appUrl))}"
+      src="${escapeHtml(brandUserAppUrl(brand))}"
     ></iframe>
   `;
 }
@@ -1371,16 +1371,20 @@ async function resetActiveBrandDemoData(): Promise<void> {
 }
 
 function openActiveBrandAsDemoMerchant(): void {
-  const appUrl = layoutState.activeBrand?.appUrl;
+  const brand = layoutState.activeBrand;
   const sessionToken = layoutState.activeRuntimeResources?.demoSessionToken;
 
-  if (!appUrl || !sessionToken) {
+  if (!brand || !sessionToken) {
     return;
   }
 
-  const url = new URL(api.layout.brandRuntimeUrl(appUrl), window.location.origin);
+  const url = new URL(brandUserAppUrl(brand), window.location.origin);
   url.searchParams.set("sessionToken", sessionToken);
   window.open(url.toString(), "_blank", "noopener,noreferrer");
+}
+
+function brandUserAppUrl(brand: Pick<LayoutBuilderBrandListItem, "appUrl" | "generatedPreviewUrl">): string {
+  return brand.generatedPreviewUrl ? api.layout.publicUrl(brand.generatedPreviewUrl) : api.layout.brandRuntimeUrl(brand.appUrl);
 }
 
 function fieldCard(label: string, value: string): string {
