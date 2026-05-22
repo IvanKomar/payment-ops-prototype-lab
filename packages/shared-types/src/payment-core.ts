@@ -12,6 +12,12 @@ export type PaymentCoreStatus =
 
 export type PaymentCoreMethodType = "card" | "bank_transfer" | "wallet" | "crypto" | "manual";
 
+export type PaymentCoreBalanceTransactionType =
+  | "payment_capture"
+  | "payment_settlement"
+  | "refund"
+  | "adjustment";
+
 export interface PaymentCoreUser {
   userId: string;
   brandId: string;
@@ -31,6 +37,63 @@ export interface PaymentCoreAccount {
   updatedAt: string;
 }
 
+export interface PaymentCoreCustomer {
+  customerId: string;
+  brandId: string;
+  accountId: string;
+  userId: string;
+  email: string | null;
+  name: string;
+  phone: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentCorePaymentMethod {
+  paymentMethodId: string;
+  brandId: string;
+  accountId: string;
+  customerId: string | null;
+  type: PaymentCoreMethodType;
+  label: string;
+  last4: string | null;
+  brand: string | null;
+  expiryMonth: number | null;
+  expiryYear: number | null;
+  bankName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentCorePaymentIntent {
+  paymentIntentId: string;
+  externalReference: string;
+  brandId: string;
+  accountId: string;
+  userId: string;
+  customerId: string | null;
+  paymentMethodId: string | null;
+  status: PaymentCoreStatus;
+  amount: number;
+  currency: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentCoreBalanceTransaction {
+  balanceTransactionId: string;
+  brandId: string;
+  accountId: string;
+  paymentId: string | null;
+  type: PaymentCoreBalanceTransactionType;
+  amount: number;
+  currency: string;
+  description: string;
+  availableAt: string | null;
+  createdAt: string;
+}
+
 export interface PaymentCoreAuthResponse {
   sessionToken: string;
   user: PaymentCoreUser;
@@ -43,12 +106,18 @@ export interface PaymentCorePayment {
   brandId: string;
   accountId: string;
   userId: string;
+  customerId: string | null;
+  paymentMethodId: string | null;
+  paymentIntentId: string | null;
   status: PaymentCoreStatus;
   amount: number;
   currency: string;
   payerLabel: string;
   destinationLabel: string;
   methodType: PaymentCoreMethodType;
+  customer: PaymentCoreCustomer | null;
+  paymentMethod: PaymentCorePaymentMethod | null;
+  paymentIntent: PaymentCorePaymentIntent | null;
   provider: string;
   createdAt: string;
   updatedAt: string;
@@ -71,13 +140,33 @@ export interface PaymentCorePaymentEvent {
 export interface PaymentCoreHistoryResponse {
   account: PaymentCoreAccount;
   payments: PaymentCorePayment[];
+  customers: PaymentCoreCustomer[];
+  paymentMethods: PaymentCorePaymentMethod[];
+  balanceTransactions: PaymentCoreBalanceTransaction[];
 }
 
 export interface PaymentCoreCreatePaymentRequest {
   amount: number;
   currency?: string;
-  destinationLabel: string;
+  destinationLabel?: string;
   methodType?: PaymentCoreMethodType;
+  customer?: {
+    customerId?: string;
+    email?: string;
+    name: string;
+    phone?: string;
+  };
+  paymentMethod?: {
+    paymentMethodId?: string;
+    type?: PaymentCoreMethodType;
+    label?: string;
+    last4?: string;
+    brand?: string;
+    expiryMonth?: number;
+    expiryYear?: number;
+    bankName?: string;
+  };
+  description?: string;
   scenario?: "demo" | "requires_action" | "fail" | "review" | "reserve" | "settle" | "refund";
 }
 

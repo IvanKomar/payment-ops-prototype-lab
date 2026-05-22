@@ -1,4 +1,5 @@
 import { assertPaymentTransition, canTransition, initialStatusForScenario } from "../src/payments/payment-state.js";
+import { createPaymentSchema } from "../src/payments/dto/payment.schemas.js";
 
 describe("payment state machine", () => {
   it("allows the intended happy-path transitions", () => {
@@ -38,5 +39,26 @@ describe("payment state machine", () => {
         destinationLabel: "settle-demo-address"
       })
     ).toBe("settled");
+  });
+
+  it("accepts structured customer and payment method input", () => {
+    const result = createPaymentSchema.parse({
+      amount: "49.99",
+      currency: "usd",
+      customer: {
+        email: "Ava@Example.com",
+        name: "Ava Customer"
+      },
+      paymentMethod: {
+        brand: "visa",
+        last4: "4242",
+        type: "card"
+      },
+      scenario: "settle"
+    });
+
+    expect(result.customer?.email).toBe("ava@example.com");
+    expect(result.methodType).toBe("card");
+    expect(result.paymentMethod?.last4).toBe("4242");
   });
 });

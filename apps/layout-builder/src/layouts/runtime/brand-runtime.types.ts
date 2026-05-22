@@ -22,11 +22,39 @@ export interface BrandRuntimeContract {
   fields: {
     paymentId: string;
     externalReference: string;
+    paymentIntentId: string;
+    customerId: string;
+    paymentMethodId: string;
     status: string;
     amount: string;
     currency: string;
     destinationLabel: string;
     methodType: string;
+    createdAt: string;
+  };
+  customerFields: {
+    customerId: string;
+    email: string;
+    name: string;
+    phone: string;
+  };
+  paymentMethodFields: {
+    paymentMethodId: string;
+    type: string;
+    label: string;
+    last4: string;
+    brand: string;
+    expiryMonth: string;
+    expiryYear: string;
+    bankName: string;
+  };
+  balanceFields: {
+    balanceTransactionId: string;
+    paymentId: string;
+    type: string;
+    amount: string;
+    currency: string;
+    description: string;
     createdAt: string;
   };
   accountFields: {
@@ -66,12 +94,40 @@ export function createBrandRuntimeContract(brand: BrandWithSchema): BrandRuntime
     fields: {
       paymentId: runtimeField(brand, "paymentId"),
       externalReference: runtimeField(brand, "externalReference"),
+      paymentIntentId: runtimeField(brand, "paymentIntentId"),
+      customerId: runtimeField(brand, "customerId"),
+      paymentMethodId: runtimeField(brand, "paymentMethodId"),
       status: runtimeField(brand, "status"),
       amount: runtimeField(brand, "amount"),
       currency: runtimeField(brand, "currency"),
       destinationLabel: runtimeField(brand, "destinationLabel"),
       methodType: runtimeField(brand, "methodType"),
       createdAt: runtimeField(brand, "createdAt")
+    },
+    customerFields: {
+      customerId: runtimeField(brand, "customerCustomerId"),
+      email: runtimeField(brand, "customerEmail"),
+      name: runtimeField(brand, "customerName"),
+      phone: runtimeField(brand, "customerPhone")
+    },
+    paymentMethodFields: {
+      paymentMethodId: runtimeField(brand, "methodPaymentMethodId"),
+      type: runtimeField(brand, "methodType"),
+      label: runtimeField(brand, "methodLabel"),
+      last4: runtimeField(brand, "methodLast4"),
+      brand: runtimeField(brand, "methodBrand"),
+      expiryMonth: runtimeField(brand, "methodExpiryMonth"),
+      expiryYear: runtimeField(brand, "methodExpiryYear"),
+      bankName: runtimeField(brand, "methodBankName")
+    },
+    balanceFields: {
+      balanceTransactionId: runtimeField(brand, "balanceTransactionId"),
+      paymentId: runtimeField(brand, "balancePaymentId"),
+      type: runtimeField(brand, "balanceType"),
+      amount: runtimeField(brand, "balanceAmount"),
+      currency: runtimeField(brand, "balanceCurrency"),
+      description: runtimeField(brand, "balanceDescription"),
+      createdAt: runtimeField(brand, "balanceCreatedAt")
     },
     accountFields: {
       accountId: runtimeField(brand, "accountId"),
@@ -115,6 +171,17 @@ export function toRuntimeHistoryResponse(
 ): unknown {
   return {
     account: mapAccount(contract, response.account),
+    customers: response.customers.map((customer) => mapCustomer(contract, customer)),
+    paymentMethods: response.paymentMethods.map((method) => mapPaymentMethod(contract, method)),
+    balanceTransactions: response.balanceTransactions.map((transaction) => ({
+      [contract.balanceFields.balanceTransactionId]: transaction.balanceTransactionId,
+      [contract.balanceFields.paymentId]: transaction.paymentId,
+      [contract.balanceFields.type]: transaction.type,
+      [contract.balanceFields.amount]: transaction.amount,
+      [contract.balanceFields.currency]: transaction.currency,
+      [contract.balanceFields.description]: transaction.description,
+      [contract.balanceFields.createdAt]: transaction.createdAt
+    })),
     [contract.resourceAlias]: response.payments.map((payment) => mapPayment(contract, payment))
   };
 }
@@ -135,11 +202,43 @@ export function toCorePaymentRequest(
   const currency = optionalString(payload[contract.fields.currency] ?? payload.currency);
   const scenario = scenarioValue(payload.scenario);
   const methodType = methodTypeValue(payload[contract.fields.methodType] ?? payload.methodType);
+  const customer = objectValue(payload.customer);
+  const paymentMethod = objectValue(payload.paymentMethod);
+  const customerName = optionalString(customer?.[contract.customerFields.name] ?? customer?.name);
+  const customerEmail = optionalString(customer?.[contract.customerFields.email] ?? customer?.email);
+  const customerPhone = optionalString(customer?.[contract.customerFields.phone] ?? customer?.phone);
+  const paymentMethodType = methodTypeValue(paymentMethod?.[contract.paymentMethodFields.type] ?? paymentMethod?.type ?? methodType);
+  const paymentMethodLast4 = optionalString(paymentMethod?.[contract.paymentMethodFields.last4] ?? paymentMethod?.last4);
+  const paymentMethodLabel = optionalString(paymentMethod?.[contract.paymentMethodFields.label] ?? paymentMethod?.label);
+  const paymentMethodBrand = optionalString(paymentMethod?.[contract.paymentMethodFields.brand] ?? paymentMethod?.brand);
+  const paymentMethodBankName = optionalString(paymentMethod?.[contract.paymentMethodFields.bankName] ?? paymentMethod?.bankName);
+  const paymentMethodExpiryMonth = optionalNumber(paymentMethod?.[contract.paymentMethodFields.expiryMonth] ?? paymentMethod?.expiryMonth);
+  const paymentMethodExpiryYear = optionalNumber(paymentMethod?.[contract.paymentMethodFields.expiryYear] ?? paymentMethod?.expiryYear);
 
   return {
     amount: numberValue(payload[contract.fields.amount] ?? payload.amount),
-    destinationLabel: stringValue(payload[contract.fields.destinationLabel] ?? payload.destinationLabel),
-    methodType,
+    ...(optionalString(payload[contract.fields.destinationLabel] ?? payload.destinationLabel)
+      ? { destinationLabel: stringValue(payload[contract.fields.destinationLabel] ?? payload.destinationLabel) }
+      : {}),
+    methodType: paymentMethodType,
+    ...(customerName
+      ? {
+          customer: {
+            name: customerName,
+            ...(customerEmail ? { email: customerEmail } : {}),
+            ...(customerPhone ? { phone: customerPhone } : {})
+          }
+        }
+      : {}),
+    paymentMethod: {
+      type: paymentMethodType,
+      ...(paymentMethodLabel ? { label: paymentMethodLabel } : {}),
+      ...(paymentMethodLast4 ? { last4: paymentMethodLast4 } : {}),
+      ...(paymentMethodBrand ? { brand: paymentMethodBrand } : {}),
+      ...(paymentMethodBankName ? { bankName: paymentMethodBankName } : {}),
+      ...(paymentMethodExpiryMonth ? { expiryMonth: paymentMethodExpiryMonth } : {}),
+      ...(paymentMethodExpiryYear ? { expiryYear: paymentMethodExpiryYear } : {})
+    },
     ...(currency ? { currency } : {}),
     ...(scenario ? { scenario } : {})
   };
@@ -161,16 +260,46 @@ function mapAccount(contract: BrandRuntimeContract, account: PaymentCoreAccount)
   };
 }
 
+function mapCustomer(contract: BrandRuntimeContract, customer: NonNullable<PaymentCorePayment["customer"]>): Record<string, unknown> {
+  return {
+    [contract.customerFields.customerId]: customer.customerId,
+    [contract.customerFields.email]: customer.email,
+    [contract.customerFields.name]: customer.name,
+    [contract.customerFields.phone]: customer.phone
+  };
+}
+
+function mapPaymentMethod(
+  contract: BrandRuntimeContract,
+  method: NonNullable<PaymentCorePayment["paymentMethod"]>
+): Record<string, unknown> {
+  return {
+    [contract.paymentMethodFields.paymentMethodId]: method.paymentMethodId,
+    [contract.paymentMethodFields.type]: method.type,
+    [contract.paymentMethodFields.label]: method.label,
+    [contract.paymentMethodFields.last4]: method.last4,
+    [contract.paymentMethodFields.brand]: method.brand,
+    [contract.paymentMethodFields.expiryMonth]: method.expiryMonth,
+    [contract.paymentMethodFields.expiryYear]: method.expiryYear,
+    [contract.paymentMethodFields.bankName]: method.bankName
+  };
+}
+
 function mapPayment(contract: BrandRuntimeContract, payment: PaymentCorePayment): Record<string, unknown> {
   return {
     [contract.fields.paymentId]: payment.paymentId,
     [contract.fields.externalReference]: payment.externalReference,
+    [contract.fields.paymentIntentId]: payment.paymentIntentId,
+    [contract.fields.customerId]: payment.customerId,
+    [contract.fields.paymentMethodId]: payment.paymentMethodId,
     [contract.fields.status]: contract.statusMap[payment.status] ?? payment.status,
     [contract.fields.amount]: payment.amount,
     [contract.fields.currency]: payment.currency,
     [contract.fields.destinationLabel]: payment.destinationLabel,
     [contract.fields.methodType]: payment.methodType,
-    [contract.fields.createdAt]: payment.createdAt
+    [contract.fields.createdAt]: payment.createdAt,
+    customer: payment.customer ? mapCustomer(contract, payment.customer) : null,
+    paymentMethod: payment.paymentMethod ? mapPaymentMethod(contract, payment.paymentMethod) : null
   };
 }
 
@@ -216,6 +345,20 @@ function numberValue(value: unknown): number {
   }
 
   return parsed;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }
 
 function methodTypeValue(value: unknown): PaymentCoreMethodType {

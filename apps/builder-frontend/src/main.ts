@@ -25,6 +25,9 @@ interface BrandRuntimeContract {
   actionLabels: Record<string, string>;
   fields: Record<string, string>;
   accountFields: Record<string, string>;
+  balanceFields: Record<string, string>;
+  customerFields: Record<string, string>;
+  paymentMethodFields: Record<string, string>;
   userFields: Record<string, string>;
   authFields: Record<string, string>;
   endpoints: Record<string, string>;
@@ -819,6 +822,18 @@ function renderContractInspector(
       <div class="contract-card">
         <h4>Payment fields</h4>
         ${mappingRows(runtimeContract.fields)}
+      </div>
+      <div class="contract-card">
+        <h4>Customer fields</h4>
+        ${mappingRows(runtimeContract.customerFields)}
+      </div>
+      <div class="contract-card">
+        <h4>Payment method fields</h4>
+        ${mappingRows(runtimeContract.paymentMethodFields)}
+      </div>
+      <div class="contract-card">
+        <h4>Balance fields</h4>
+        ${mappingRows(runtimeContract.balanceFields)}
       </div>
       <div class="contract-card">
         <h4>Status map</h4>

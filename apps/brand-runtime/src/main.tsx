@@ -20,6 +20,9 @@ interface RuntimeContract {
   };
   fields: Record<string, string>;
   accountFields: Record<string, string>;
+  balanceFields: Record<string, string>;
+  customerFields: Record<string, string>;
+  paymentMethodFields: Record<string, string>;
   userFields: Record<string, string>;
   authFields: Record<string, string>;
   endpoints: Record<string, string>;
@@ -210,16 +213,16 @@ function BrandRuntimeApp() {
     const customerEmail = String(formData.get("customerEmail") ?? "").trim();
     const methodType = String(formData.get("methodType") ?? "card");
     const instrumentReference = String(formData.get("instrumentReference") ?? "").trim();
-    const destinationLabel = [
-      customerName || "Customer",
-      customerEmail || "customer@example.com",
-      `${paymentSourceLabel(methodType)} ${instrumentSummary(instrumentReference)}`
-    ].join(" | ");
+    const paymentMethod = paymentMethodPayload(contract, methodType, instrumentReference);
     const payload = {
       [fields.amount ?? "amount"]: Number(formData.get("amount")),
       [fields.currency ?? "currency"]: String(formData.get("currency") ?? "USD"),
-      [fields.destinationLabel ?? "destinationLabel"]: destinationLabel,
       [fields.methodType ?? "methodType"]: methodType,
+      customer: {
+        [contract.customerFields.name ?? "name"]: customerName || "Customer",
+        [contract.customerFields.email ?? "email"]: customerEmail || "customer@example.com"
+      },
+      paymentMethod,
       scenario: String(formData.get("scenario") ?? "settle")
     };
 
@@ -767,6 +770,20 @@ function customersFromPayments(contract: RuntimeContract, payments: Array<Record
 }
 
 function customerFromPayment(contract: RuntimeContract, payment: Record<string, unknown>) {
+  const customer = objectValue(payment.customer);
+  const paymentMethod = objectValue(payment.paymentMethod);
+  const structuredName = stringValue(customer?.[contract.customerFields.name ?? "name"] ?? customer?.name);
+  const structuredEmail = stringValue(customer?.[contract.customerFields.email ?? "email"] ?? customer?.email);
+  const structuredMethodLabel = stringValue(paymentMethod?.[contract.paymentMethodFields.label ?? "label"] ?? paymentMethod?.label);
+  const structuredMethodLast4 = stringValue(paymentMethod?.[contract.paymentMethodFields.last4 ?? "last4"] ?? paymentMethod?.last4);
+
+  if (structuredName || structuredEmail || structuredMethodLabel || structuredMethodLast4) {
+    return {
+      instrument: structuredMethodLabel || (structuredMethodLast4 ? `Source ending ${structuredMethodLast4}` : "Payment source"),
+      name: structuredName || structuredEmail || "Customer"
+    };
+  }
+
   const rawDestination = String(payment[contract.fields.destinationLabel ?? "destinationLabel"] ?? "Customer");
   const [name = "Customer", emailOrId = "", instrument = "Payment source"] = rawDestination
     .split("|")
@@ -775,6 +792,19 @@ function customerFromPayment(contract: RuntimeContract, payment: Record<string, 
   return {
     instrument: instrument.length > 0 ? instrument : emailOrId,
     name: name.length > 0 ? name : "Customer"
+  };
+}
+
+function paymentMethodPayload(contract: RuntimeContract, methodType: string, instrumentReference: string) {
+  const last4 = instrumentSummary(instrumentReference).replace(/[^\dA-Za-z]/gu, "");
+  const fields = contract.paymentMethodFields;
+
+  return {
+    [fields.type ?? "type"]: methodType,
+    [fields.label ?? "label"]: `${paymentSourceLabel(methodType)} ${instrumentSummary(instrumentReference)}`,
+    [fields.last4 ?? "last4"]: last4,
+    ...(methodType === "card" ? { [fields.brand ?? "brand"]: cardBrand(instrumentReference) } : {}),
+    ...(methodType === "bank_transfer" ? { [fields.bankName ?? "bankName"]: "Demo Bank" } : {})
   };
 }
 
@@ -790,6 +820,20 @@ function paymentSourceLabel(methodType: string) {
   return "Card";
 }
 
+function cardBrand(value: string) {
+  const compact = value.replace(/\s+/gu, "");
+
+  if (compact.startsWith("4")) {
+    return "visa";
+  }
+
+  if (compact.startsWith("5")) {
+    return "mastercard";
+  }
+
+  return "card";
+}
+
 function instrumentSummary(value: string) {
   const compact = value.replace(/\s+/gu, "");
 
@@ -798,6 +842,14 @@ function instrumentSummary(value: string) {
   }
 
   return `•••• ${compact.slice(-4)}`;
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function paymentsFromHistory(

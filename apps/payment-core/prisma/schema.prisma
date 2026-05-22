@@ -106,6 +106,8 @@ model PaymentUser {
   displayName  String
   accounts     PaymentAccount[]
   sessions     PaymentSession[]
+  customers    PaymentCustomer[]
+  paymentIntents PaymentIntent[]
   payments     Payment[]
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -115,15 +117,19 @@ model PaymentUser {
 }
 
 model PaymentAccount {
-  id        String      @id
-  brandId   String
-  userId    String
-  user      PaymentUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-  balance   Float       @default(0)
-  currency  String
-  payments  Payment[]
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id                  String               @id
+  brandId             String
+  userId              String
+  user                PaymentUser          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance             Float                @default(0)
+  currency            String
+  customers           PaymentCustomer[]
+  paymentMethods      PaymentMethod[]
+  paymentIntents      PaymentIntent[]
+  payments            Payment[]
+  balanceTransactions BalanceTransaction[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@index([brandId, userId])
   @@map("payment_accounts")
@@ -150,6 +156,12 @@ model Payment {
   account           PaymentAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
   userId            String
   user              PaymentUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId        String?
+  customer          PaymentCustomer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  paymentMethodId   String?
+  paymentMethod     PaymentMethod?     @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  paymentIntentId   String?
+  paymentIntent     PaymentIntent?     @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
   status            PaymentStatus
   amount            Float
   currency          String
@@ -165,11 +177,107 @@ model Payment {
   capturedAt        DateTime?
   settledAt         DateTime?
   refundedAt        DateTime?
+  balanceMovements  BalanceTransaction[]
 
   @@index([brandId, accountId, createdAt])
+  @@index([brandId, customerId, createdAt])
+  @@index([brandId, paymentMethodId, createdAt])
+  @@index([paymentIntentId])
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@map("payments")
+}
+
+model PaymentCustomer {
+  id             String          @id
+  brandId        String
+  accountId      String
+  account        PaymentAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId         String
+  user           PaymentUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email          String?
+  name           String
+  phone          String?
+  metadata       Json?
+  paymentMethods PaymentMethod[]
+  paymentIntents PaymentIntent[]
+  payments       Payment[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([brandId, accountId, email])
+  @@index([brandId, accountId, createdAt])
+  @@map("payment_customers")
+}
+
+model PaymentMethod {
+  id             String            @id
+  brandId        String
+  accountId      String
+  account        PaymentAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  customerId     String?
+  customer       PaymentCustomer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  type           PaymentMethodType
+  label          String
+  last4          String?
+  brand          String?
+  expiryMonth    Int?
+  expiryYear     Int?
+  bankName       String?
+  metadata       Json?
+  paymentIntents PaymentIntent[]
+  payments       Payment[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([brandId, accountId, createdAt])
+  @@index([brandId, customerId, createdAt])
+  @@map("payment_methods")
+}
+
+model PaymentIntent {
+  id                String            @id
+  externalReference String            @unique
+  brandId           String
+  accountId         String
+  account           PaymentAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId            String
+  user              PaymentUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId        String?
+  customer          PaymentCustomer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  paymentMethodId   String?
+  paymentMethod     PaymentMethod?    @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  status            PaymentStatus
+  amount            Float
+  currency          String
+  description       String?
+  payments          Payment[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([brandId, accountId, createdAt])
+  @@index([brandId, customerId, createdAt])
+  @@index([status, createdAt])
+  @@map("payment_intents")
+}
+
+model BalanceTransaction {
+  id          String                        @id
+  brandId     String
+  accountId   String
+  account     PaymentAccount                @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  paymentId   String?
+  payment     Payment?                      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  type        PaymentBalanceTransactionType
+  amount      Float
+  currency    String
+  description String
+  availableAt DateTime?
+  createdAt   DateTime                      @default(now())
+
+  @@index([brandId, accountId, createdAt])
+  @@index([paymentId, createdAt])
+  @@map("balance_transactions")
 }
 
 model PaymentEvent {
@@ -222,4 +330,11 @@ enum PaymentMethodType {
   wallet
   crypto
   manual
+}
+
+enum PaymentBalanceTransactionType {
+  payment_capture
+  payment_settlement
+  refund
+  adjustment
 }

@@ -93,7 +93,9 @@ Primary tables:
 - `payments`
 - `payment_events`
 - `payment_methods`
-- `payment_transfers`
+- `payment_customers`
+- `payment_intents`
+- `balance_transactions`
 
 Canonical payment row for table/history APIs:
 
@@ -103,12 +105,18 @@ export interface PaymentHistoryRow {
   externalReference: string;
   brandId: string;
   merchantId: string;
+  customerId: string | null;
+  paymentMethodId: string | null;
+  paymentIntentId: string | null;
   status: PaymentStatus;
   amount: number;
   currency: string;
   payerLabel: string;
   destinationLabel: string;
   methodType: "card" | "bank_transfer" | "wallet" | "crypto" | "manual";
+  customer: PaymentCoreCustomer | null;
+  paymentMethod: PaymentCorePaymentMethod | null;
+  paymentIntent: PaymentCorePaymentIntent | null;
   provider: string;
   createdAt: string;
   updatedAt: string;
@@ -131,6 +139,19 @@ Internal API:
 - `GET /payments`
 - `GET /payments/history`
 - `GET /payments/summary`
+
+MVP gateway-domain progress:
+
+- `payment-core` now stores structured merchant payment data: customers,
+  payment methods, payment intents, payments/charges, events, and balance
+  transactions;
+- `POST /payments` accepts both the old `destinationLabel` shape and the new
+  structured `customer` + `paymentMethod` shape;
+- `GET /payments/history` returns payments plus structured customers, payment
+  methods, and balance transactions for the authenticated merchant account;
+- payment rows include nested customer, payment method, and payment intent
+  details so brand UIs no longer need to encode card/customer details into one
+  display string.
 
 The payment core never exposes per-brand randomized field names. It only speaks
 canonical internal DTOs.
@@ -369,22 +390,24 @@ MVP progress:
   application for generated brands. It provides merchant login/registration,
   overview, payments, customers, and balances routes and calls only the brand
   runtime facade.
+- brand contracts now include generated field maps for customers, payment
+  methods, balance transactions, payment intents, and existing payment rows;
+- the React brand runtime sends structured customer and payment method payloads
+  through the facade instead of packing those values into `destinationLabel`.
 
 Immediate next actions:
 
-1. Normalize `payment-core` around a real payment-gateway domain:
-   `MerchantAccount`, `Customer`, `PaymentMethod`, `Card`, `BankAccount`,
-   `PaymentIntent`/`Charge`, refunds, and balance movements.
-2. Replace the current `destinationLabel`-based customer/card encoding with
-   structured payment requests and responses.
-3. Extend the brand runtime contract with generated field maps for customers,
-   payment methods, merchant accounts, balance rows, and payment statuses.
-4. Update `apps/brand-runtime` to consume the structured contract and remove
-   remaining local assumptions about customer/payment-method shape.
-5. Add seed/demo scenarios for successful card payment, declined card, bank
+1. Add first-class facade endpoints for customers, payment methods, payment
+   intents, and balance transactions instead of exposing them only through
+   payment history.
+2. Update the admin console contract inspector to show live payment core data
+   for each generated brand and merchant account.
+3. Add seed/demo scenarios for successful card payment, declined card, bank
    account pending, refund, review/hold, and saved customer payment method.
-6. Add admin tools to inspect brand merchant accounts, reset seed data, and open
+4. Add admin tools to inspect brand merchant accounts, reset seed data, and open
    each brand as a merchant user.
+5. Split `PaymentUser` into clearer merchant-owner and future customer auth
+   boundaries once the prototype needs customer-side checkout sessions.
 
 ### Phase 6.3: AI Gateway MVP
 
