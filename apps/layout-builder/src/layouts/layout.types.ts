@@ -1,5 +1,6 @@
 import type {
   LayoutBuilderDashboardConfig,
+  LayoutBuilderContractVersion,
   LayoutBuilderGeneratedBrandArtifact,
   LayoutBuilderAiGenerationProfile,
   LayoutBuilderFieldStyle,
@@ -31,6 +32,7 @@ export interface GeneratedSchema {
   fields: Record<string, string>;
   templateProfile: LayoutProfile;
   generationProfile: LayoutBuilderAiGenerationProfile | null;
+  contractVersion: LayoutBuilderContractVersion | null;
   generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
 }
 

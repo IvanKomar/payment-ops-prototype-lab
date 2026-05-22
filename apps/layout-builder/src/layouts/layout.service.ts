@@ -7,6 +7,7 @@ import type {
   LayoutBuilderConfigureResponse,
   LayoutBuilderDeleteBrandResponse,
   LayoutBuilderAiGenerationProfile,
+  LayoutBuilderContractVersion,
   LayoutBuilderGeneratedBrandArtifact
 } from "@payment-ops/shared-types";
 import { randomUUID } from "node:crypto";
@@ -19,7 +20,7 @@ import { createDefaultDashboardConfig } from "./default-dashboard.js";
 import { LogoStorageService } from "./logo/logo-storage.service.js";
 import { PaletteService } from "./palette/palette.service.js";
 import { brandRequestToCanonicalConfig, LayoutRepository } from "./layout.repository.js";
-import type { BrandWithSchema, CreateBrandRequestInput, UploadedLogoFile } from "./layout.types.js";
+import type { BrandWithSchema, CreateBrandRequestInput, GeneratedSchema, UploadedLogoFile } from "./layout.types.js";
 import { SchemaGeneratorService } from "./schema/schema-generator.service.js";
 import { PayloadMapperService } from "./schema/payload-mapper.service.js";
 import { SvgRendererService } from "./render/svg-renderer.service.js";
@@ -86,24 +87,33 @@ export class LayoutService {
     );
     if (generationProfile) {
       const now = new Date();
+      const previewBrand: BrandWithSchema = {
+        id: brandId,
+        name: body.brandName,
+        logoOriginalFilename: logo.originalFilename,
+        logoMimeType: logo.mimeType,
+        logoSizeBytes: logo.sizeBytes,
+        logoPath: logo.path,
+        palette,
+        createdAt: now,
+        updatedAt: now,
+        schema
+      };
+      const contract = createBrandRuntimeContract(previewBrand);
+      schema.contractVersion = createContractVersion({
+        brandId,
+        schema,
+        generationProfile,
+        contract,
+        createdAt: now
+      });
       schema.generatedArtifact = this.aiBrandGenerator.generateArtifact({
         brandId,
         brandName: body.brandName,
-        contractVersionId: schema.id,
+        contractVersionId: schema.contractVersion.contractVersionId,
         contractSlug: schema.slug,
         generationProfile,
-        contract: createBrandRuntimeContract({
-          id: brandId,
-          name: body.brandName,
-          logoOriginalFilename: logo.originalFilename,
-          logoMimeType: logo.mimeType,
-          logoSizeBytes: logo.sizeBytes,
-          logoPath: logo.path,
-          palette,
-          createdAt: now,
-          updatedAt: now,
-          schema
-        })
+        contract
       });
     }
     const brand = await this.repository.createBrand({
@@ -128,6 +138,7 @@ export class LayoutService {
       appUrl: this.brandAppUrl(brand),
       generatedPreviewUrl: this.generatedPreviewUrl(brand),
       generationProfile: brand.schema.generationProfile,
+      contractVersion: brand.schema.contractVersion,
       generatedArtifact: brand.schema.generatedArtifact,
       createdAt: brand.createdAt.toISOString(),
       updatedAt: brand.updatedAt.toISOString()
@@ -607,6 +618,7 @@ export class LayoutService {
       layoutVariant: brand.schema.templateProfile.variant,
       fields: brand.schema.fields,
       generationProfile: brand.schema.generationProfile,
+      contractVersion: brand.schema.contractVersion,
       generatedArtifact: brand.schema.generatedArtifact,
       samplePayload: this.schemaGenerator.samplePayload(brand.schema, brand.name)
     };
@@ -700,6 +712,46 @@ function errorMessage(error: unknown): string | null {
   }
 
   return error instanceof Error ? error.message : String(error);
+}
+
+interface CreateContractVersionInput {
+  brandId: string;
+  schema: GeneratedSchema;
+  generationProfile: LayoutBuilderAiGenerationProfile;
+  contract: BrandRuntimeContract;
+  createdAt: Date;
+}
+
+function createContractVersion(input: CreateContractVersionInput): LayoutBuilderContractVersion {
+  const timestamp = input.createdAt.toISOString();
+
+  return {
+    contractVersionId: `cv_${randomUUID().replaceAll("-", "")}`,
+    brandId: input.brandId,
+    schemaId: input.schema.id,
+    slug: input.schema.slug,
+    resourceAlias: input.generationProfile.resourceAlias,
+    payloadStructure: input.schema.structure,
+    fieldMap: {
+      ...prefixFields("payment", input.contract.fields),
+      ...prefixFields("customer", input.contract.customerFields),
+      ...prefixFields("method", input.contract.paymentMethodFields),
+      ...prefixFields("balance", input.contract.balanceFields),
+      ...prefixFields("account", input.contract.accountFields),
+      ...prefixFields("user", input.contract.userFields),
+      ...prefixFields("auth", input.contract.authFields)
+    },
+    statusMap: input.contract.statusMap,
+    actionLabels: input.contract.actionLabels,
+    endpoints: input.contract.endpoints,
+    active: true,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+function prefixFields(prefix: string, fields: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [`${prefix}.${key}`, value]));
 }
 
 interface PublicBrandAppInput {

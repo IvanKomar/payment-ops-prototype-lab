@@ -61,6 +61,8 @@ model Brand {
   requests             BrandRequest[]
   bffRequestLogs       BrandBffRequestLog[]
   memberships          BrandMembership[]
+  contractVersions     ContractVersion[]
+  generatedArtifacts   GeneratedArtifact[]
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
@@ -117,17 +119,18 @@ model BrandMembership {
 }
 
 model BrandSchema {
-  id          String         @id
-  brandId     String
-  brand       Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  slug        String         @unique
-  fieldsStyle String
-  structure   String
-  fields      Json
-  requests    BrandRequest[]
-  bffRequestLogs BrandBffRequestLog[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id               String         @id
+  brandId          String
+  brand            Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  slug             String         @unique
+  fieldsStyle      String
+  structure        String
+  fields           Json
+  requests         BrandRequest[]
+  bffRequestLogs   BrandBffRequestLog[]
+  contractVersions ContractVersion[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([brandId])
   @@map("brand_schemas")
@@ -170,6 +173,49 @@ model BrandBffRequestLog {
   @@index([brandId, createdAt])
   @@index([schemaId, createdAt])
   @@map("brand_bff_request_logs")
+}
+
+model ContractVersion {
+  id               String              @id
+  brandId          String
+  brand            Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  schemaId         String
+  schema           BrandSchema         @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+  slug             String
+  resourceAlias    String
+  payloadStructure String
+  fieldMap         Json
+  statusMap        Json
+  actionLabels     Json
+  endpoints        Json
+  active           Boolean             @default(false)
+  artifacts        GeneratedArtifact[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([brandId, active])
+  @@index([schemaId, createdAt])
+  @@map("contract_versions")
+}
+
+model GeneratedArtifact {
+  id                String          @id
+  brandId           String
+  brand             Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contractVersionId String
+  contractVersion   ContractVersion @relation(fields: [contractVersionId], references: [id], onDelete: Cascade)
+  provider          String
+  model             String
+  framework         String
+  entryFile         String
+  manifest          Json
+  active            Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([brandId, active])
+  @@index([contractVersionId, active])
+  @@map("generated_artifacts")
 }
 
 model PaymentUser {

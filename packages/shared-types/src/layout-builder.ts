@@ -67,6 +67,22 @@ export interface LayoutBuilderGeneratedBrandArtifact {
   generatedAt: string;
 }
 
+export interface LayoutBuilderContractVersion {
+  contractVersionId: string;
+  brandId: string;
+  schemaId: string;
+  slug: string;
+  resourceAlias: string;
+  payloadStructure: LayoutBuilderPayloadStructure;
+  fieldMap: Record<string, string>;
+  statusMap: Record<PaymentCoreStatus, string>;
+  actionLabels: LayoutBuilderAiGenerationProfile["actionLabels"];
+  endpoints: Record<string, string>;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LayoutBuilderBffRequestLog {
   requestLogId: string;
   brandId: string;
@@ -167,6 +183,7 @@ export interface LayoutBuilderBrandSchemaResponse {
   layoutVariant: LayoutBuilderLayoutVariant;
   fields: Record<string, string>;
   generationProfile: LayoutBuilderAiGenerationProfile | null;
+  contractVersion: LayoutBuilderContractVersion | null;
   generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
   samplePayload: unknown;
 }
@@ -188,6 +205,7 @@ export interface LayoutBuilderBrandListItem {
   appUrl: string;
   generatedPreviewUrl: string | null;
   generationProfile: LayoutBuilderAiGenerationProfile | null;
+  contractVersion: LayoutBuilderContractVersion | null;
   generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
   createdAt: string;
   updatedAt: string;

@@ -83,6 +83,9 @@ export class CreateBrandResponseDto {
   generationProfile!: unknown | null;
 
   @ApiProperty({ type: Object, nullable: true })
+  contractVersion!: unknown | null;
+
+  @ApiProperty({ type: Object, nullable: true })
   generatedArtifact!: unknown | null;
 
   @ApiProperty({ type: Object })
@@ -121,6 +124,9 @@ export class BrandListItemDto {
 
   @ApiProperty({ type: Object, nullable: true })
   generationProfile!: unknown | null;
+
+  @ApiProperty({ type: Object, nullable: true })
+  contractVersion!: unknown | null;
 
   @ApiProperty({ type: Object, nullable: true })
   generatedArtifact!: unknown | null;

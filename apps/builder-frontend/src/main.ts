@@ -1050,7 +1050,7 @@ function renderContractInspector(
       <strong>${escapeHtml(runtimeContract.resourceAlias)}</strong>
       <small>${escapeHtml(profile.contractSummary)}</small>
     </div>
-    ${schema.generatedArtifact ? generatedArtifactHtml(schema.generatedArtifact) : ""}
+    ${schema.generatedArtifact ? generatedArtifactHtml(schema.generatedArtifact, schema.contractVersion) : ""}
     <div class="contract-grid">
       <div class="contract-card">
         <h4>Endpoints</h4>
@@ -1097,7 +1097,10 @@ function renderContractInspector(
   `;
 }
 
-function generatedArtifactHtml(artifact: NonNullable<LayoutBuilderBrandSchemaResponse["generatedArtifact"]>): string {
+function generatedArtifactHtml(
+  artifact: NonNullable<LayoutBuilderBrandSchemaResponse["generatedArtifact"]>,
+  contractVersion: LayoutBuilderBrandSchemaResponse["contractVersion"]
+): string {
   return `
     <div class="contract-card artifact-card">
       <h4>Generated frontend artifact</h4>
@@ -1109,6 +1112,14 @@ function generatedArtifactHtml(artifact: NonNullable<LayoutBuilderBrandSchemaRes
       <div class="contract-row">
         <span>artifact</span>
         <code>${escapeHtml(artifact.artifactId)}</code>
+      </div>
+      <div class="contract-row">
+        <span>contract version</span>
+        <code>${escapeHtml(contractVersion?.contractVersionId ?? artifact.contractVersionId)}</code>
+      </div>
+      <div class="contract-row">
+        <span>contract status</span>
+        <code>${contractVersion?.active ? "active" : "legacy manifest"}</code>
       </div>
       <div class="contract-row">
         <span>entry</span>

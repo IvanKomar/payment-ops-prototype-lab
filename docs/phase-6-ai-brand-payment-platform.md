@@ -462,9 +462,10 @@ MVP progress:
 - merchants can create saved customers and saved payment methods through
   first-class `payment-core` and brand facade endpoints. The React brand runtime
   exposes these actions from the Customers view.
-- AI-created brands now store a local deterministic `GeneratedBrandArtifact`
-  manifest in brand schema metadata. The manifest includes React/Vite files,
-  routes, capabilities, validation checks, and the BFF base path.
+- AI-created brands now persist active `ContractVersion` and
+  `GeneratedBrandArtifact` records separately from legacy schema metadata. The
+  artifact manifest includes React/Vite files, routes, capabilities, validation
+  checks, and the BFF base path.
 - brand contracts now expose per-brand BFF endpoint aliases under
   `/brands/:id/:slug/bff/:alias`. The old `/runtime/*` endpoints remain as a
   fallback for the current hand-built runtime, while generated artifacts should
@@ -495,15 +496,17 @@ MVP progress:
 - admin preview and "open user app" now prefer the generated artifact preview
   URL when a generated artifact exists. The older hand-built brand runtime
   remains available as fallback for non-AI brands.
+- the admin contract inspector exposes the active contract version id alongside
+  the generated artifact, while older brands can still load artifact manifests
+  from legacy schema JSON.
 
 Immediate next actions:
 
 1. Change the admin create-brand flow so the system prompt, brand brief, BFF
    contract, and sample payloads drive artifact generation more explicitly in
    the UI.
-2. Persist contract versions separately from brand metadata and expose a BFF
-   contract inspector with endpoint aliases, field maps, payload structure, and
-   status/action labels.
+2. Add regenerate/rollback controls for contract versions and generated
+   artifacts so admins can compare and activate previous brand interfaces.
 3. Remove fallback access from create/seed/reset/request-log operations once
    the explicit admin login is the default local workflow.
 4. Decide whether merchant auth sessions remain owned by payment-core or move

@@ -1,9 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { Brand, BrandBffRequestLog, BrandRequest, BrandSchema, Prisma } from "@prisma/client";
+import type { BrandBffRequestLog, BrandRequest, ContractVersion, GeneratedArtifact, Prisma } from "@prisma/client";
 import type {
   LayoutBuilderAiGenerationProfile,
+  LayoutBuilderContractVersion,
   LayoutBuilderDashboardConfig,
   LayoutBuilderGeneratedBrandArtifact,
+  LayoutBuilderPayloadStructure,
   LayoutBuilderPalette
 } from "@payment-ops/shared-types";
 
@@ -17,63 +19,115 @@ import type {
   SaveBrandRequestInput
 } from "./layout.types.js";
 
-type BrandWithRelations = Brand & {
-  schemas: BrandSchema[];
-};
+const BRAND_WITH_SCHEMA_INCLUDE = {
+  schemas: {
+    orderBy: {
+      createdAt: "desc"
+    },
+    take: 1,
+    include: {
+      contractVersions: {
+        where: {
+          active: true
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 1,
+        include: {
+          artifacts: {
+            where: {
+              active: true
+            },
+            orderBy: {
+              createdAt: "desc"
+            },
+            take: 1
+          }
+        }
+      }
+    }
+  }
+} satisfies Prisma.BrandInclude;
+
+type BrandWithRelations = Prisma.BrandGetPayload<{ include: typeof BRAND_WITH_SCHEMA_INCLUDE }>;
 
 @Injectable()
 export class LayoutRepository {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async createBrand(input: CreateBrandInput): Promise<BrandWithSchema> {
-    const brand = await this.prisma.brand.create({
-      data: {
-        id: input.schema.brandId,
-        name: input.name,
-        logoOriginalFilename: input.logo.originalFilename,
-        logoMimeType: input.logo.mimeType,
-        logoSizeBytes: input.logo.sizeBytes,
-        logoPath: input.logo.path,
-        palette: input.palette as unknown as Prisma.InputJsonValue,
-        schemas: {
-          create: {
-            id: input.schema.id,
-            slug: input.schema.slug,
-            fieldsStyle: input.schema.fieldsStyle,
-            structure: input.schema.structure,
-            fields: {
-              mappings: input.schema.fields,
-              templateProfile: input.schema.templateProfile,
-              generationProfile: input.schema.generationProfile,
-              generatedArtifact: input.schema.generatedArtifact
-            } as unknown as Prisma.InputJsonValue
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.brand.create({
+        data: {
+          id: input.schema.brandId,
+          name: input.name,
+          logoOriginalFilename: input.logo.originalFilename,
+          logoMimeType: input.logo.mimeType,
+          logoSizeBytes: input.logo.sizeBytes,
+          logoPath: input.logo.path,
+          palette: input.palette as unknown as Prisma.InputJsonValue,
+          schemas: {
+            create: {
+              id: input.schema.id,
+              slug: input.schema.slug,
+              fieldsStyle: input.schema.fieldsStyle,
+              structure: input.schema.structure,
+              fields: {
+                mappings: input.schema.fields,
+                templateProfile: input.schema.templateProfile,
+                generationProfile: input.schema.generationProfile
+              } as unknown as Prisma.InputJsonValue
+            }
           }
         }
-      },
-      include: {
-        schemas: {
-          orderBy: {
-            createdAt: "desc"
-          },
-          take: 1
-        }
+      });
+
+      if (input.schema.contractVersion && input.schema.generatedArtifact) {
+        await transaction.contractVersion.create({
+          data: {
+            id: input.schema.contractVersion.contractVersionId,
+            brandId: input.schema.contractVersion.brandId,
+            schemaId: input.schema.contractVersion.schemaId,
+            slug: input.schema.contractVersion.slug,
+            resourceAlias: input.schema.contractVersion.resourceAlias,
+            payloadStructure: input.schema.contractVersion.payloadStructure,
+            fieldMap: input.schema.contractVersion.fieldMap as Prisma.InputJsonValue,
+            statusMap: input.schema.contractVersion.statusMap as unknown as Prisma.InputJsonValue,
+            actionLabels: input.schema.contractVersion.actionLabels as unknown as Prisma.InputJsonValue,
+            endpoints: input.schema.contractVersion.endpoints as Prisma.InputJsonValue,
+            active: input.schema.contractVersion.active
+          }
+        });
+
+        await transaction.generatedArtifact.create({
+          data: {
+            id: input.schema.generatedArtifact.artifactId,
+            brandId: input.schema.generatedArtifact.brandId,
+            contractVersionId: input.schema.generatedArtifact.contractVersionId,
+            provider: input.schema.generatedArtifact.provider,
+            model: input.schema.generatedArtifact.model,
+            framework: input.schema.generatedArtifact.framework,
+            entryFile: input.schema.generatedArtifact.entryFile,
+            manifest: input.schema.generatedArtifact as unknown as Prisma.InputJsonValue,
+            active: true
+          }
+        });
       }
     });
 
-    return toBrandWithSchema(brand);
+    const brand = await this.findBrand(input.schema.brandId);
+    if (!brand) {
+      throw new Error(`Created brand was not found: ${input.schema.brandId}`);
+    }
+
+    return brand;
   }
 
   async findBrand(id: string): Promise<BrandWithSchema | null> {
     const brand = await this.prisma.brand.findUnique({
       where: { id },
-      include: {
-        schemas: {
-          orderBy: {
-            createdAt: "desc"
-          },
-          take: 1
-        }
-      }
+      include: BRAND_WITH_SCHEMA_INCLUDE
     });
 
     return brand ? toBrandWithSchema(brand) : null;
@@ -85,14 +139,7 @@ export class LayoutRepository {
         updatedAt: "desc"
       },
       take: limit,
-      include: {
-        schemas: {
-          orderBy: {
-            createdAt: "desc"
-          },
-          take: 1
-        }
-      }
+      include: BRAND_WITH_SCHEMA_INCLUDE
     });
 
     return brands.map(toBrandWithSchema);
@@ -164,6 +211,7 @@ function toBrandWithSchema(brand: BrandWithRelations): BrandWithSchema {
   }
 
   const parsedFields = parseSchemaFields(schema.fields, brand.id);
+  const activeContractVersion = schema.contractVersions[0];
 
   return {
     id: brand.id,
@@ -184,7 +232,8 @@ function toBrandWithSchema(brand: BrandWithRelations): BrandWithSchema {
       fields: parsedFields.mappings,
       templateProfile: parsedFields.templateProfile,
       generationProfile: parsedFields.generationProfile,
-      generatedArtifact: parsedFields.generatedArtifact
+      contractVersion: contractVersionToResponse(activeContractVersion) ?? parsedFields.contractVersion,
+      generatedArtifact: generatedArtifactToResponse(activeContractVersion?.artifacts[0]) ?? parsedFields.generatedArtifact
     } satisfies GeneratedSchema
   };
 }
@@ -196,6 +245,7 @@ function parseSchemaFields(
   mappings: Record<string, string>;
   templateProfile: LayoutProfile;
   generationProfile: LayoutBuilderAiGenerationProfile | null;
+  contractVersion: LayoutBuilderContractVersion | null;
   generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
 } {
   if (isObject(value) && isObject(value.mappings)) {
@@ -203,6 +253,7 @@ function parseSchemaFields(
       mappings: stringRecord(value.mappings),
       templateProfile: normalizeLayoutProfile(value.templateProfile, brandId),
       generationProfile: normalizeGenerationProfile(value.generationProfile),
+      contractVersion: normalizeContractVersion(value.contractVersion),
       generatedArtifact: normalizeGeneratedArtifact(value.generatedArtifact)
     };
   }
@@ -211,6 +262,7 @@ function parseSchemaFields(
     mappings: stringRecord(value),
     templateProfile: createLayoutProfile(brandId),
     generationProfile: null,
+    contractVersion: null,
     generatedArtifact: null
   };
 }
@@ -229,6 +281,46 @@ function normalizeGeneratedArtifact(value: unknown): LayoutBuilderGeneratedBrand
   }
 
   return value as unknown as LayoutBuilderGeneratedBrandArtifact;
+}
+
+function normalizeContractVersion(value: unknown): LayoutBuilderContractVersion | null {
+  if (!isObject(value) || typeof value.contractVersionId !== "string" || typeof value.resourceAlias !== "string") {
+    return null;
+  }
+
+  return value as unknown as LayoutBuilderContractVersion;
+}
+
+function contractVersionToResponse(
+  value: (ContractVersion & { artifacts: GeneratedArtifact[] }) | undefined
+): LayoutBuilderContractVersion | null {
+  if (!value) {
+    return null;
+  }
+
+  return {
+    contractVersionId: value.id,
+    brandId: value.brandId,
+    schemaId: value.schemaId,
+    slug: value.slug,
+    resourceAlias: value.resourceAlias,
+    payloadStructure: value.payloadStructure as LayoutBuilderPayloadStructure,
+    fieldMap: stringRecord(value.fieldMap),
+    statusMap: value.statusMap as unknown as LayoutBuilderContractVersion["statusMap"],
+    actionLabels: value.actionLabels as unknown as LayoutBuilderContractVersion["actionLabels"],
+    endpoints: stringRecord(value.endpoints),
+    active: value.active,
+    createdAt: value.createdAt.toISOString(),
+    updatedAt: value.updatedAt.toISOString()
+  };
+}
+
+function generatedArtifactToResponse(value: GeneratedArtifact | undefined): LayoutBuilderGeneratedBrandArtifact | null {
+  if (!value) {
+    return null;
+  }
+
+  return normalizeGeneratedArtifact(value.manifest);
 }
 
 function normalizeLayoutProfile(value: unknown, brandId: string): LayoutProfile {
