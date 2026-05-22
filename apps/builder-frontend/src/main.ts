@@ -867,6 +867,7 @@ function renderContractInspector(
       <strong>${escapeHtml(runtimeContract.resourceAlias)}</strong>
       <small>${escapeHtml(profile.contractSummary)}</small>
     </div>
+    ${schema.generatedArtifact ? generatedArtifactHtml(schema.generatedArtifact) : ""}
     <div class="contract-grid">
       <div class="contract-card">
         <h4>Endpoints</h4>
@@ -910,6 +911,38 @@ function renderContractInspector(
       <summary>Runtime contract JSON</summary>
       <pre>${escapeHtml(JSON.stringify(runtimeContract, null, 2))}</pre>
     </details>
+  `;
+}
+
+function generatedArtifactHtml(artifact: NonNullable<LayoutBuilderBrandSchemaResponse["generatedArtifact"]>): string {
+  return `
+    <div class="contract-card artifact-card">
+      <h4>Generated frontend artifact</h4>
+      <div class="contract-grid compact">
+        ${contractMetric("files", artifact.files.length)}
+        ${contractMetric("routes", artifact.routes.length)}
+        ${contractMetric("capabilities", artifact.capabilities.length)}
+      </div>
+      <div class="contract-row">
+        <span>artifact</span>
+        <code>${escapeHtml(artifact.artifactId)}</code>
+      </div>
+      <div class="contract-row">
+        <span>entry</span>
+        <code>${escapeHtml(artifact.entryFile)}</code>
+      </div>
+      <div class="contract-row">
+        <span>BFF base</span>
+        <code>${escapeHtml(artifact.facadeBasePath)}</code>
+      </div>
+      <div class="artifact-files">
+        ${artifact.files.map((file) => `<code>${escapeHtml(file.path)} · ${file.kind} · ${file.bytes}b</code>`).join("")}
+      </div>
+      <details class="contract-json">
+        <summary>Artifact manifest</summary>
+        <pre>${escapeHtml(JSON.stringify(artifact, null, 2))}</pre>
+      </details>
+    </div>
   `;
 }
 

@@ -29,6 +29,43 @@ export interface LayoutBuilderAiGenerationProfile {
   generatedAt: string;
 }
 
+export type LayoutBuilderGeneratedBrandCapability =
+  | "register_user"
+  | "login_user"
+  | "read_payments"
+  | "create_payment"
+  | "read_customers"
+  | "create_customer"
+  | "read_balance_transactions";
+
+export interface LayoutBuilderGeneratedBrandArtifact {
+  artifactId: string;
+  brandId: string;
+  provider: LayoutBuilderAiGenerationProfile["provider"];
+  model: string;
+  framework: "react-vite";
+  entryFile: string;
+  contractVersionId: string;
+  facadeBasePath: string;
+  routes: Array<{
+    path: string;
+    label: string;
+    requiresSession: boolean;
+  }>;
+  capabilities: LayoutBuilderGeneratedBrandCapability[];
+  files: Array<{
+    path: string;
+    kind: "entry" | "component" | "style" | "contract";
+    bytes: number;
+    content: string;
+  }>;
+  validation: {
+    status: "passed";
+    checks: string[];
+  };
+  generatedAt: string;
+}
+
 export interface LayoutBuilderPalette {
   primary: string;
   secondary: string;
@@ -76,6 +113,7 @@ export interface LayoutBuilderBrandSchemaResponse {
   layoutVariant: LayoutBuilderLayoutVariant;
   fields: Record<string, string>;
   generationProfile: LayoutBuilderAiGenerationProfile | null;
+  generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
   samplePayload: unknown;
 }
 
@@ -95,6 +133,7 @@ export interface LayoutBuilderBrandListItem {
   dataEndpoint: string;
   appUrl: string;
   generationProfile: LayoutBuilderAiGenerationProfile | null;
+  generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
   createdAt: string;
   updatedAt: string;
 }

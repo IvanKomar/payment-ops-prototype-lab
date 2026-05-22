@@ -38,7 +38,8 @@ describe("SvgRendererService", () => {
         structure: "flat",
         fields: {},
         templateProfile: createLayoutProfile("br_00000000000000000000000000000001"),
-        generationProfile: null
+        generationProfile: null,
+        generatedArtifact: null
       }
     };
 

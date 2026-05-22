@@ -34,6 +34,27 @@ how it integrates with the payment core.
    local scenarios for different payment statuses, and about 10 canonical
    statuses that brand contracts can remap.
 
+## Direction Update: 2026-05-22
+
+The prototype should now stop investing deeply in payment-domain completeness.
+Payment data can be mostly seeded and scenario-driven. The important product
+surface is the system that lets an admin generate a brand frontend with AI,
+publish it into the brand runtime, and verify that it calls only a brand-specific
+BFF contract.
+
+Revised priorities:
+
+- generated frontend creation is the main path, not hand-built runtime screens;
+- BFF/facade contracts must differ strongly per brand: endpoint paths, resource
+  names, field names, payload structures, status names, action names, and table
+  schemas;
+- all brands should share the same authentication core, with brand-scoped
+  memberships/roles and sessions;
+- the admin console is global across all brands and is the operator surface for
+  generation, preview, contract inspection, seeding, and request logs;
+- payment-core remains a seeded simulator unless a UI generation scenario needs
+  a specific capability.
+
 ## Current Layout Builder Reuse
 
 Reuse these parts:
@@ -153,6 +174,14 @@ MVP gateway-domain progress:
   details so brand UIs no longer need to encode card/customer details into one
   display string.
 
+Current scope boundary:
+
+- this service should stay stable and seeded/demo-oriented for the next phase;
+- avoid adding more payment CRUD depth unless the generated brand UI requires
+  it;
+- use admin seed/reset flows to create realistic merchant, customer, payment
+  method, intent, payment, and balance states for each brand.
+
 The payment core never exposes per-brand randomized field names. It only speaks
 canonical internal DTOs.
 
@@ -180,6 +209,16 @@ GET  /b/:brandPublicId/:contractSlug/payments
 POST /b/:brandPublicId/:contractSlug/payments
 POST /b/:brandPublicId/:contractSlug/payments/:publicPaymentId/confirm
 POST /b/:brandPublicId/:contractSlug/payments/:publicPaymentId/refund
+```
+
+This is only a conceptual example. Real generated contracts should be able to
+rename the resource paths and actions per brand, for example:
+
+```text
+GET  /api/:brandPublicId/:contractSlug/settlement-cases
+POST /api/:brandPublicId/:contractSlug/dispatch-orders
+GET  /v2/:brandPublicId/:contractSlug/ledger-stream
+POST /connect/:brandPublicId/:contractSlug/routing-instructions/:publicId/release
 ```
 
 Each brand receives:
@@ -255,6 +294,17 @@ The prompt must describe only the public brand contract, sample data, allowed
 actions, visual brand inputs, and UX constraints. It must not include internal
 payment-core DTO names, database schema, service names, or canonical enum names
 unless those names are explicitly intended to be public.
+
+AI-generated frontend target:
+
+- admin edits a system prompt and a brand brief;
+- generator receives a public BFF contract, sample mapped payloads, visual
+  inputs, and allowed capabilities;
+- generator returns a versioned React/Vite artifact manifest;
+- validator rejects unknown imports, unsafe network targets, missing routes, and
+  contract mismatches;
+- runtime serves the generated artifact for that brand;
+- admin can open the generated UI as a preview or as a seeded demo merchant.
 
 Current MVP implementation:
 
@@ -412,14 +462,29 @@ MVP progress:
 - merchants can create saved customers and saved payment methods through
   first-class `payment-core` and brand facade endpoints. The React brand runtime
   exposes these actions from the Customers view.
+- AI-created brands now store a local deterministic `GeneratedBrandArtifact`
+  manifest in brand schema metadata. The manifest includes React/Vite files,
+  routes, capabilities, validation checks, and the BFF base path.
+- brand contracts now expose per-brand BFF endpoint aliases under
+  `/brands/:id/:slug/bff/:alias`. The old `/runtime/*` endpoints remain as a
+  fallback for the current hand-built runtime, while generated artifacts should
+  call only the alias endpoints from the contract.
+- the admin contract inspector shows the generated frontend artifact summary and
+  full manifest next to endpoint, field, status, and live seeded resource data.
 
 Immediate next actions:
 
-1. Allow payment creation to reuse selected saved customers/payment methods
-   directly from the payment form.
-2. Add update/delete actions for saved customers and payment methods.
-3. Split `PaymentUser` into clearer merchant-owner and future customer auth
-   boundaries once the prototype needs customer-side checkout sessions.
+1. Change the admin create-brand flow so the system prompt, brand brief, BFF
+   contract, and sample payloads drive artifact generation.
+2. Replace or bypass the hand-built brand runtime screens with a generated
+   artifact preview path, while keeping the current runtime as a fallback shell.
+3. Persist contract versions separately from brand metadata and expose a BFF
+   contract inspector with endpoint aliases, field maps, payload structure, and
+   status/action labels.
+4. Add request logging at the facade layer so the admin can see which generated
+   UI endpoint called which internal canonical operation.
+5. Start extracting shared auth semantics: one auth/session model, admin roles,
+   merchant brand memberships, and brand-scoped runtime sessions.
 
 ### Phase 6.3: AI Gateway MVP
 
@@ -429,6 +494,10 @@ Immediate next actions:
 - generate a React/Vite artifact with a fixed safe runtime template;
 - persist artifact files and generation metadata.
 
+The first provider should be `local` and deterministic. External model adapters
+are useful only after the artifact schema, validator, preview, and deployment
+path are reliable.
+
 ### Phase 6.4: Generated Brand Runtime
 
 - serve generated artifacts under brand URLs;
@@ -436,11 +505,28 @@ Immediate next actions:
 - restrict network calls to the brand facade base URL;
 - add artifact validation and rollback.
 
+The generated app should own user-facing routes such as login, merchant
+registration, dashboard, payment creation, and history. It should not import
+payment-core types or call canonical endpoints directly.
+
 ### Phase 6.5: Admin Console
 
 - replace the current layout tab with brand generation workflow;
 - add brand preview, contract inspector, payment history, and request log;
 - add model/provider selector with local fallback as default.
+
+The admin console is global across all brands. It should provide brand list,
+generation history, prompt versions, contract versions, live generated preview,
+seed/reset controls, open-as-demo entry points, and facade request logs.
+
+### Phase 6.6: Shared Auth Boundary
+
+- introduce a shared auth/session model for admins and merchants;
+- keep brand-specific user experience, but use one identity core underneath;
+- add admin roles for brand creation, generation, preview, and seed operations;
+- add merchant brand memberships so a user can access only the correct brand
+  runtime;
+- keep public brand contracts unaware of internal auth table and session names.
 
 ## Testing Requirements
 
@@ -486,3 +572,7 @@ Sources:
 - Keep provider APIs server-side and optional; local fallback must still work.
 - Treat contract variation as encapsulation and tenant customization, not as a
   security boundary.
+- For the next phase, prefer seeded payment scenarios over deeper payment
+  implementation.
+- The main technical risk is generated UI integration quality, not payment
+  processor fidelity.

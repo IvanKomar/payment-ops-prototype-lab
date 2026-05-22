@@ -1,5 +1,6 @@
 import type {
   LayoutBuilderDashboardConfig,
+  LayoutBuilderGeneratedBrandArtifact,
   LayoutBuilderAiGenerationProfile,
   LayoutBuilderFieldStyle,
   LayoutBuilderPalette,
@@ -30,6 +31,7 @@ export interface GeneratedSchema {
   fields: Record<string, string>;
   templateProfile: LayoutProfile;
   generationProfile: LayoutBuilderAiGenerationProfile | null;
+  generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
 }
 
 export interface BrandWithSchema {

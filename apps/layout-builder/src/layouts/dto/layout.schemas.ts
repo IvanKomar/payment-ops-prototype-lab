@@ -74,6 +74,9 @@ export class CreateBrandResponseDto {
   @ApiProperty({ type: Object, nullable: true })
   generationProfile!: unknown | null;
 
+  @ApiProperty({ type: Object, nullable: true })
+  generatedArtifact!: unknown | null;
+
   @ApiProperty({ type: Object })
   samplePayload!: unknown;
 }
@@ -107,6 +110,9 @@ export class BrandListItemDto {
 
   @ApiProperty({ type: Object, nullable: true })
   generationProfile!: unknown | null;
+
+  @ApiProperty({ type: Object, nullable: true })
+  generatedArtifact!: unknown | null;
 
   @ApiProperty({ type: String, example: "2026-05-15T10:00:00.000Z" })
   createdAt!: string;

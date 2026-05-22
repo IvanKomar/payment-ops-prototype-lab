@@ -3,6 +3,7 @@ import type { Brand, BrandRequest, BrandSchema, Prisma } from "@prisma/client";
 import type {
   LayoutBuilderAiGenerationProfile,
   LayoutBuilderDashboardConfig,
+  LayoutBuilderGeneratedBrandArtifact,
   LayoutBuilderPalette
 } from "@payment-ops/shared-types";
 
@@ -42,7 +43,8 @@ export class LayoutRepository {
             fields: {
               mappings: input.schema.fields,
               templateProfile: input.schema.templateProfile,
-              generationProfile: input.schema.generationProfile
+              generationProfile: input.schema.generationProfile,
+              generatedArtifact: input.schema.generatedArtifact
             } as unknown as Prisma.InputJsonValue
           }
         }
@@ -151,7 +153,8 @@ function toBrandWithSchema(brand: BrandWithRelations): BrandWithSchema {
       structure: schema.structure as GeneratedSchema["structure"],
       fields: parsedFields.mappings,
       templateProfile: parsedFields.templateProfile,
-      generationProfile: parsedFields.generationProfile
+      generationProfile: parsedFields.generationProfile,
+      generatedArtifact: parsedFields.generatedArtifact
     } satisfies GeneratedSchema
   };
 }
@@ -163,19 +166,22 @@ function parseSchemaFields(
   mappings: Record<string, string>;
   templateProfile: LayoutProfile;
   generationProfile: LayoutBuilderAiGenerationProfile | null;
+  generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
 } {
   if (isObject(value) && isObject(value.mappings)) {
     return {
       mappings: stringRecord(value.mappings),
       templateProfile: normalizeLayoutProfile(value.templateProfile, brandId),
-      generationProfile: normalizeGenerationProfile(value.generationProfile)
+      generationProfile: normalizeGenerationProfile(value.generationProfile),
+      generatedArtifact: normalizeGeneratedArtifact(value.generatedArtifact)
     };
   }
 
   return {
     mappings: stringRecord(value),
     templateProfile: createLayoutProfile(brandId),
-    generationProfile: null
+    generationProfile: null,
+    generatedArtifact: null
   };
 }
 
@@ -185,6 +191,14 @@ function normalizeGenerationProfile(value: unknown): LayoutBuilderAiGenerationPr
   }
 
   return value as unknown as LayoutBuilderAiGenerationProfile;
+}
+
+function normalizeGeneratedArtifact(value: unknown): LayoutBuilderGeneratedBrandArtifact | null {
+  if (!isObject(value) || typeof value.artifactId !== "string" || typeof value.entryFile !== "string") {
+    return null;
+  }
+
+  return value as unknown as LayoutBuilderGeneratedBrandArtifact;
 }
 
 function normalizeLayoutProfile(value: unknown, brandId: string): LayoutProfile {

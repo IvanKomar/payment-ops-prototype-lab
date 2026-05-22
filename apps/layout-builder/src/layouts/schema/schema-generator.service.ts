@@ -38,7 +38,8 @@ export class SchemaGeneratorService {
       structure,
       fields,
       templateProfile: createLayoutProfile(brandId, recentProfiles),
-      generationProfile
+      generationProfile,
+      generatedArtifact: null
     };
   }
 

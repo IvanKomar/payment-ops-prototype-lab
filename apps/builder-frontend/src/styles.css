@@ -563,6 +563,28 @@ pre {
   text-transform: uppercase;
 }
 
+.artifact-card {
+  background: #fbfcf8;
+  border-color: #dfe8d2;
+}
+
+.artifact-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.artifact-files code {
+  background: #edf4e5;
+  border-radius: 5px;
+  color: #29361f;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  padding: 4px 6px;
+}
+
 .contract-grid {
   display: grid;
   gap: 8px;

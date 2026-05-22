@@ -35,7 +35,8 @@ import {
   toRuntimePaymentMethodResponse,
   toRuntimePaymentIntentsResponse,
   toRuntimePaymentMethodsResponse,
-  toRuntimePaymentResponse
+  toRuntimePaymentResponse,
+  resolveBrandRuntimeGatewayOperation
 } from "./runtime/brand-runtime.types.js";
 
 @Injectable()
@@ -76,6 +77,28 @@ export class LayoutService {
       recentBrands.map((brand) => brand.schema.templateProfile),
       generationProfile
     );
+    if (generationProfile) {
+      const now = new Date();
+      schema.generatedArtifact = this.aiBrandGenerator.generateArtifact({
+        brandId,
+        brandName: body.brandName,
+        contractVersionId: schema.id,
+        contractSlug: schema.slug,
+        generationProfile,
+        contract: createBrandRuntimeContract({
+          id: brandId,
+          name: body.brandName,
+          logoOriginalFilename: logo.originalFilename,
+          logoMimeType: logo.mimeType,
+          logoSizeBytes: logo.sizeBytes,
+          logoPath: logo.path,
+          palette,
+          createdAt: now,
+          updatedAt: now,
+          schema
+        })
+      });
+    }
     const brand = await this.repository.createBrand({
       name: body.brandName,
       logo,
@@ -96,6 +119,7 @@ export class LayoutService {
       dataEndpoint: this.brandDataEndpoint(brand),
       appUrl: this.brandAppUrl(brand),
       generationProfile: brand.schema.generationProfile,
+      generatedArtifact: brand.schema.generatedArtifact,
       createdAt: brand.createdAt.toISOString(),
       updatedAt: brand.updatedAt.toISOString()
     }));
@@ -157,6 +181,62 @@ export class LayoutService {
     this.assertBrandApiSlug(brand, slug);
 
     return createBrandRuntimeContract(brand);
+  }
+
+  async dispatchRuntimeGateway(
+    id: string,
+    slug: string,
+    method: "GET" | "POST",
+    alias: string,
+    authorization: string | undefined,
+    payload: unknown = {}
+  ): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const contract = createBrandRuntimeContract(brand);
+    const operation = resolveBrandRuntimeGatewayOperation(contract, method, alias);
+
+    if (!operation) {
+      throw new NotFoundException(`Brand BFF endpoint was not found: ${alias}`);
+    }
+
+    if (operation === "config") {
+      return contract;
+    }
+
+    if (operation === "register") {
+      return this.registerRuntimeUser(id, slug, payload);
+    }
+
+    if (operation === "login") {
+      return this.loginRuntimeUser(id, slug, payload);
+    }
+
+    const sessionToken = bearerTokenPayload(authorization);
+
+    if (operation === "payments") {
+      return method === "GET"
+        ? this.getRuntimePayments(id, slug, sessionToken)
+        : this.createRuntimePayment(id, slug, sessionToken, payload);
+    }
+
+    if (operation === "customers") {
+      return method === "GET"
+        ? this.getRuntimeCustomers(id, slug, sessionToken)
+        : this.createRuntimeCustomer(id, slug, sessionToken, payload);
+    }
+
+    if (operation === "paymentMethods") {
+      return method === "GET"
+        ? this.getRuntimePaymentMethods(id, slug, sessionToken)
+        : this.createRuntimePaymentMethod(id, slug, sessionToken, payload);
+    }
+
+    if (operation === "paymentIntents") {
+      return this.getRuntimePaymentIntents(id, slug, sessionToken);
+    }
+
+    return this.getRuntimeBalanceTransactions(id, slug, sessionToken);
   }
 
   async registerRuntimeUser(id: string, slug: string, payload: unknown): Promise<unknown> {
@@ -407,6 +487,7 @@ export class LayoutService {
       layoutVariant: brand.schema.templateProfile.variant,
       fields: brand.schema.fields,
       generationProfile: brand.schema.generationProfile,
+      generatedArtifact: brand.schema.generatedArtifact,
       samplePayload: this.schemaGenerator.samplePayload(brand.schema, brand.name)
     };
   }
@@ -438,6 +519,20 @@ function stringPayload(value: unknown): string {
 
 function optionalStringPayload(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function bearerTokenPayload(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new BadRequestException("Authorization header is required");
+  }
+
+  const match = /^Bearer\s+(\S+)$/iu.exec(value.trim());
+
+  if (!match) {
+    throw new BadRequestException("Authorization must use Bearer token");
+  }
+
+  return match[1]!;
 }
 
 interface PublicBrandAppInput {

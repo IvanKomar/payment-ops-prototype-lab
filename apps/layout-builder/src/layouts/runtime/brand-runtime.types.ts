@@ -100,6 +100,7 @@ export interface BrandRuntimeContract {
 export function createBrandRuntimeContract(brand: BrandWithSchema): BrandRuntimeContract {
   const generation = brand.schema.generationProfile;
   const resourceAlias = generation?.resourceAlias ?? "payments";
+  const resourcePath = apiAlias(brand, resourceAlias);
 
   return {
     brandId: brand.id,
@@ -162,18 +163,55 @@ export function createBrandRuntimeContract(brand: BrandWithSchema): BrandRuntime
       currency: runtimeField(brand, "authCurrency")
     },
     endpoints: {
-      register: "runtime/register",
-      login: "runtime/login",
-      payments: "runtime/payments",
-      customers: "runtime/customers",
-      paymentMethods: "runtime/payment-methods",
-    paymentIntents: "runtime/payment-intents",
-    balanceTransactions: "runtime/balance-transactions",
-    createCustomer: "runtime/customers",
-    createPaymentMethod: "runtime/payment-methods",
-    config: "runtime/config"
+      register: `bff/${apiAlias(brand, "access-open")}`,
+      login: `bff/${apiAlias(brand, "access-resume")}`,
+      payments: `bff/${resourcePath}`,
+      customers: `bff/${apiAlias(brand, "profiles")}`,
+      paymentMethods: `bff/${apiAlias(brand, "funding-keys")}`,
+      paymentIntents: `bff/${apiAlias(brand, "routing-drafts")}`,
+      balanceTransactions: `bff/${apiAlias(brand, "ledger-moves")}`,
+      createCustomer: `bff/${apiAlias(brand, "profiles")}`,
+      createPaymentMethod: `bff/${apiAlias(brand, "funding-keys")}`,
+      config: `bff/${apiAlias(brand, "interface")}`
     }
   };
+}
+
+export type BrandRuntimeGatewayOperation =
+  | "config"
+  | "register"
+  | "login"
+  | "payments"
+  | "customers"
+  | "paymentMethods"
+  | "paymentIntents"
+  | "balanceTransactions";
+
+export function resolveBrandRuntimeGatewayOperation(
+  contract: BrandRuntimeContract,
+  method: "GET" | "POST",
+  alias: string
+): BrandRuntimeGatewayOperation | null {
+  const normalizedAlias = alias.trim();
+
+  if (method === "GET") {
+    return (
+      matchAlias(contract.endpoints.config, normalizedAlias, "config") ??
+      matchAlias(contract.endpoints.payments, normalizedAlias, "payments") ??
+      matchAlias(contract.endpoints.customers, normalizedAlias, "customers") ??
+      matchAlias(contract.endpoints.paymentMethods, normalizedAlias, "paymentMethods") ??
+      matchAlias(contract.endpoints.paymentIntents, normalizedAlias, "paymentIntents") ??
+      matchAlias(contract.endpoints.balanceTransactions, normalizedAlias, "balanceTransactions")
+    );
+  }
+
+  return (
+    matchAlias(contract.endpoints.register, normalizedAlias, "register") ??
+    matchAlias(contract.endpoints.login, normalizedAlias, "login") ??
+    matchAlias(contract.endpoints.payments, normalizedAlias, "payments") ??
+    matchAlias(contract.endpoints.customers, normalizedAlias, "customers") ??
+    matchAlias(contract.endpoints.paymentMethods, normalizedAlias, "paymentMethods")
+  );
 }
 
 export function toRuntimeAuthResponse(
@@ -486,6 +524,26 @@ function runtimeField(brand: BrandWithSchema, canonical: string): string {
   }
 
   return `${base}_${suffix}`;
+}
+
+function apiAlias(brand: BrandWithSchema, value: string): string {
+  const suffix = createHash("sha1").update(`${brand.id}:bff:${value}`).digest("hex").slice(0, 8);
+  const normalized = value
+    .replace(/([a-z])([A-Z])/gu, "$1-$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .replace(/-{2,}/gu, "-");
+
+  return `${normalized || "resource"}-${suffix}`;
+}
+
+function matchAlias<T extends BrandRuntimeGatewayOperation>(
+  endpoint: string,
+  alias: string,
+  operation: T
+): T | null {
+  return endpoint.split("/").at(-1) === alias ? operation : null;
 }
 
 function toCamel(value: string): string {

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 
 import { loadLayoutBuilderConfig } from "../config/layout-builder.config.js";
 import { PrismaModule } from "../prisma/prisma.module.js";
+import { BrandBffController } from "./controllers/brand-bff.controller.js";
 import { BrandRuntimeController } from "./controllers/brand-runtime.controller.js";
 import { BrandsController } from "./controllers/brands.controller.js";
 import { LayoutRepository } from "./layout.repository.js";
@@ -17,7 +18,7 @@ import { PaymentCoreClientService } from "./runtime/payment-core-client.service.
 
 @Module({
   imports: [PrismaModule],
-  controllers: [BrandsController, BrandRuntimeController],
+  controllers: [BrandsController, BrandRuntimeController, BrandBffController],
   providers: [
     {
       provide: LAYOUT_BUILDER_CONFIG,
