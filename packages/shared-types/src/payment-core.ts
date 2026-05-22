@@ -212,3 +212,30 @@ export interface PaymentCoreCreatePaymentResponse {
   payment: PaymentCorePayment;
   events: PaymentCorePaymentEvent[];
 }
+
+export interface PaymentCoreCreateCustomerRequest {
+  email?: string;
+  name: string;
+  phone?: string;
+}
+
+export interface PaymentCoreCreateCustomerResponse {
+  account: PaymentCoreAccount;
+  customer: PaymentCoreCustomer;
+}
+
+export interface PaymentCoreCreatePaymentMethodRequest {
+  customerId?: string;
+  type?: PaymentCoreMethodType;
+  label?: string;
+  last4?: string;
+  brand?: string;
+  expiryMonth?: number;
+  expiryYear?: number;
+  bankName?: string;
+}
+
+export interface PaymentCoreCreatePaymentMethodResponse {
+  account: PaymentCoreAccount;
+  paymentMethod: PaymentCorePaymentMethod;
+}

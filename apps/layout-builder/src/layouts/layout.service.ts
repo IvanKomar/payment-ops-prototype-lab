@@ -23,12 +23,16 @@ import { AiBrandGeneratorService } from "./ai/ai-brand-generator.service.js";
 import { PaymentCoreClientService } from "./runtime/payment-core-client.service.js";
 import {
   createBrandRuntimeContract,
+  toCoreCustomerRequest,
   toCorePaymentRequest,
+  toCorePaymentMethodRequest,
   toRuntimeAuthResponse,
   toRuntimeAdminResourcesResponse,
   toRuntimeBalanceTransactionsResponse,
+  toRuntimeCustomerResponse,
   toRuntimeCustomersResponse,
   toRuntimeHistoryResponse,
+  toRuntimePaymentMethodResponse,
   toRuntimePaymentIntentsResponse,
   toRuntimePaymentMethodsResponse,
   toRuntimePaymentResponse
@@ -203,12 +207,46 @@ export class LayoutService {
     return toRuntimeCustomersResponse(createBrandRuntimeContract(brand), response);
   }
 
+  async createRuntimeCustomer(
+    id: string,
+    slug: string,
+    sessionToken: string,
+    payload: unknown
+  ): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const contract = createBrandRuntimeContract(brand);
+    const response = await this.paymentCoreClient.createCustomer(
+      sessionToken,
+      toCoreCustomerRequest(contract, objectPayload(payload))
+    );
+
+    return toRuntimeCustomerResponse(contract, response);
+  }
+
   async getRuntimePaymentMethods(id: string, slug: string, sessionToken: string): Promise<unknown> {
     const brand = await this.getExistingBrand(id);
     this.assertBrandApiSlug(brand, slug);
     const response = await this.paymentCoreClient.paymentMethods(sessionToken);
 
     return toRuntimePaymentMethodsResponse(createBrandRuntimeContract(brand), response);
+  }
+
+  async createRuntimePaymentMethod(
+    id: string,
+    slug: string,
+    sessionToken: string,
+    payload: unknown
+  ): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const contract = createBrandRuntimeContract(brand);
+    const response = await this.paymentCoreClient.createPaymentMethod(
+      sessionToken,
+      toCorePaymentMethodRequest(contract, objectPayload(payload))
+    );
+
+    return toRuntimePaymentMethodResponse(contract, response);
   }
 
   async getRuntimePaymentIntents(id: string, slug: string, sessionToken: string): Promise<unknown> {

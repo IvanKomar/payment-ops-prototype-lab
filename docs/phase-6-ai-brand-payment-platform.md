@@ -409,12 +409,16 @@ MVP progress:
 - seeded demo data can be reset from the admin console, and the selected brand
   can be opened directly as the seeded demo merchant through a one-time runtime
   session token.
+- merchants can create saved customers and saved payment methods through
+  first-class `payment-core` and brand facade endpoints. The React brand runtime
+  exposes these actions from the Customers view.
 
 Immediate next actions:
 
-1. Add explicit create/update endpoints for saved customers and payment methods
-   once the merchant UX needs saved reusable instruments.
-2. Split `PaymentUser` into clearer merchant-owner and future customer auth
+1. Allow payment creation to reuse selected saved customers/payment methods
+   directly from the payment form.
+2. Add update/delete actions for saved customers and payment methods.
+3. Split `PaymentUser` into clearer merchant-owner and future customer auth
    boundaries once the prototype needs customer-side checkout sessions.
 
 ### Phase 6.3: AI Gateway MVP

@@ -62,6 +62,23 @@ export const createPaymentSchema = z.object({
 
 export const paymentIdSchema = z.string().trim().min(2).max(80);
 
+export const createCustomerSchema = z.object({
+  email: z.string().trim().email().max(180).transform((value) => value.toLowerCase()).optional(),
+  name: z.string().trim().min(1).max(140),
+  phone: z.string().trim().min(3).max(40).optional()
+});
+
+export const createPaymentMethodSchema = z.object({
+  customerId: z.string().trim().min(2).max(80).optional(),
+  type: z.enum(["card", "bank_transfer", "wallet", "crypto", "manual"]).default("card"),
+  label: z.string().trim().min(1).max(140).optional(),
+  last4: z.string().trim().regex(/^[0-9A-Za-z]{2,8}$/u).optional(),
+  brand: z.string().trim().min(1).max(40).optional(),
+  expiryMonth: z.coerce.number().int().min(1).max(12).optional(),
+  expiryYear: z.coerce.number().int().min(2024).max(2100).optional(),
+  bankName: z.string().trim().min(1).max(80).optional()
+});
+
 export class RegisterDto {
   @ApiProperty({ type: String, example: "br_koi_demo" })
   brandId!: string;
@@ -122,6 +139,43 @@ export class CreatePaymentDto {
   scenario?: string;
 }
 
+export class CreateCustomerDto {
+  @ApiPropertyOptional({ type: String, example: "ava@example.com" })
+  email?: string;
+
+  @ApiProperty({ type: String, example: "Ava Customer" })
+  name!: string;
+
+  @ApiPropertyOptional({ type: String, example: "+15551234567" })
+  phone?: string;
+}
+
+export class CreatePaymentMethodDto {
+  @ApiPropertyOptional({ type: String, example: "cus_..." })
+  customerId?: string;
+
+  @ApiPropertyOptional({ type: String, example: "card" })
+  type?: string;
+
+  @ApiPropertyOptional({ type: String, example: "Visa ending 4242" })
+  label?: string;
+
+  @ApiPropertyOptional({ type: String, example: "4242" })
+  last4?: string;
+
+  @ApiPropertyOptional({ type: String, example: "visa" })
+  brand?: string;
+
+  @ApiPropertyOptional({ type: Number, example: 12 })
+  expiryMonth?: number;
+
+  @ApiPropertyOptional({ type: Number, example: 2030 })
+  expiryYear?: number;
+
+  @ApiPropertyOptional({ type: String, example: "Demo Bank" })
+  bankName?: string;
+}
+
 @Injectable()
 export class ZodValidationPipe<TOutput> implements PipeTransform<unknown, TOutput> {
   constructor(private readonly schema: ZodType<TOutput>) {}
@@ -143,6 +197,8 @@ export class ZodValidationPipe<TOutput> implements PipeTransform<unknown, TOutpu
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
+export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
+export type CreatePaymentMethodInput = z.infer<typeof createPaymentMethodSchema>;
 
 export function parseBearerToken(value: unknown): string {
   return new ZodValidationPipe(authHeaderSchema).transform(value);

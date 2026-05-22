@@ -251,6 +251,59 @@ function BrandRuntimeApp() {
     navigateTo(locationState, "payments", setLocationState);
   }
 
+  async function createCustomer(form: HTMLFormElement) {
+    if (!contract || !sessionToken) {
+      setStatus("Sign in first.");
+      return;
+    }
+
+    const formData = new FormData(form);
+    const payload = {
+      [contract.customerFields.name ?? "name"]: String(formData.get("name") ?? ""),
+      [contract.customerFields.email ?? "email"]: String(formData.get("email") ?? ""),
+      [contract.customerFields.phone ?? "phone"]: String(formData.get("phone") ?? "")
+    };
+
+    await requestJson<unknown>(runtimeUrl(locationState, "customers"), {
+      body: JSON.stringify(payload),
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json"
+      },
+      method: "POST"
+    });
+    setStatus("Customer saved.");
+    await refreshHistory();
+  }
+
+  async function createPaymentMethod(form: HTMLFormElement) {
+    if (!contract || !sessionToken) {
+      setStatus("Sign in first.");
+      return;
+    }
+
+    const formData = new FormData(form);
+    const payload = {
+      [contract.customerFields.customerId ?? "customerId"]: String(formData.get("customerId") ?? ""),
+      [contract.paymentMethodFields.type ?? "type"]: String(formData.get("type") ?? "card"),
+      [contract.paymentMethodFields.label ?? "label"]: String(formData.get("label") ?? ""),
+      [contract.paymentMethodFields.last4 ?? "last4"]: String(formData.get("last4") ?? ""),
+      [contract.paymentMethodFields.brand ?? "brand"]: String(formData.get("brand") ?? ""),
+      [contract.paymentMethodFields.bankName ?? "bankName"]: String(formData.get("bankName") ?? "")
+    };
+
+    await requestJson<unknown>(runtimeUrl(locationState, "payment-methods"), {
+      body: JSON.stringify(payload),
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json"
+      },
+      method: "POST"
+    });
+    setStatus("Payment method saved.");
+    await refreshHistory();
+  }
+
   function logout() {
     localStorage.removeItem(sessionKey(locationState));
     setSessionToken("");
@@ -318,7 +371,19 @@ function BrandRuntimeApp() {
           />
         ) : null}
         {view === "payments" ? <PaymentsView contract={contract} payments={payments} /> : null}
-        {view === "customers" ? <CustomersView contract={contract} payments={payments} /> : null}
+        {view === "customers" ? (
+          <CustomersView
+            contract={contract}
+            historyState={historyState}
+            onCreateCustomer={(form) => {
+              void createCustomer(form);
+            }}
+            onCreatePaymentMethod={(form) => {
+              void createPaymentMethod(form);
+            }}
+            payments={payments}
+          />
+        ) : null}
         {view === "balances" ? <BalancesView account={account} contract={contract} metrics={metrics} /> : null}
       </section>
     </main>
@@ -417,44 +482,71 @@ function PaymentsView({ contract, payments }: { contract: RuntimeContract; payme
   );
 }
 
-function CustomersView({ contract, payments }: { contract: RuntimeContract; payments: Array<Record<string, unknown>> }) {
+function CustomersView({
+  contract,
+  historyState,
+  onCreateCustomer,
+  onCreatePaymentMethod,
+  payments
+}: {
+  contract: RuntimeContract;
+  historyState: RuntimeHistoryResponse | null;
+  onCreateCustomer: (form: HTMLFormElement) => void;
+  onCreatePaymentMethod: (form: HTMLFormElement) => void;
+  payments: Array<Record<string, unknown>>;
+}) {
   const customers = customersFromPayments(contract, payments);
+  const savedCustomers = savedCustomersFromHistory(contract, historyState);
+  const savedPaymentMethods = savedPaymentMethodsFromHistory(contract, historyState);
 
   return (
-    <section className="panel">
-      <div className="section-title">
-        <h2>Customers</h2>
-      </div>
-      {customers.length === 0 ? (
-        <div className="empty">Customers appear after the merchant processes payments.</div>
-      ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Payments</th>
-                <th>Total volume</th>
-                <th>Last payment</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((customer) => (
-                <tr key={customer.name}>
-                  <td>
-                    <strong>{customer.name}</strong>
-                    <small>{customer.instrument}</small>
-                  </td>
-                  <td>{customer.count}</td>
-                  <td>{formatAmount(customer.volume, customer.currency)}</td>
-                  <td>{formatDateTime(customer.lastPaymentAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="content-grid">
+      <section className="panel">
+        <div className="section-title">
+          <h2>Customers</h2>
         </div>
-      )}
-    </section>
+        {customers.length === 0 ? (
+          <div className="empty">Customers appear after the merchant processes payments.</div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Payments</th>
+                  <th>Total volume</th>
+                  <th>Last payment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((customer) => (
+                  <tr key={customer.name}>
+                    <td>
+                      <strong>{customer.name}</strong>
+                      <small>{customer.instrument}</small>
+                    </td>
+                    <td>{customer.count}</td>
+                    <td>{formatAmount(customer.volume, customer.currency)}</td>
+                    <td>{formatDateTime(customer.lastPaymentAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      <section className="panel">
+        <div className="side-stack">
+          <SavedCustomerForm onSubmit={onCreateCustomer} />
+          <SavedPaymentMethodForm
+            contract={contract}
+            customers={savedCustomers}
+            methods={savedPaymentMethods}
+            onSubmit={onCreatePaymentMethod}
+          />
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -609,6 +701,103 @@ function PaymentForm({ onSubmit }: { onSubmit: (form: HTMLFormElement) => void }
       <button className="primary" type="submit">
         Process payment
       </button>
+    </form>
+  );
+}
+
+function SavedCustomerForm({ onSubmit }: { onSubmit: (form: HTMLFormElement) => void }) {
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(event.currentTarget);
+      }}
+    >
+      <h2>Save customer</h2>
+      <label>
+        Name
+        <input defaultValue="Saved Customer" name="name" required />
+      </label>
+      <label>
+        Email
+        <input defaultValue="saved@example.com" name="email" type="email" />
+      </label>
+      <label>
+        Phone
+        <input name="phone" placeholder="+15551234567" />
+      </label>
+      <button className="primary" type="submit">
+        Save customer
+      </button>
+    </form>
+  );
+}
+
+function SavedPaymentMethodForm({
+  contract,
+  customers,
+  methods,
+  onSubmit
+}: {
+  contract: RuntimeContract;
+  customers: Array<Record<string, unknown>>;
+  methods: Array<Record<string, unknown>>;
+  onSubmit: (form: HTMLFormElement) => void;
+}) {
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(event.currentTarget);
+      }}
+    >
+      <h2>Save payment method</h2>
+      <label>
+        Customer
+        <select name="customerId">
+          <option value="">No customer</option>
+          {customers.map((customer) => (
+            <option
+              key={String(customer[contract.customerFields.customerId ?? "customerId"])}
+              value={String(customer[contract.customerFields.customerId ?? "customerId"])}
+            >
+              {String(customer[contract.customerFields.name ?? "name"] ?? "Customer")}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="row">
+        <label>
+          Type
+          <select defaultValue="card" name="type">
+            <option value="card">Card</option>
+            <option value="bank_transfer">Bank transfer</option>
+            <option value="wallet">Wallet</option>
+          </select>
+        </label>
+        <label>
+          Last 4
+          <input defaultValue="4242" name="last4" required />
+        </label>
+      </div>
+      <label>
+        Label
+        <input defaultValue="Saved card ending 4242" name="label" required />
+      </label>
+      <div className="row">
+        <label>
+          Brand
+          <input defaultValue="visa" name="brand" />
+        </label>
+        <label>
+          Bank
+          <input name="bankName" placeholder="Demo Bank" />
+        </label>
+      </div>
+      <button className="primary" type="submit">
+        Save method
+      </button>
+      <small>{methods.length} saved methods</small>
     </form>
   );
 }
@@ -879,6 +1068,28 @@ function paymentsFromHistory(
     : [];
 }
 
+function savedCustomersFromHistory(
+  _contract: RuntimeContract,
+  historyResponse: RuntimeHistoryResponse | null
+): Array<Record<string, unknown>> {
+  const rawCustomers = historyResponse?.customers;
+
+  return Array.isArray(rawCustomers)
+    ? rawCustomers.filter((customer): customer is Record<string, unknown> => Boolean(customer) && typeof customer === "object" && !Array.isArray(customer))
+    : [];
+}
+
+function savedPaymentMethodsFromHistory(
+  _contract: RuntimeContract,
+  historyResponse: RuntimeHistoryResponse | null
+): Array<Record<string, unknown>> {
+  const rawMethods = historyResponse?.paymentMethods;
+
+  return Array.isArray(rawMethods)
+    ? rawMethods.filter((method): method is Record<string, unknown> => Boolean(method) && typeof method === "object" && !Array.isArray(method))
+    : [];
+}
+
 function parseRuntimeLocation(): RuntimeLocation {
   const parts = window.location.pathname.split("/").filter(Boolean);
   const brandIndex = parts.indexOf("brands");
@@ -913,7 +1124,10 @@ function isRuntimeView(value: string): value is RuntimeView {
   return ["login", "dashboard", "payments", "customers", "balances"].includes(value);
 }
 
-function runtimeUrl(locationState: RuntimeLocation, key: "config" | "login" | "payments" | "register") {
+function runtimeUrl(
+  locationState: RuntimeLocation,
+  key: "config" | "customers" | "login" | "payment-methods" | "payments" | "register"
+) {
   return `${runtimeBasePath(locationState)}/runtime/${key}`;
 }
 

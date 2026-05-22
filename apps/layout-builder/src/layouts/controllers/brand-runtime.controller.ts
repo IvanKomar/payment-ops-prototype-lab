@@ -68,6 +68,18 @@ export class BrandRuntimeController {
     return this.layoutService.getRuntimeCustomers(id, slug, parseBearerToken(authorization));
   }
 
+  @Post("customers")
+  @ApiOkResponse({ description: "Create a brand-specific saved customer" })
+  @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
+  createCustomer(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string,
+    @Headers("authorization") authorization: string | undefined,
+    @Body() payload: unknown
+  ): Promise<unknown> {
+    return this.layoutService.createRuntimeCustomer(id, slug, parseBearerToken(authorization), payload);
+  }
+
   @Get("payment-methods")
   @ApiOkResponse({ description: "Brand-specific payment methods" })
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
@@ -77,6 +89,18 @@ export class BrandRuntimeController {
     @Headers("authorization") authorization: string | undefined
   ): Promise<unknown> {
     return this.layoutService.getRuntimePaymentMethods(id, slug, parseBearerToken(authorization));
+  }
+
+  @Post("payment-methods")
+  @ApiOkResponse({ description: "Create a brand-specific saved payment method" })
+  @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
+  createPaymentMethod(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string,
+    @Headers("authorization") authorization: string | undefined,
+    @Body() payload: unknown
+  ): Promise<unknown> {
+    return this.layoutService.createRuntimePaymentMethod(id, slug, parseBearerToken(authorization), payload);
   }
 
   @Get("payment-intents")

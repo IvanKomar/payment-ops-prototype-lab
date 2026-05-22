@@ -10,6 +10,8 @@ import type {
   PaymentCoreAuthResponse,
   PaymentCoreBalanceTransactionsResponse,
   PaymentCoreBrandResourcesResponse,
+  PaymentCoreCreateCustomerResponse,
+  PaymentCoreCreatePaymentMethodResponse,
   PaymentCoreCreatePaymentResponse,
   PaymentCoreCustomersResponse,
   PaymentCoreHistoryResponse,
@@ -24,7 +26,7 @@ import { createHash, pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } from
 
 import { loadPaymentCoreConfig } from "../config/payment-core.config.js";
 import { assertPaymentTransition, initialStatusForScenario } from "./payment-state.js";
-import type { CreatePaymentInput, LoginInput, RegisterInput } from "./dto/payment.schemas.js";
+import type { CreateCustomerInput, CreatePaymentInput, CreatePaymentMethodInput, LoginInput, RegisterInput } from "./dto/payment.schemas.js";
 import {
   toAccountResponse,
   toBalanceTransactionResponse,
@@ -218,6 +220,51 @@ export class PaymentsService {
     };
   }
 
+  async createCustomer(
+    sessionToken: string,
+    input: CreateCustomerInput
+  ): Promise<PaymentCoreCreateCustomerResponse> {
+    const { user, account } = await this.authenticate(sessionToken);
+    const customer = input.email
+      ? await this.prisma.paymentCustomer.upsert({
+          where: {
+            brandId_accountId_email: {
+              brandId: user.brandId,
+              accountId: account.id,
+              email: input.email
+            }
+          },
+          create: {
+            id: `cus_${randomId()}`,
+            brandId: user.brandId,
+            accountId: account.id,
+            userId: user.id,
+            email: input.email,
+            name: input.name,
+            phone: input.phone ?? null
+          },
+          update: {
+            name: input.name,
+            phone: input.phone ?? null
+          }
+        })
+      : await this.prisma.paymentCustomer.create({
+          data: {
+            id: `cus_${randomId()}`,
+            brandId: user.brandId,
+            accountId: account.id,
+            userId: user.id,
+            name: input.name,
+            phone: input.phone ?? null
+          }
+        });
+
+    return {
+      account: toAccountResponse(account),
+      customer: toCustomerResponse(customer)
+    };
+  }
+
   async paymentMethods(sessionToken: string): Promise<PaymentCorePaymentMethodsResponse> {
     const { user, account } = await this.authenticate(sessionToken);
     const paymentMethods = await this.prisma.paymentMethod.findMany({
@@ -234,6 +281,49 @@ export class PaymentsService {
     return {
       account: toAccountResponse(account),
       paymentMethods: paymentMethods.map(toPaymentMethodResponse)
+    };
+  }
+
+  async createPaymentMethod(
+    sessionToken: string,
+    input: CreatePaymentMethodInput
+  ): Promise<PaymentCoreCreatePaymentMethodResponse> {
+    const { user, account } = await this.authenticate(sessionToken);
+
+    if (input.customerId) {
+      const customer = await this.prisma.paymentCustomer.findFirst({
+        where: {
+          id: input.customerId,
+          brandId: user.brandId,
+          accountId: account.id
+        }
+      });
+
+      if (!customer) {
+        throw new NotFoundException(`Customer was not found: ${input.customerId}`);
+      }
+    }
+
+    const type = input.type ?? "card";
+    const paymentMethod = await this.prisma.paymentMethod.create({
+      data: {
+        id: `pm_${randomId()}`,
+        brandId: user.brandId,
+        accountId: account.id,
+        customerId: input.customerId ?? null,
+        type: type as never,
+        label: input.label ?? paymentMethodLabel(type, input.last4, input.bankName),
+        last4: input.last4 ?? null,
+        brand: input.brand ?? null,
+        expiryMonth: input.expiryMonth ?? null,
+        expiryYear: input.expiryYear ?? null,
+        bankName: input.bankName ?? null
+      }
+    });
+
+    return {
+      account: toAccountResponse(account),
+      paymentMethod: toPaymentMethodResponse(paymentMethod)
     };
   }
 

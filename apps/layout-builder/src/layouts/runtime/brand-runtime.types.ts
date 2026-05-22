@@ -6,6 +6,10 @@ import type {
   PaymentCoreAuthResponse,
   PaymentCoreCreatePaymentRequest,
   PaymentCoreBrandResourcesResponse,
+  PaymentCoreCreateCustomerRequest,
+  PaymentCoreCreateCustomerResponse,
+  PaymentCoreCreatePaymentMethodRequest,
+  PaymentCoreCreatePaymentMethodResponse,
   PaymentCoreCustomersResponse,
   PaymentCoreHistoryResponse,
   PaymentCorePayment,
@@ -87,6 +91,8 @@ export interface BrandRuntimeContract {
     paymentMethods: string;
     paymentIntents: string;
     balanceTransactions: string;
+    createCustomer: string;
+    createPaymentMethod: string;
     config: string;
   };
 }
@@ -161,9 +167,11 @@ export function createBrandRuntimeContract(brand: BrandWithSchema): BrandRuntime
       payments: "runtime/payments",
       customers: "runtime/customers",
       paymentMethods: "runtime/payment-methods",
-      paymentIntents: "runtime/payment-intents",
-      balanceTransactions: "runtime/balance-transactions",
-      config: "runtime/config"
+    paymentIntents: "runtime/payment-intents",
+    balanceTransactions: "runtime/balance-transactions",
+    createCustomer: "runtime/customers",
+    createPaymentMethod: "runtime/payment-methods",
+    config: "runtime/config"
     }
   };
 }
@@ -202,6 +210,16 @@ export function toRuntimeCustomersResponse(
   };
 }
 
+export function toRuntimeCustomerResponse(
+  contract: BrandRuntimeContract,
+  response: PaymentCoreCreateCustomerResponse
+): unknown {
+  return {
+    account: mapAccount(contract, response.account),
+    customer: mapCustomer(contract, response.customer)
+  };
+}
+
 export function toRuntimePaymentMethodsResponse(
   contract: BrandRuntimeContract,
   response: PaymentCorePaymentMethodsResponse
@@ -209,6 +227,16 @@ export function toRuntimePaymentMethodsResponse(
   return {
     account: mapAccount(contract, response.account),
     paymentMethods: response.paymentMethods.map((method) => mapPaymentMethod(contract, method))
+  };
+}
+
+export function toRuntimePaymentMethodResponse(
+  contract: BrandRuntimeContract,
+  response: PaymentCoreCreatePaymentMethodResponse
+): unknown {
+  return {
+    account: mapAccount(contract, response.account),
+    paymentMethod: mapPaymentMethod(contract, response.paymentMethod)
   };
 }
 
@@ -329,6 +357,45 @@ export function toCorePaymentRequest(
     },
     ...(currency ? { currency } : {}),
     ...(scenario ? { scenario } : {})
+  };
+}
+
+export function toCoreCustomerRequest(
+  contract: BrandRuntimeContract,
+  payload: Record<string, unknown>
+): PaymentCoreCreateCustomerRequest {
+  const email = optionalString(payload[contract.customerFields.email] ?? payload.email);
+  const phone = optionalString(payload[contract.customerFields.phone] ?? payload.phone);
+
+  return {
+    name: stringValue(payload[contract.customerFields.name] ?? payload.name),
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {})
+  };
+}
+
+export function toCorePaymentMethodRequest(
+  contract: BrandRuntimeContract,
+  payload: Record<string, unknown>
+): PaymentCoreCreatePaymentMethodRequest {
+  const customerId = optionalString(payload[contract.customerFields.customerId] ?? payload.customerId);
+  const type = methodTypeValue(payload[contract.paymentMethodFields.type] ?? payload.type);
+  const label = optionalString(payload[contract.paymentMethodFields.label] ?? payload.label);
+  const last4 = optionalString(payload[contract.paymentMethodFields.last4] ?? payload.last4);
+  const brand = optionalString(payload[contract.paymentMethodFields.brand] ?? payload.brand);
+  const expiryMonth = optionalNumber(payload[contract.paymentMethodFields.expiryMonth] ?? payload.expiryMonth);
+  const expiryYear = optionalNumber(payload[contract.paymentMethodFields.expiryYear] ?? payload.expiryYear);
+  const bankName = optionalString(payload[contract.paymentMethodFields.bankName] ?? payload.bankName);
+
+  return {
+    type,
+    ...(customerId ? { customerId } : {}),
+    ...(label ? { label } : {}),
+    ...(last4 ? { last4 } : {}),
+    ...(brand ? { brand } : {}),
+    ...(expiryMonth ? { expiryMonth } : {}),
+    ...(expiryYear ? { expiryYear } : {}),
+    ...(bankName ? { bankName } : {})
   };
 }
 

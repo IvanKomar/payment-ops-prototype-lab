@@ -1,15 +1,24 @@
-import { Controller, Get, Headers, Inject, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Inject, Param, Post } from "@nestjs/common";
 import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type {
   PaymentCoreBalanceTransactionsResponse,
   PaymentCoreBrandResourcesResponse,
+  PaymentCoreCreateCustomerResponse,
+  PaymentCoreCreatePaymentMethodResponse,
   PaymentCoreCustomersResponse,
   PaymentCorePaymentIntentsResponse,
   PaymentCorePaymentMethodsResponse,
   PaymentCoreSeedBrandDemoResponse
 } from "@payment-ops/shared-types";
 
-import { parseBearerToken } from "./dto/payment.schemas.js";
+import {
+  createCustomerSchema,
+  createPaymentMethodSchema,
+  parseBearerToken,
+  ZodValidationPipe,
+  type CreateCustomerInput,
+  type CreatePaymentMethodInput
+} from "./dto/payment.schemas.js";
 import { PaymentsService } from "./payments.service.js";
 
 @ApiTags("gateway-resources")
@@ -23,12 +32,30 @@ export class GatewayResourcesController {
     return this.paymentsService.customers(parseBearerToken(authorization));
   }
 
+  @Post("customers")
+  @ApiOkResponse({ description: "Create or update a saved customer for the authenticated merchant account" })
+  createCustomer(
+    @Headers("authorization") authorization: string | undefined,
+    @Body(new ZodValidationPipe(createCustomerSchema)) body: CreateCustomerInput
+  ): Promise<PaymentCoreCreateCustomerResponse> {
+    return this.paymentsService.createCustomer(parseBearerToken(authorization), body);
+  }
+
   @Get("payment-methods")
   @ApiOkResponse({ description: "Payment methods for the authenticated merchant account" })
   paymentMethods(
     @Headers("authorization") authorization: string | undefined
   ): Promise<PaymentCorePaymentMethodsResponse> {
     return this.paymentsService.paymentMethods(parseBearerToken(authorization));
+  }
+
+  @Post("payment-methods")
+  @ApiOkResponse({ description: "Create a saved payment method for the authenticated merchant account" })
+  createPaymentMethod(
+    @Headers("authorization") authorization: string | undefined,
+    @Body(new ZodValidationPipe(createPaymentMethodSchema)) body: CreatePaymentMethodInput
+  ): Promise<PaymentCoreCreatePaymentMethodResponse> {
+    return this.paymentsService.createPaymentMethod(parseBearerToken(authorization), body);
   }
 
   @Get("payment-intents")

@@ -3,6 +3,10 @@ import type {
   PaymentCoreAuthResponse,
   PaymentCoreBalanceTransactionsResponse,
   PaymentCoreBrandResourcesResponse,
+  PaymentCoreCreateCustomerRequest,
+  PaymentCoreCreateCustomerResponse,
+  PaymentCoreCreatePaymentMethodRequest,
+  PaymentCoreCreatePaymentMethodResponse,
   PaymentCoreCreatePaymentRequest,
   PaymentCoreCreatePaymentResponse,
   PaymentCoreCustomersResponse,
@@ -61,10 +65,32 @@ export class PaymentCoreClientService {
     });
   }
 
+  createCustomer(
+    sessionToken: string,
+    input: PaymentCoreCreateCustomerRequest
+  ): Promise<PaymentCoreCreateCustomerResponse> {
+    return this.request("/customers", {
+      method: "POST",
+      sessionToken,
+      body: input
+    });
+  }
+
   paymentMethods(sessionToken: string): Promise<PaymentCorePaymentMethodsResponse> {
     return this.request("/payment-methods", {
       method: "GET",
       sessionToken
+    });
+  }
+
+  createPaymentMethod(
+    sessionToken: string,
+    input: PaymentCoreCreatePaymentMethodRequest
+  ): Promise<PaymentCoreCreatePaymentMethodResponse> {
+    return this.request("/payment-methods", {
+      method: "POST",
+      sessionToken,
+      body: input
     });
   }
 
