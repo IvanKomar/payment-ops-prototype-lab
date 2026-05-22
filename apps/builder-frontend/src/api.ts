@@ -1,6 +1,8 @@
 import type {
   HealthResponse,
+  LayoutBuilderAdminAuthResponse,
   LayoutBuilderBrandListItem,
+  LayoutBuilderBrandMembership,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
   LayoutBuilderDeleteBrandResponse,
@@ -116,6 +118,21 @@ export const api = {
       )
   },
   layout: {
+    adminDevSession: () =>
+      requestJson<LayoutBuilderAdminAuthResponse>(apiBases.layout, "/admin/auth/dev-session", {
+        method: "POST"
+      }),
+    adminMe: (sessionToken?: string) =>
+      requestJson<LayoutBuilderAdminAuthResponse>(
+        apiBases.layout,
+        "/admin/auth/me",
+        sessionToken ? { headers: { authorization: `Bearer ${sessionToken}` } } : undefined
+      ),
+    brandMemberships: (brandId: string) =>
+      requestJson<LayoutBuilderBrandMembership[]>(
+        apiBases.layout,
+        `/admin/brands/${encodeURIComponent(brandId)}/memberships`
+      ),
     createBrand: (brandName: string, logo: File | Blob) => {
       const formData = new FormData();
       formData.set("brandName", brandName);

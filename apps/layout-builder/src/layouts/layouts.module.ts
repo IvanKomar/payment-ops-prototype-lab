@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 
 import { loadLayoutBuilderConfig } from "../config/layout-builder.config.js";
 import { PrismaModule } from "../prisma/prisma.module.js";
+import { AuthBoundaryService } from "./auth/auth-boundary.service.js";
+import { AdminAuthController } from "./controllers/admin-auth.controller.js";
 import { BrandBffController } from "./controllers/brand-bff.controller.js";
 import { BrandRuntimeController } from "./controllers/brand-runtime.controller.js";
 import { BrandsController } from "./controllers/brands.controller.js";
@@ -18,7 +20,7 @@ import { PaymentCoreClientService } from "./runtime/payment-core-client.service.
 
 @Module({
   imports: [PrismaModule],
-  controllers: [BrandsController, BrandRuntimeController, BrandBffController],
+  controllers: [BrandsController, BrandRuntimeController, BrandBffController, AdminAuthController],
   providers: [
     {
       provide: LAYOUT_BUILDER_CONFIG,
@@ -26,6 +28,7 @@ import { PaymentCoreClientService } from "./runtime/payment-core-client.service.
     },
     LayoutRepository,
     LayoutService,
+    AuthBoundaryService,
     AiBrandGeneratorService,
     PaymentCoreClientService,
     LogoStorageService,

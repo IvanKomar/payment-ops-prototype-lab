@@ -1,6 +1,8 @@
 import type {
   HealthResponse,
+  LayoutBuilderAdminAuthResponse,
   LayoutBuilderBrandListItem,
+  LayoutBuilderBrandMembership,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
   ReceiptRecognitionModel,
@@ -17,6 +19,8 @@ interface LayoutState {
   activeRuntimeContract: BrandRuntimeContract | null;
   activeRuntimeResources: BrandRuntimeResources | null;
   activeRuntimeRequestLogs: BrandRuntimeRequestLog[];
+  activeAdminSession: LayoutBuilderAdminAuthResponse | null;
+  activeBrandMemberships: LayoutBuilderBrandMembership[];
 }
 
 interface BrandRuntimeContract {
@@ -67,7 +71,9 @@ const layoutState: LayoutState = {
   activeSchema: null,
   activeRuntimeContract: null,
   activeRuntimeResources: null,
-  activeRuntimeRequestLogs: []
+  activeRuntimeRequestLogs: [],
+  activeAdminSession: null,
+  activeBrandMemberships: []
 };
 let recentLayoutBrands: LayoutBuilderBrandListItem[] = [];
 
@@ -380,7 +386,7 @@ function required<T extends Element>(selector: string): T {
 }
 
 async function refreshAll(): Promise<void> {
-  await Promise.allSettled([refreshHealth(), refreshSms(), refreshReceipts(), refreshBrands()]);
+  await Promise.allSettled([refreshHealth(), refreshSms(), refreshReceipts(), refreshAdminSession(), refreshBrands()]);
 }
 
 function routeFromHash(): DemoRoute {
@@ -415,7 +421,19 @@ async function setActiveRoute(route: DemoRoute): Promise<void> {
     return;
   }
 
-  await Promise.allSettled([paintHealth("health-layout", api.health.layout()), refreshBrands()]);
+  await Promise.allSettled([paintHealth("health-layout", api.health.layout()), refreshAdminSession(), refreshBrands()]);
+}
+
+async function refreshAdminSession(): Promise<void> {
+  try {
+    const storedToken = window.localStorage.getItem("layout-admin-session") ?? undefined;
+    const session = storedToken ? await api.layout.adminMe(storedToken) : await api.layout.adminDevSession();
+    layoutState.activeAdminSession = session;
+    window.localStorage.setItem("layout-admin-session", session.sessionToken);
+  } catch {
+    layoutState.activeAdminSession = null;
+    window.localStorage.removeItem("layout-admin-session");
+  }
 }
 
 async function refreshHealth(): Promise<void> {
@@ -748,6 +766,7 @@ async function selectBrand(brandId: string): Promise<void> {
   layoutState.activeRuntimeContract = null;
   layoutState.activeRuntimeResources = null;
   layoutState.activeRuntimeRequestLogs = [];
+  layoutState.activeBrandMemberships = [];
   applyBrandPreview(brand);
   renderBrandListSelection(brandId);
   void loadBrandContract(brandId);
@@ -774,7 +793,8 @@ function applyBrandPreview(
     layoutState.activeSchema,
     layoutState.activeRuntimeContract,
     layoutState.activeRuntimeResources,
-    layoutState.activeRuntimeRequestLogs
+    layoutState.activeRuntimeRequestLogs,
+    layoutState.activeBrandMemberships
   );
   deleteBrandButton.disabled = false;
   openBrandAppButton.disabled = false;
@@ -802,10 +822,11 @@ async function loadBrandContract(brandId: string): Promise<void> {
 
   try {
     const schema = await api.layout.schema(brandId);
-    const [runtimeContract, runtimeResources, runtimeRequestLogs] = await Promise.all([
+    const [runtimeContract, runtimeResources, runtimeRequestLogs, brandMemberships] = await Promise.all([
       api.layout.runtimeConfig<BrandRuntimeContract>(schema.endpoint),
       api.layout.runtimeAdminResources<BrandRuntimeResources>(schema.endpoint),
-      api.layout.runtimeRequestLogs<BrandRuntimeRequestLog[]>(schema.endpoint)
+      api.layout.runtimeRequestLogs<BrandRuntimeRequestLog[]>(schema.endpoint),
+      api.layout.brandMemberships(brandId)
     ]);
 
     if (layoutState.activeBrand?.brandId !== brandId) {
@@ -816,8 +837,9 @@ async function loadBrandContract(brandId: string): Promise<void> {
     layoutState.activeRuntimeContract = runtimeContract;
     layoutState.activeRuntimeResources = runtimeResources;
     layoutState.activeRuntimeRequestLogs = runtimeRequestLogs;
+    layoutState.activeBrandMemberships = brandMemberships;
     openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
-    renderContractInspector(activeBrand, schema, runtimeContract, runtimeResources, runtimeRequestLogs);
+    renderContractInspector(activeBrand, schema, runtimeContract, runtimeResources, runtimeRequestLogs, brandMemberships);
   } catch (error) {
     contractInspector.innerHTML = `
       <div class="contract-card">
@@ -840,6 +862,7 @@ function clearLayoutSelection(): void {
   layoutState.activeRuntimeContract = null;
   layoutState.activeRuntimeResources = null;
   layoutState.activeRuntimeRequestLogs = [];
+  layoutState.activeBrandMemberships = [];
   selectedBrandTitle.textContent = "No brand selected";
   contractInspector.innerHTML = "";
   deleteBrandButton.disabled = true;
@@ -873,7 +896,8 @@ function renderContractInspector(
   schema: LayoutBuilderBrandSchemaResponse | null,
   runtimeContract: BrandRuntimeContract | null,
   runtimeResources: BrandRuntimeResources | null,
-  runtimeRequestLogs: BrandRuntimeRequestLog[] = []
+  runtimeRequestLogs: BrandRuntimeRequestLog[] = [],
+  brandMemberships: LayoutBuilderBrandMembership[] = []
 ): void {
   const profile = schema?.generationProfile ?? brand.generationProfile;
 
@@ -923,7 +947,7 @@ function renderContractInspector(
         ${mappingRows(runtimeContract.authFields)}
       </div>
     </div>
-    ${runtimeResources ? runtimeResourcesHtml(runtimeContract, runtimeResources, runtimeRequestLogs) : ""}
+    ${runtimeResources ? runtimeResourcesHtml(runtimeContract, runtimeResources, runtimeRequestLogs, brandMemberships) : ""}
     <details class="contract-json">
       <summary>System prompt</summary>
       <pre>${escapeHtml(profile.systemPrompt)}</pre>
@@ -971,7 +995,8 @@ function generatedArtifactHtml(artifact: NonNullable<LayoutBuilderBrandSchemaRes
 function runtimeResourcesHtml(
   runtimeContract: BrandRuntimeContract,
   resources: BrandRuntimeResources,
-  requestLogs: BrandRuntimeRequestLog[]
+  requestLogs: BrandRuntimeRequestLog[],
+  brandMemberships: LayoutBuilderBrandMembership[]
 ): string {
   const recentPayments = resources.payments.slice(0, 5);
   const recentCustomers = resources.customers.slice(0, 5);
@@ -1007,8 +1032,38 @@ function runtimeResourcesHtml(
           ? `<details class="contract-json"><summary>Recent customers</summary><pre>${escapeHtml(JSON.stringify(recentCustomers, null, 2))}</pre></details>`
           : ""
       }
+      ${brandMembershipsHtml(brandMemberships)}
       ${requestLogsHtml(requestLogs)}
     </div>
+  `;
+}
+
+function brandMembershipsHtml(memberships: LayoutBuilderBrandMembership[]): string {
+  if (memberships.length === 0) {
+    return `<small>No shared auth memberships have been recorded for this brand yet.</small>`;
+  }
+
+  return `
+    <details class="contract-json" open>
+      <summary>Shared auth memberships</summary>
+      <div class="mini-table request-log-table">
+        ${memberships
+          .slice(0, 8)
+          .map((membership) => {
+            const label = membership.merchantEmail ?? membership.adminId ?? membership.subjectKey;
+            const source = `${membership.subjectType} · ${membership.role} · ${membership.source}`;
+
+            return `
+              <div>
+                <strong>${escapeHtml(label)}</strong>
+                <span>${escapeHtml(source)}</span>
+                <code>${escapeHtml(membership.merchantAccountId ?? membership.membershipId)}</code>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </details>
   `;
 }
 
@@ -1138,9 +1193,11 @@ async function seedActiveBrandDemoData(): Promise<void> {
 
   try {
     const runtimeResources = await api.layout.seedRuntimeDemoData<BrandRuntimeResources>(schema.endpoint);
+    const brandMemberships = await api.layout.brandMemberships(brand.brandId);
     layoutState.activeRuntimeResources = runtimeResources;
+    layoutState.activeBrandMemberships = brandMemberships;
     openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
-    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources, layoutState.activeRuntimeRequestLogs);
+    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources, layoutState.activeRuntimeRequestLogs, brandMemberships);
   } catch (error) {
     livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
   } finally {
@@ -1162,9 +1219,11 @@ async function resetActiveBrandDemoData(): Promise<void> {
 
   try {
     const runtimeResources = await api.layout.resetRuntimeDemoData<BrandRuntimeResources>(schema.endpoint);
+    const brandMemberships = await api.layout.brandMemberships(brand.brandId);
     layoutState.activeRuntimeResources = runtimeResources;
+    layoutState.activeBrandMemberships = brandMemberships;
     openDemoMerchantButton.disabled = true;
-    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources, layoutState.activeRuntimeRequestLogs);
+    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources, layoutState.activeRuntimeRequestLogs, brandMemberships);
   } catch (error) {
     livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
   } finally {

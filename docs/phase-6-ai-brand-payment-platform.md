@@ -479,6 +479,11 @@ MVP progress:
   operation, duration, redacted request payload, response summary, and error
   message. The admin inspector can read the recent log from
   `/brands/:id/:slug/runtime/admin/request-logs`.
+- a first shared auth boundary now exists in the control plane. Layout Builder
+  stores local platform admin identity/session records and brand memberships.
+  Brand creation records the platform admin as a brand owner, while brand
+  runtime registration/login and demo seeding record merchant memberships
+  against the same brand membership table.
 
 Immediate next actions:
 
@@ -488,9 +493,11 @@ Immediate next actions:
 2. Persist contract versions separately from brand metadata and expose a BFF
    contract inspector with endpoint aliases, field maps, payload structure, and
    status/action labels.
-3. Start extracting shared auth semantics: one auth/session model, admin roles,
-   merchant brand memberships, and brand-scoped runtime sessions.
-4. Replace the fallback hand-built brand runtime with generated artifacts as the
+3. Replace the prototype dev admin fallback with explicit admin login and
+   authorization checks on create/seed/reset/request-log operations.
+4. Decide whether merchant auth sessions remain owned by payment-core or move
+   fully into the shared identity boundary.
+5. Replace the fallback hand-built brand runtime with generated artifacts as the
    primary user-facing route once preview validation is stable.
 
 ### Phase 6.3: AI Gateway MVP

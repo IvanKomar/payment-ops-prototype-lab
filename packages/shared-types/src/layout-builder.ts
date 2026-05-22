@@ -2,6 +2,7 @@ import type { PaymentCoreStatus } from "./payment-core.js";
 
 export type LayoutBuilderFieldStyle = "camelCase" | "snake_case" | "kebab-case";
 export type LayoutBuilderPayloadStructure = "flat" | "nested" | "key-value-array";
+export type LayoutBuilderIdentityRole = "platform_admin" | "brand_operator" | "merchant_owner";
 export type LayoutBuilderLayoutVariant =
   | "classic"
   | "summary-left"
@@ -80,6 +81,37 @@ export interface LayoutBuilderBffRequestLog {
   errorMessage: string | null;
   durationMs: number;
   createdAt: string;
+}
+
+export interface LayoutBuilderAdminIdentity {
+  adminId: string;
+  email: string;
+  displayName: string;
+  role: "platform_admin";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LayoutBuilderAdminAuthResponse {
+  sessionToken: string;
+  admin: LayoutBuilderAdminIdentity;
+  expiresAt: string;
+}
+
+export interface LayoutBuilderBrandMembership {
+  membershipId: string;
+  brandId: string;
+  subjectType: "admin" | "merchant";
+  subjectKey: string;
+  role: LayoutBuilderIdentityRole;
+  source: "admin_console" | "brand_runtime" | "demo_seed";
+  adminId: string | null;
+  merchantUserId: string | null;
+  merchantEmail: string | null;
+  merchantDisplayName: string | null;
+  merchantAccountId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LayoutBuilderPalette {

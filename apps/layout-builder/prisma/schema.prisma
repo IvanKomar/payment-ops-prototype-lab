@@ -60,10 +60,60 @@ model Brand {
   schemas              BrandSchema[]
   requests             BrandRequest[]
   bffRequestLogs       BrandBffRequestLog[]
+  memberships          BrandMembership[]
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
   @@map("brands")
+}
+
+model AdminIdentity {
+  id           String            @id
+  email        String            @unique
+  displayName  String
+  role         String
+  passwordHash String?
+  sessions     AdminSession[]
+  memberships  BrandMembership[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@map("admin_identities")
+}
+
+model AdminSession {
+  id        String        @id
+  adminId   String
+  admin     AdminIdentity @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  tokenHash String        @unique
+  expiresAt DateTime
+  createdAt DateTime      @default(now())
+
+  @@index([adminId])
+  @@map("admin_sessions")
+}
+
+model BrandMembership {
+  id                  String         @id
+  brandId             String
+  brand               Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  subjectType         String
+  subjectKey          String
+  role                String
+  source              String
+  adminId             String?
+  admin               AdminIdentity? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  merchantUserId      String?
+  merchantEmail       String?
+  merchantDisplayName String?
+  merchantAccountId   String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@unique([brandId, subjectKey])
+  @@index([adminId])
+  @@index([brandId, role])
+  @@map("brand_memberships")
 }
 
 model BrandSchema {

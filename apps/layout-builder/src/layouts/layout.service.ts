@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import type { LayoutBuilderEnv } from "../config/env.schema.js";
+import { AuthBoundaryService } from "./auth/auth-boundary.service.js";
 import { ACCEPTED_LOGO_MIME_TYPES, LAYOUT_BUILDER_CONFIG } from "./layout.constants.js";
 import { createDefaultDashboardConfig } from "./default-dashboard.js";
 import { LogoStorageService } from "./logo/logo-storage.service.js";
@@ -54,7 +55,8 @@ export class LayoutService {
     @Inject(PayloadMapperService) private readonly payloadMapper: PayloadMapperService,
     @Inject(SvgRendererService) private readonly renderer: SvgRendererService,
     @Inject(AiBrandGeneratorService) private readonly aiBrandGenerator: AiBrandGeneratorService,
-    @Inject(PaymentCoreClientService) private readonly paymentCoreClient: PaymentCoreClientService
+    @Inject(PaymentCoreClientService) private readonly paymentCoreClient: PaymentCoreClientService,
+    @Inject(AuthBoundaryService) private readonly authBoundary: AuthBoundaryService
   ) {}
 
   async createBrand(
@@ -109,6 +111,7 @@ export class LayoutService {
       palette,
       schema
     });
+    await this.authBoundary.ensureBrandOwnerMembership(brand.id);
 
     return this.toBrandResponse(brand);
   }
@@ -328,6 +331,7 @@ export class LayoutService {
       ...(displayName ? { displayName } : {}),
       ...(currency ? { currency } : {})
     });
+    await this.authBoundary.recordMerchantMembership(response);
 
     return toRuntimeAuthResponse(contract, response);
   }
@@ -342,6 +346,7 @@ export class LayoutService {
       email: stringPayload(body.email ?? body[contract.authFields.email]),
       password: stringPayload(body.password ?? body[contract.authFields.password])
     });
+    await this.authBoundary.recordMerchantMembership(response);
 
     return toRuntimeAuthResponse(contract, response);
   }
@@ -432,6 +437,14 @@ export class LayoutService {
     const brand = await this.getExistingBrand(id);
     this.assertBrandApiSlug(brand, slug);
     const response = await this.paymentCoreClient.seedBrandDemoData(brand.id);
+    await this.authBoundary.recordMerchantMembership(
+      {
+        sessionToken: response.demoSessionToken,
+        user: response.demoUser,
+        account: response.demoAccount
+      },
+      "demo_seed"
+    );
 
     return toRuntimeAdminResourcesResponse(createBrandRuntimeContract(brand), response);
   }
