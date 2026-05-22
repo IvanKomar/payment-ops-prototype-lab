@@ -248,6 +248,12 @@ textarea:disabled {
   background: #b42318;
 }
 
+.button.demo-create {
+  background: #174f6f;
+  min-height: 38px;
+  width: 100%;
+}
+
 .icon-button {
   background: #eef3f8;
   color: #26323f;

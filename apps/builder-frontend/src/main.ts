@@ -88,6 +88,12 @@ const DEFAULT_BRAND_SYSTEM_PROMPT = [
   "Return distinct resource naming, payment status labels, action labels, and visual direction.",
   "The user-facing interface must support registration, login, payment creation, refunds, and transaction history."
 ].join("\n");
+const WORKING_DEMO_PROMPT = [
+  "Create a Stripe-like payment gateway for merchants and their operators.",
+  "The first screen must feel like a real payment processor: login, account summary, payment creation, transaction history, saved customers, and balance movements.",
+  "Use professional finance wording, clear settlement status names, and avoid any generic internal service terminology.",
+  "The interface should look ready for a merchant user, not like a developer demo."
+].join(" ");
 
 if (!app) {
   throw new Error("Missing #app root");
@@ -208,7 +214,7 @@ app.innerHTML = `
         </article>
         <div class="panel-header">
           <div>
-            <h2>Brand layout demo</h2>
+            <h2>Payment gateway brands</h2>
           </div>
         </div>
         <div class="layout-workbench">
@@ -220,6 +226,7 @@ app.innerHTML = `
                 <button class="icon-button" id="layout-refresh" type="button" title="Refresh brands">↻</button>
               </div>
             </div>
+            <button class="button demo-create" id="create-working-demo" type="button">Create working gateway demo</button>
             <div class="list compact" id="brand-list"></div>
             <button class="button danger sidebar-delete" id="delete-brand" type="button" disabled>Delete selected</button>
           </aside>
@@ -329,6 +336,7 @@ const brandForm = required<HTMLFormElement>("#brand-form");
 const brandModal = required<HTMLElement>("#brand-modal");
 const brandModalStatus = required<HTMLElement>("#brand-modal-status");
 const brandList = required<HTMLElement>("#brand-list");
+const createWorkingDemoButton = required<HTMLButtonElement>("#create-working-demo");
 const selectedBrandTitle = required<HTMLElement>("#selected-brand-title");
 const contractInspector = required<HTMLElement>("#contract-inspector");
 const openBrandAppButton = required<HTMLButtonElement>("#open-brand-app");
@@ -376,6 +384,10 @@ required<HTMLButtonElement>("#admin-logout").addEventListener("click", () => {
 
 required<HTMLButtonElement>("#open-brand-modal").addEventListener("click", () => {
   openBrandModal();
+});
+
+createWorkingDemoButton.addEventListener("click", () => {
+  void createWorkingGatewayDemo();
 });
 
 required<HTMLButtonElement>("#close-brand-modal").addEventListener("click", () => {
@@ -860,6 +872,38 @@ async function createBrand(): Promise<void> {
   }
 }
 
+async function createWorkingGatewayDemo(): Promise<void> {
+  const brandName = `Atlas Gateway ${new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit"
+  })}`;
+  const logo = createDemoLogo(brandName);
+
+  createWorkingDemoButton.disabled = true;
+  createWorkingDemoButton.textContent = "Creating demo...";
+
+  try {
+    const brand = await api.layout.createAiBrand({
+      brandName,
+      logo,
+      aiPrompt: WORKING_DEMO_PROMPT,
+      systemPrompt: DEFAULT_BRAND_SYSTEM_PROMPT
+    });
+    await setActiveBrand(brand);
+    const runtimeResources = await api.layout.seedRuntimeDemoData<BrandRuntimeResources>(brand.endpoint);
+    layoutState.activeRuntimeResources = runtimeResources;
+    openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
+    await refreshBrands();
+    await loadBrandContract(brand.brandId);
+    window.open(brandUserAppUrl(brand), "_blank", "noopener,noreferrer");
+  } catch (error) {
+    livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
+  } finally {
+    createWorkingDemoButton.disabled = false;
+    createWorkingDemoButton.textContent = "Create working gateway demo";
+  }
+}
+
 async function refreshBrands(): Promise<void> {
   try {
     const brands = await api.layout.recent();
@@ -876,8 +920,12 @@ async function refreshBrands(): Promise<void> {
       ? brands.some((brand) => brand.brandId === activeBrandId)
       : false;
 
-    if (!activeBrandStillExists && brands[0]) {
-      await selectBrand(brands[0].brandId);
+    if (!activeBrandStillExists) {
+      const preferredBrand = brands.find((brand) => Boolean(brand.generatedArtifact)) ?? brands[0];
+
+      if (preferredBrand) {
+        await selectBrand(preferredBrand.brandId);
+      }
     }
   } catch (error) {
     brandList.textContent = errorMessage(error);
@@ -897,7 +945,7 @@ function renderBrandList(brands: LayoutBuilderBrandListItem[]): void {
           <span class="swatch" style="background:${escapeHtml(brand.palette.primary)}"></span>
           <span>
             <strong>${escapeHtml(brand.name)}</strong>
-            <small>${escapeHtml(shortId(brand.brandId))}</small>
+            <small>${escapeHtml(shortId(brand.brandId))} · ${brand.generatedArtifact ? "generated gateway" : "legacy runtime"}</small>
           </span>
         </button>
       `

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, type PipeTransform } from "@nestjs/common";
+import { BadRequestException, Injectable, UnauthorizedException, type PipeTransform } from "@nestjs/common";
 import { ApiProperty } from "@nestjs/swagger";
 import type {
   LayoutBuilderFieldStyle,
@@ -189,7 +189,15 @@ export class ZodValidationPipe<TOutput> implements PipeTransform<unknown, TOutpu
 }
 
 export function parseBearerToken(value: unknown): string {
-  return new ZodValidationPipe(authHeaderSchema).transform(value);
+  if (typeof value !== "string") {
+    throw new UnauthorizedException("Authorization header is required");
+  }
+
+  try {
+    return new ZodValidationPipe(authHeaderSchema).transform(value);
+  } catch {
+    throw new UnauthorizedException("Authorization must use Bearer token");
+  }
 }
 
 export function parseOptionalBearerToken(value: unknown): string | undefined {
