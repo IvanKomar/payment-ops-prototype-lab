@@ -499,14 +499,18 @@ MVP progress:
 - the admin contract inspector exposes the active contract version id alongside
   the generated artifact, while older brands can still load artifact manifests
   from legacy schema JSON.
+- the control plane can list generated contract versions, regenerate a new
+  active version, and activate an older version for rollback. The generated
+  preview and BFF alias resolution now prefer the active persisted contract
+  version.
 
 Immediate next actions:
 
 1. Change the admin create-brand flow so the system prompt, brand brief, BFF
    contract, and sample payloads drive artifact generation more explicitly in
    the UI.
-2. Add regenerate/rollback controls for contract versions and generated
-   artifacts so admins can compare and activate previous brand interfaces.
+2. Add richer prompt editing to regeneration so admins can revise the system
+   prompt and brand brief before creating a new contract version.
 3. Remove fallback access from create/seed/reset/request-log operations once
    the explicit admin login is the default local workflow.
 4. Decide whether merchant auth sessions remain owned by payment-core or move

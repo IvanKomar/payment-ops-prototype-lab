@@ -6,7 +6,9 @@ import type {
   LayoutBuilderBrandMembership,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
+  LayoutBuilderContractVersionRecord,
   LayoutBuilderDeleteBrandResponse,
+  LayoutBuilderRegenerateContractRequest,
   ReceiptRecognitionModel,
   ReceiptRecognizerRawTextResponse,
   ReceiptRecognizerReceiptResponse,
@@ -186,6 +188,32 @@ export const api = {
       requestJson<LayoutBuilderBrandSchemaResponse>(
         apiBases.layout,
         `/brands/${encodeURIComponent(brandId)}/schema`
+      ),
+    contractVersions: (brandId: string) =>
+      requestJson<LayoutBuilderContractVersionRecord[]>(
+        apiBases.layout,
+        `/brands/${encodeURIComponent(brandId)}/contract-versions`,
+        withAdminAuth()
+      ),
+    regenerateContractVersion: (brandId: string, payload: LayoutBuilderRegenerateContractRequest = {}) =>
+      requestJson<LayoutBuilderBrandSchemaResponse>(
+        apiBases.layout,
+        `/brands/${encodeURIComponent(brandId)}/contract-versions/regenerate`,
+        withAdminAuth({
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        })
+      ),
+    activateContractVersion: (brandId: string, contractVersionId: string) =>
+      requestJson<LayoutBuilderBrandSchemaResponse>(
+        apiBases.layout,
+        `/brands/${encodeURIComponent(brandId)}/contract-versions/${encodeURIComponent(contractVersionId)}/activate`,
+        withAdminAuth({
+          method: "POST"
+        })
       ),
     runtimeConfig: <TContract>(endpoint: string) =>
       requestJson<TContract>(apiBases.layout, `${endpointPath(endpoint)}/runtime/config`),

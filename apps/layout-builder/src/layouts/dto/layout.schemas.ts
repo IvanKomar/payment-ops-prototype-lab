@@ -16,6 +16,11 @@ export const slugSchema = z
   .trim()
   .regex(/^[a-z0-9][a-z0-9_-]{6,80}$/, "slug must be lowercase URL-safe text");
 
+export const contractVersionIdSchema = z
+  .string()
+  .trim()
+  .regex(/^cv_[a-f0-9]{32}$/, "contract version id must use the cv_<uuid> format");
+
 export const authHeaderSchema = z
   .string()
   .trim()
@@ -24,6 +29,11 @@ export const authHeaderSchema = z
 
 export const createBrandSchema = z.object({
   brandName: z.string().trim().min(1).max(80),
+  aiPrompt: z.string().trim().min(1).max(4000).optional(),
+  systemPrompt: z.string().trim().min(1).max(6000).optional()
+});
+
+export const regenerateContractSchema = z.object({
   aiPrompt: z.string().trim().min(1).max(4000).optional(),
   systemPrompt: z.string().trim().min(1).max(6000).optional()
 });

@@ -99,15 +99,17 @@ export interface BrandRuntimeContract {
 
 export function createBrandRuntimeContract(brand: BrandWithSchema): BrandRuntimeContract {
   const generation = brand.schema.generationProfile;
-  const resourceAlias = generation?.resourceAlias ?? "payments";
+  const persistedContract = brand.schema.contractVersion;
+  const resourceAlias = persistedContract?.resourceAlias ?? generation?.resourceAlias ?? "payments";
   const resourcePath = apiAlias(brand, resourceAlias);
+  const endpoints = persistedContract?.endpoints;
 
   return {
     brandId: brand.id,
     brandName: brand.name,
     resourceAlias,
-    statusMap: generation?.statusMap ?? DEFAULT_STATUS_MAP,
-    actionLabels: generation?.actionLabels ?? DEFAULT_ACTION_LABELS,
+    statusMap: persistedContract?.statusMap ?? generation?.statusMap ?? DEFAULT_STATUS_MAP,
+    actionLabels: persistedContract?.actionLabels ?? generation?.actionLabels ?? DEFAULT_ACTION_LABELS,
     fields: {
       paymentId: runtimeField(brand, "paymentId"),
       externalReference: runtimeField(brand, "externalReference"),
@@ -163,16 +165,16 @@ export function createBrandRuntimeContract(brand: BrandWithSchema): BrandRuntime
       currency: runtimeField(brand, "authCurrency")
     },
     endpoints: {
-      register: `bff/${apiAlias(brand, "access-open")}`,
-      login: `bff/${apiAlias(brand, "access-resume")}`,
-      payments: `bff/${resourcePath}`,
-      customers: `bff/${apiAlias(brand, "profiles")}`,
-      paymentMethods: `bff/${apiAlias(brand, "funding-keys")}`,
-      paymentIntents: `bff/${apiAlias(brand, "routing-drafts")}`,
-      balanceTransactions: `bff/${apiAlias(brand, "ledger-moves")}`,
-      createCustomer: `bff/${apiAlias(brand, "profiles")}`,
-      createPaymentMethod: `bff/${apiAlias(brand, "funding-keys")}`,
-      config: `bff/${apiAlias(brand, "interface")}`
+      register: endpoints?.register ?? `bff/${apiAlias(brand, "access-open")}`,
+      login: endpoints?.login ?? `bff/${apiAlias(brand, "access-resume")}`,
+      payments: endpoints?.payments ?? `bff/${resourcePath}`,
+      customers: endpoints?.customers ?? `bff/${apiAlias(brand, "profiles")}`,
+      paymentMethods: endpoints?.paymentMethods ?? `bff/${apiAlias(brand, "funding-keys")}`,
+      paymentIntents: endpoints?.paymentIntents ?? `bff/${apiAlias(brand, "routing-drafts")}`,
+      balanceTransactions: endpoints?.balanceTransactions ?? `bff/${apiAlias(brand, "ledger-moves")}`,
+      createCustomer: endpoints?.createCustomer ?? `bff/${apiAlias(brand, "profiles")}`,
+      createPaymentMethod: endpoints?.createPaymentMethod ?? `bff/${apiAlias(brand, "funding-keys")}`,
+      config: endpoints?.config ?? `bff/${apiAlias(brand, "interface")}`
     }
   };
 }

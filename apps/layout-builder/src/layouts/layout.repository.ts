@@ -3,6 +3,7 @@ import type { BrandBffRequestLog, BrandRequest, ContractVersion, GeneratedArtifa
 import type {
   LayoutBuilderAiGenerationProfile,
   LayoutBuilderContractVersion,
+  LayoutBuilderContractVersionRecord,
   LayoutBuilderDashboardConfig,
   LayoutBuilderGeneratedBrandArtifact,
   LayoutBuilderPayloadStructure,
@@ -18,6 +19,12 @@ import type {
   SaveBffRequestLogInput,
   SaveBrandRequestInput
 } from "./layout.types.js";
+
+interface SaveGeneratedContractVersionInput {
+  brandId: string;
+  contractVersion: LayoutBuilderContractVersion;
+  generatedArtifact: LayoutBuilderGeneratedBrandArtifact;
+}
 
 const BRAND_WITH_SCHEMA_INCLUDE = {
   schemas: {
@@ -143,6 +150,102 @@ export class LayoutRepository {
     });
 
     return brands.map(toBrandWithSchema);
+  }
+
+  async findContractVersions(brandId: string): Promise<LayoutBuilderContractVersionRecord[]> {
+    const versions = await this.prisma.contractVersion.findMany({
+      where: { brandId },
+      orderBy: {
+        createdAt: "desc"
+      },
+      include: {
+        artifacts: {
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 1
+        }
+      }
+    });
+
+    return versions.map(contractVersionRecordToResponse);
+  }
+
+  async saveGeneratedContractVersion(input: SaveGeneratedContractVersionInput): Promise<BrandWithSchema | null> {
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.contractVersion.updateMany({
+        where: { brandId: input.brandId },
+        data: { active: false }
+      });
+      await transaction.generatedArtifact.updateMany({
+        where: { brandId: input.brandId },
+        data: { active: false }
+      });
+      await transaction.contractVersion.create({
+        data: {
+          id: input.contractVersion.contractVersionId,
+          brandId: input.contractVersion.brandId,
+          schemaId: input.contractVersion.schemaId,
+          slug: input.contractVersion.slug,
+          resourceAlias: input.contractVersion.resourceAlias,
+          payloadStructure: input.contractVersion.payloadStructure,
+          fieldMap: input.contractVersion.fieldMap as Prisma.InputJsonValue,
+          statusMap: input.contractVersion.statusMap as unknown as Prisma.InputJsonValue,
+          actionLabels: input.contractVersion.actionLabels as unknown as Prisma.InputJsonValue,
+          endpoints: input.contractVersion.endpoints as Prisma.InputJsonValue,
+          active: true
+        }
+      });
+      await transaction.generatedArtifact.create({
+        data: {
+          id: input.generatedArtifact.artifactId,
+          brandId: input.generatedArtifact.brandId,
+          contractVersionId: input.generatedArtifact.contractVersionId,
+          provider: input.generatedArtifact.provider,
+          model: input.generatedArtifact.model,
+          framework: input.generatedArtifact.framework,
+          entryFile: input.generatedArtifact.entryFile,
+          manifest: input.generatedArtifact as unknown as Prisma.InputJsonValue,
+          active: true
+        }
+      });
+    });
+
+    return this.findBrand(input.brandId);
+  }
+
+  async activateContractVersion(brandId: string, contractVersionId: string): Promise<BrandWithSchema | null> {
+    const existing = await this.prisma.contractVersion.findFirst({
+      where: {
+        id: contractVersionId,
+        brandId
+      }
+    });
+
+    if (!existing) {
+      return null;
+    }
+
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.contractVersion.updateMany({
+        where: { brandId },
+        data: { active: false }
+      });
+      await transaction.generatedArtifact.updateMany({
+        where: { brandId },
+        data: { active: false }
+      });
+      await transaction.contractVersion.update({
+        where: { id: contractVersionId },
+        data: { active: true }
+      });
+      await transaction.generatedArtifact.updateMany({
+        where: { contractVersionId },
+        data: { active: true }
+      });
+    });
+
+    return this.findBrand(brandId);
   }
 
   async findLatestRequest(brandId: string): Promise<BrandRequest | null> {
@@ -312,6 +415,21 @@ function contractVersionToResponse(
     active: value.active,
     createdAt: value.createdAt.toISOString(),
     updatedAt: value.updatedAt.toISOString()
+  };
+}
+
+function contractVersionRecordToResponse(
+  value: ContractVersion & { artifacts: GeneratedArtifact[] }
+): LayoutBuilderContractVersionRecord {
+  const contractVersion = contractVersionToResponse(value);
+
+  if (!contractVersion) {
+    throw new Error(`Unable to normalize contract version: ${value.id}`);
+  }
+
+  return {
+    contractVersion,
+    generatedArtifact: generatedArtifactToResponse(value.artifacts[0])
   };
 }
 

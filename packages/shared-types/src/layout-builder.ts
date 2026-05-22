@@ -83,6 +83,16 @@ export interface LayoutBuilderContractVersion {
   updatedAt: string;
 }
 
+export interface LayoutBuilderContractVersionRecord {
+  contractVersion: LayoutBuilderContractVersion;
+  generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
+}
+
+export interface LayoutBuilderRegenerateContractRequest {
+  aiPrompt?: string;
+  systemPrompt?: string;
+}
+
 export interface LayoutBuilderBffRequestLog {
   requestLogId: string;
   brandId: string;

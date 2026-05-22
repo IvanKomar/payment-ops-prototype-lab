@@ -628,6 +628,24 @@ pre {
   padding: 4px 6px;
 }
 
+.version-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.version-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(150px, 1fr) minmax(140px, 1fr) auto;
+}
+
+.version-row .button {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
 .contract-grid {
   display: grid;
   gap: 8px;

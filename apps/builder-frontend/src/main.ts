@@ -5,6 +5,7 @@ import type {
   LayoutBuilderBrandMembership,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
+  LayoutBuilderContractVersionRecord,
   ReceiptRecognitionModel,
   ReceiptRecognizerReceiptResponse
 } from "@payment-ops/shared-types";
@@ -19,6 +20,7 @@ interface LayoutState {
   activeRuntimeContract: BrandRuntimeContract | null;
   activeRuntimeResources: BrandRuntimeResources | null;
   activeRuntimeRequestLogs: BrandRuntimeRequestLog[];
+  activeContractVersions: LayoutBuilderContractVersionRecord[];
   activeAdminSession: LayoutBuilderAdminAuthResponse | null;
   activeBrandMemberships: LayoutBuilderBrandMembership[];
 }
@@ -72,6 +74,7 @@ const layoutState: LayoutState = {
   activeRuntimeContract: null,
   activeRuntimeResources: null,
   activeRuntimeRequestLogs: [],
+  activeContractVersions: [],
   activeAdminSession: null,
   activeBrandMemberships: []
 };
@@ -421,6 +424,27 @@ seedBrandDemoButton.addEventListener("click", () => {
 
 resetBrandDemoButton.addEventListener("click", () => {
   void resetActiveBrandDemoData();
+});
+
+contractInspector.addEventListener("click", (event) => {
+  const target = event.target;
+
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const regenerateButton = target.closest<HTMLButtonElement>("[data-regenerate-contract]");
+  if (regenerateButton) {
+    void regenerateActiveContractVersion();
+    return;
+  }
+
+  const activateButton = target.closest<HTMLButtonElement>("[data-activate-contract-version]");
+  const contractVersionId = activateButton?.dataset.activateContractVersion;
+
+  if (contractVersionId) {
+    void activateContractVersion(contractVersionId);
+  }
 });
 
 openDemoMerchantButton.addEventListener("click", () => {
@@ -904,6 +928,7 @@ async function selectBrand(brandId: string): Promise<void> {
   layoutState.activeRuntimeContract = null;
   layoutState.activeRuntimeResources = null;
   layoutState.activeRuntimeRequestLogs = [];
+  layoutState.activeContractVersions = [];
   layoutState.activeBrandMemberships = [];
   applyBrandPreview(brand);
   renderBrandListSelection(brandId);
@@ -916,6 +941,7 @@ async function setActiveBrand(brand: LayoutBuilderBrandResponse): Promise<void> 
   layoutState.activeRuntimeContract = null;
   layoutState.activeRuntimeResources = null;
   layoutState.activeRuntimeRequestLogs = [];
+  layoutState.activeContractVersions = [];
   applyBrandPreview(brand, brand.name);
   renderBrandListSelection(brand.brandId);
   void loadBrandContract(brand.brandId);
@@ -932,6 +958,7 @@ function applyBrandPreview(
     layoutState.activeRuntimeContract,
     layoutState.activeRuntimeResources,
     layoutState.activeRuntimeRequestLogs,
+    layoutState.activeContractVersions,
     layoutState.activeBrandMemberships
   );
   deleteBrandButton.disabled = false;
@@ -960,10 +987,11 @@ async function loadBrandContract(brandId: string): Promise<void> {
 
   try {
     const schema = await api.layout.schema(brandId);
-    const [runtimeContract, runtimeResources, runtimeRequestLogs, brandMemberships] = await Promise.all([
+    const [runtimeContract, runtimeResources, runtimeRequestLogs, contractVersions, brandMemberships] = await Promise.all([
       api.layout.runtimeConfig<BrandRuntimeContract>(schema.endpoint),
       api.layout.runtimeAdminResources<BrandRuntimeResources>(schema.endpoint),
       api.layout.runtimeRequestLogs<BrandRuntimeRequestLog[]>(schema.endpoint),
+      api.layout.contractVersions(brandId),
       api.layout.brandMemberships(brandId)
     ]);
 
@@ -975,9 +1003,18 @@ async function loadBrandContract(brandId: string): Promise<void> {
     layoutState.activeRuntimeContract = runtimeContract;
     layoutState.activeRuntimeResources = runtimeResources;
     layoutState.activeRuntimeRequestLogs = runtimeRequestLogs;
+    layoutState.activeContractVersions = contractVersions;
     layoutState.activeBrandMemberships = brandMemberships;
     openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
-    renderContractInspector(activeBrand, schema, runtimeContract, runtimeResources, runtimeRequestLogs, brandMemberships);
+    renderContractInspector(
+      activeBrand,
+      schema,
+      runtimeContract,
+      runtimeResources,
+      runtimeRequestLogs,
+      contractVersions,
+      brandMemberships
+    );
   } catch (error) {
     contractInspector.innerHTML = `
       <div class="contract-card">
@@ -1000,6 +1037,7 @@ function clearLayoutSelection(): void {
   layoutState.activeRuntimeContract = null;
   layoutState.activeRuntimeResources = null;
   layoutState.activeRuntimeRequestLogs = [];
+  layoutState.activeContractVersions = [];
   layoutState.activeBrandMemberships = [];
   selectedBrandTitle.textContent = "No brand selected";
   contractInspector.innerHTML = "";
@@ -1035,6 +1073,7 @@ function renderContractInspector(
   runtimeContract: BrandRuntimeContract | null,
   runtimeResources: BrandRuntimeResources | null,
   runtimeRequestLogs: BrandRuntimeRequestLog[] = [],
+  contractVersions: LayoutBuilderContractVersionRecord[] = [],
   brandMemberships: LayoutBuilderBrandMembership[] = []
 ): void {
   const profile = schema?.generationProfile ?? brand.generationProfile;
@@ -1050,7 +1089,7 @@ function renderContractInspector(
       <strong>${escapeHtml(runtimeContract.resourceAlias)}</strong>
       <small>${escapeHtml(profile.contractSummary)}</small>
     </div>
-    ${schema.generatedArtifact ? generatedArtifactHtml(schema.generatedArtifact, schema.contractVersion) : ""}
+    ${schema.generatedArtifact ? generatedArtifactHtml(schema.generatedArtifact, schema.contractVersion, contractVersions) : ""}
     <div class="contract-grid">
       <div class="contract-card">
         <h4>Endpoints</h4>
@@ -1099,7 +1138,8 @@ function renderContractInspector(
 
 function generatedArtifactHtml(
   artifact: NonNullable<LayoutBuilderBrandSchemaResponse["generatedArtifact"]>,
-  contractVersion: LayoutBuilderBrandSchemaResponse["contractVersion"]
+  contractVersion: LayoutBuilderBrandSchemaResponse["contractVersion"],
+  contractVersions: LayoutBuilderContractVersionRecord[]
 ): string {
   return `
     <div class="contract-card artifact-card">
@@ -1130,6 +1170,8 @@ function generatedArtifactHtml(
         <code>${escapeHtml(artifact.facadeBasePath)}</code>
       </div>
       <a class="button secondary artifact-link" href="${escapeHtml(api.layout.publicUrl(`${artifact.facadeBasePath}/generated/preview`))}" target="_blank" rel="noreferrer">Open generated preview</a>
+      <button class="button secondary artifact-link" type="button" data-regenerate-contract>Regenerate version</button>
+      ${contractVersionHistoryHtml(contractVersion?.contractVersionId ?? artifact.contractVersionId, contractVersions)}
       <div class="artifact-files">
         ${artifact.files.map((file) => `<code>${escapeHtml(file.path)} · ${file.kind} · ${file.bytes}b</code>`).join("")}
       </div>
@@ -1138,6 +1180,38 @@ function generatedArtifactHtml(
         <pre>${escapeHtml(JSON.stringify(artifact, null, 2))}</pre>
       </details>
     </div>
+  `;
+}
+
+function contractVersionHistoryHtml(activeContractVersionId: string, versions: LayoutBuilderContractVersionRecord[]): string {
+  if (versions.length === 0) {
+    return "";
+  }
+
+  return `
+    <details class="contract-json version-history">
+      <summary>Contract versions</summary>
+      <div class="version-list">
+        ${versions
+          .map((record) => {
+            const version = record.contractVersion;
+            const isActive = version.contractVersionId === activeContractVersionId || version.active;
+
+            return `
+              <div class="version-row">
+                <code>${escapeHtml(version.contractVersionId)}</code>
+                <span>${escapeHtml(version.resourceAlias)} · ${escapeHtml(new Date(version.createdAt).toLocaleString())}</span>
+                ${
+                  isActive
+                    ? `<strong>active</strong>`
+                    : `<button class="button secondary" type="button" data-activate-contract-version="${escapeHtml(version.contractVersionId)}">Activate</button>`
+                }
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </details>
   `;
 }
 
@@ -1329,6 +1403,72 @@ async function deleteActiveBrand(): Promise<void> {
   }
 }
 
+async function regenerateActiveContractVersion(): Promise<void> {
+  const brand = layoutState.activeBrand;
+
+  if (!brand) {
+    return;
+  }
+
+  contractInspector.innerHTML = `
+    <div class="contract-card">
+      <strong>Regenerating contract version...</strong>
+      <small>${escapeHtml(brand.brandId)}</small>
+    </div>
+  `;
+
+  try {
+    await api.layout.regenerateContractVersion(brand.brandId);
+    await reloadActiveBrandAfterVersionChange(brand.brandId);
+  } catch (error) {
+    contractInspector.innerHTML = `
+      <div class="contract-card">
+        <strong>Regeneration failed</strong>
+        <small>${escapeHtml(errorMessage(error))}</small>
+      </div>
+    `;
+  }
+}
+
+async function activateContractVersion(contractVersionId: string): Promise<void> {
+  const brand = layoutState.activeBrand;
+
+  if (!brand || !window.confirm(`Activate contract version ${contractVersionId}?`)) {
+    return;
+  }
+
+  contractInspector.innerHTML = `
+    <div class="contract-card">
+      <strong>Activating contract version...</strong>
+      <small>${escapeHtml(contractVersionId)}</small>
+    </div>
+  `;
+
+  try {
+    await api.layout.activateContractVersion(brand.brandId, contractVersionId);
+    await reloadActiveBrandAfterVersionChange(brand.brandId);
+  } catch (error) {
+    contractInspector.innerHTML = `
+      <div class="contract-card">
+        <strong>Activation failed</strong>
+        <small>${escapeHtml(errorMessage(error))}</small>
+      </div>
+    `;
+  }
+}
+
+async function reloadActiveBrandAfterVersionChange(brandId: string): Promise<void> {
+  await refreshBrands();
+  const refreshedBrand = recentLayoutBrands.find((brand) => brand.brandId === brandId);
+
+  if (refreshedBrand) {
+    layoutState.activeBrand = refreshedBrand;
+    applyBrandPreview(refreshedBrand);
+  }
+
+  await loadBrandContract(brandId);
+}
+
 async function seedActiveBrandDemoData(): Promise<void> {
   const schema = layoutState.activeSchema;
   const brand = layoutState.activeBrand;
@@ -1346,7 +1486,15 @@ async function seedActiveBrandDemoData(): Promise<void> {
     layoutState.activeRuntimeResources = runtimeResources;
     layoutState.activeBrandMemberships = brandMemberships;
     openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
-    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources, layoutState.activeRuntimeRequestLogs, brandMemberships);
+    renderContractInspector(
+      brand,
+      schema,
+      layoutState.activeRuntimeContract,
+      runtimeResources,
+      layoutState.activeRuntimeRequestLogs,
+      layoutState.activeContractVersions,
+      brandMemberships
+    );
   } catch (error) {
     livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
   } finally {
@@ -1372,7 +1520,15 @@ async function resetActiveBrandDemoData(): Promise<void> {
     layoutState.activeRuntimeResources = runtimeResources;
     layoutState.activeBrandMemberships = brandMemberships;
     openDemoMerchantButton.disabled = true;
-    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources, layoutState.activeRuntimeRequestLogs, brandMemberships);
+    renderContractInspector(
+      brand,
+      schema,
+      layoutState.activeRuntimeContract,
+      runtimeResources,
+      layoutState.activeRuntimeRequestLogs,
+      layoutState.activeContractVersions,
+      brandMemberships
+    );
   } catch (error) {
     livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
   } finally {

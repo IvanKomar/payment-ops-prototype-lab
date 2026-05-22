@@ -4,11 +4,13 @@ import type {
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
   LayoutBuilderBffRequestLog,
+  LayoutBuilderContractVersionRecord,
   LayoutBuilderConfigureResponse,
   LayoutBuilderDeleteBrandResponse,
   LayoutBuilderAiGenerationProfile,
   LayoutBuilderContractVersion,
-  LayoutBuilderGeneratedBrandArtifact
+  LayoutBuilderGeneratedBrandArtifact,
+  LayoutBuilderRegenerateContractRequest
 } from "@payment-ops/shared-types";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -87,34 +89,23 @@ export class LayoutService {
     );
     if (generationProfile) {
       const now = new Date();
-      const previewBrand: BrandWithSchema = {
-        id: brandId,
-        name: body.brandName,
-        logoOriginalFilename: logo.originalFilename,
-        logoMimeType: logo.mimeType,
-        logoSizeBytes: logo.sizeBytes,
-        logoPath: logo.path,
-        palette,
-        createdAt: now,
-        updatedAt: now,
-        schema
-      };
-      const contract = createBrandRuntimeContract(previewBrand);
-      schema.contractVersion = createContractVersion({
-        brandId,
-        schema,
-        generationProfile,
-        contract,
-        createdAt: now
-      });
-      schema.generatedArtifact = this.aiBrandGenerator.generateArtifact({
-        brandId,
-        brandName: body.brandName,
-        contractVersionId: schema.contractVersion.contractVersionId,
-        contractSlug: schema.slug,
-        generationProfile,
-        contract
-      });
+      const generated = this.generateContractArtifactVersion(
+        {
+          id: brandId,
+          name: body.brandName,
+          logoOriginalFilename: logo.originalFilename,
+          logoMimeType: logo.mimeType,
+          logoSizeBytes: logo.sizeBytes,
+          logoPath: logo.path,
+          palette,
+          createdAt: now,
+          updatedAt: now,
+          schema
+        },
+        generationProfile
+      );
+      schema.contractVersion = generated.contractVersion;
+      schema.generatedArtifact = generated.generatedArtifact;
     }
     const brand = await this.repository.createBrand({
       name: body.brandName,
@@ -160,6 +151,63 @@ export class LayoutService {
   async getBrandSchema(id: string): Promise<LayoutBuilderBrandSchemaResponse> {
     const brand = await this.getExistingBrand(id);
     return this.toSchemaResponse(brand);
+  }
+
+  async listContractVersions(id: string, adminSessionToken?: string): Promise<LayoutBuilderContractVersionRecord[]> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
+    await this.getExistingBrand(id);
+
+    return this.repository.findContractVersions(id);
+  }
+
+  async regenerateContractVersion(
+    id: string,
+    payload: LayoutBuilderRegenerateContractRequest,
+    adminSessionToken?: string
+  ): Promise<LayoutBuilderBrandSchemaResponse> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
+    const brand = await this.getExistingBrand(id);
+    const previousProfile = brand.schema.generationProfile;
+
+    if (!previousProfile) {
+      throw new BadRequestException(`Brand does not have an AI generation profile: ${id}`);
+    }
+
+    const revisionHint = new Date().toISOString();
+    const generationProfile = this.aiBrandGenerator.generate({
+      brandId: brand.id,
+      brandName: brand.name,
+      adminPrompt: payload.aiPrompt?.trim() || `${previousProfile.adminPrompt}\nRegenerate runtime variant ${revisionHint}`,
+      systemPrompt: payload.systemPrompt?.trim() || previousProfile.systemPrompt
+    });
+    const generated = this.generateContractArtifactVersion(brand, generationProfile);
+    const updatedBrand = await this.repository.saveGeneratedContractVersion({
+      brandId: brand.id,
+      contractVersion: generated.contractVersion,
+      generatedArtifact: generated.generatedArtifact
+    });
+
+    if (!updatedBrand) {
+      throw new NotFoundException(`Brand was not found: ${id}`);
+    }
+
+    return this.toSchemaResponse(updatedBrand);
+  }
+
+  async activateContractVersion(
+    id: string,
+    contractVersionId: string,
+    adminSessionToken?: string
+  ): Promise<LayoutBuilderBrandSchemaResponse> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
+    await this.getExistingBrand(id);
+    const updatedBrand = await this.repository.activateContractVersion(id, contractVersionId);
+
+    if (!updatedBrand) {
+      throw new NotFoundException(`Contract version was not found: ${contractVersionId}`);
+    }
+
+    return this.toSchemaResponse(updatedBrand);
   }
 
   async configureBrand(id: string, slug: string, payload: unknown): Promise<LayoutBuilderConfigureResponse> {
@@ -567,6 +615,47 @@ export class LayoutService {
     }
 
     return brand;
+  }
+
+  private generateContractArtifactVersion(
+    brand: BrandWithSchema,
+    generationProfile: LayoutBuilderAiGenerationProfile
+  ): {
+    contractVersion: LayoutBuilderContractVersion;
+    generatedArtifact: LayoutBuilderGeneratedBrandArtifact;
+  } {
+    const now = new Date();
+    const versionedBrand: BrandWithSchema = {
+      ...brand,
+      updatedAt: now,
+      schema: {
+        ...brand.schema,
+        generationProfile,
+        contractVersion: null,
+        generatedArtifact: null
+      }
+    };
+    const contract = createBrandRuntimeContract(versionedBrand);
+    const contractVersion = createContractVersion({
+      brandId: brand.id,
+      schema: versionedBrand.schema,
+      generationProfile,
+      contract,
+      createdAt: now
+    });
+    const generatedArtifact = this.aiBrandGenerator.generateArtifact({
+      brandId: brand.id,
+      brandName: brand.name,
+      contractVersionId: contractVersion.contractVersionId,
+      contractSlug: versionedBrand.schema.slug,
+      generationProfile,
+      contract
+    });
+
+    return {
+      contractVersion,
+      generatedArtifact
+    };
   }
 
   private assertBrandApiSlug(brand: BrandWithSchema, slug: string): void {

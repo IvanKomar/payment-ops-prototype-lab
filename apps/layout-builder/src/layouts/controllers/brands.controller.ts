@@ -23,8 +23,10 @@ import type {
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
+  LayoutBuilderContractVersionRecord,
   LayoutBuilderConfigureResponse,
-  LayoutBuilderDeleteBrandResponse
+  LayoutBuilderDeleteBrandResponse,
+  LayoutBuilderRegenerateContractRequest
 } from "@payment-ops/shared-types";
 
 import { loadLayoutBuilderConfig } from "../../config/layout-builder.config.js";
@@ -33,10 +35,12 @@ import {
   BrandListItemDto,
   BrandResponseDto,
   ConfigureBrandResponseDto,
+  contractVersionIdSchema,
   createBrandSchema,
   CreateBrandResponseDto,
   DeleteBrandResponseDto,
   parseOptionalBearerToken,
+  regenerateContractSchema,
   slugSchema,
   ZodValidationPipe
 } from "../dto/layout.schemas.js";
@@ -147,6 +151,38 @@ export class BrandsController {
     @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string
   ): Promise<LayoutBuilderBrandSchemaResponse> {
     return this.layoutService.getBrandSchema(id);
+  }
+
+  @Get(":id/contract-versions")
+  @ApiOkResponse({ description: "Generated contract versions for the selected brand" })
+  @ApiNotFoundResponse({ description: "Brand was not found" })
+  listContractVersions(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderContractVersionRecord[]> {
+    return this.layoutService.listContractVersions(id, parseOptionalBearerToken(authorization));
+  }
+
+  @Post(":id/contract-versions/regenerate")
+  @ApiOkResponse({ type: CreateBrandResponseDto })
+  @ApiNotFoundResponse({ description: "Brand was not found" })
+  regenerateContractVersion(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Body(new ZodValidationPipe(regenerateContractSchema)) body: LayoutBuilderRegenerateContractRequest,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandSchemaResponse> {
+    return this.layoutService.regenerateContractVersion(id, body, parseOptionalBearerToken(authorization));
+  }
+
+  @Post(":id/contract-versions/:contractVersionId/activate")
+  @ApiOkResponse({ type: CreateBrandResponseDto })
+  @ApiNotFoundResponse({ description: "Brand or contract version was not found" })
+  activateContractVersion(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("contractVersionId", new ZodValidationPipe<string>(contractVersionIdSchema)) contractVersionId: string,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandSchemaResponse> {
+    return this.layoutService.activateContractVersion(id, contractVersionId, parseOptionalBearerToken(authorization));
   }
 
   @Delete(":id")
