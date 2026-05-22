@@ -4,6 +4,7 @@ import { ApiNotFoundResponse, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import {
   brandIdSchema,
   parseBearerToken,
+  parseOptionalBearerToken,
   slugSchema,
   ZodValidationPipe
 } from "../dto/layout.schemas.js";
@@ -130,9 +131,10 @@ export class BrandRuntimeController {
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
   getAdminResources(
     @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
-    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string,
+    @Headers("authorization") authorization: string | undefined
   ): Promise<unknown> {
-    return this.layoutService.getRuntimeAdminResources(id, slug);
+    return this.layoutService.getRuntimeAdminResources(id, slug, parseOptionalBearerToken(authorization));
   }
 
   @Get("admin/request-logs")
@@ -140,9 +142,10 @@ export class BrandRuntimeController {
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
   getAdminRequestLogs(
     @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
-    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string,
+    @Headers("authorization") authorization: string | undefined
   ): Promise<unknown> {
-    return this.layoutService.getRuntimeGatewayRequestLogs(id, slug);
+    return this.layoutService.getRuntimeGatewayRequestLogs(id, slug, parseOptionalBearerToken(authorization));
   }
 
   @Post("admin/seed")
@@ -150,9 +153,10 @@ export class BrandRuntimeController {
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
   seedDemoData(
     @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
-    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string,
+    @Headers("authorization") authorization: string | undefined
   ): Promise<unknown> {
-    return this.layoutService.seedRuntimeDemoData(id, slug);
+    return this.layoutService.seedRuntimeDemoData(id, slug, parseOptionalBearerToken(authorization));
   }
 
   @Post("admin/reset-demo")
@@ -160,9 +164,10 @@ export class BrandRuntimeController {
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
   resetDemoData(
     @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
-    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string,
+    @Headers("authorization") authorization: string | undefined
   ): Promise<unknown> {
-    return this.layoutService.resetRuntimeDemoData(id, slug);
+    return this.layoutService.resetRuntimeDemoData(id, slug, parseOptionalBearerToken(authorization));
   }
 
   @Post("payments")

@@ -484,6 +484,10 @@ MVP progress:
   Brand creation records the platform admin as a brand owner, while brand
   runtime registration/login and demo seeding record merchant memberships
   against the same brand membership table.
+- admin create/delete/seed/reset/resource-log operations now accept the shared
+  admin bearer token. The local prototype still falls back to a generated dev
+  admin session when no token is present, so one-command local startup remains
+  usable.
 
 Immediate next actions:
 
@@ -494,7 +498,7 @@ Immediate next actions:
    contract inspector with endpoint aliases, field maps, payload structure, and
    status/action labels.
 3. Replace the prototype dev admin fallback with explicit admin login and
-   authorization checks on create/seed/reset/request-log operations.
+   remove fallback access from create/seed/reset/request-log operations.
 4. Decide whether merchant auth sessions remain owned by payment-core or move
    fully into the shared identity boundary.
 5. Replace the fallback hand-built brand runtime with generated artifacts as the

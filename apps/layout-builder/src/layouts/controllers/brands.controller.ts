@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Header,
+  Headers,
   Inject,
   Param,
   Post,
@@ -35,6 +36,7 @@ import {
   createBrandSchema,
   CreateBrandResponseDto,
   DeleteBrandResponseDto,
+  parseOptionalBearerToken,
   slugSchema,
   ZodValidationPipe
 } from "../dto/layout.schemas.js";
@@ -84,9 +86,10 @@ export class BrandsController {
   @ApiOkResponse({ type: BrandResponseDto })
   createBrand(
     @UploadedFile() file: UploadedLogoFile | undefined,
-    @Body(new ZodValidationPipe(createBrandSchema)) body: { brandName: string }
+    @Body(new ZodValidationPipe(createBrandSchema)) body: { brandName: string },
+    @Headers("authorization") authorization: string | undefined
   ): Promise<LayoutBuilderBrandResponse> {
-    return this.layoutService.createBrand(file, body);
+    return this.layoutService.createBrand(file, body, parseOptionalBearerToken(authorization));
   }
 
   @Post("ai")
@@ -125,9 +128,10 @@ export class BrandsController {
   @ApiOkResponse({ type: BrandResponseDto })
   createAiBrand(
     @UploadedFile() file: UploadedLogoFile | undefined,
-    @Body(new ZodValidationPipe(createBrandSchema)) body: { brandName: string; aiPrompt?: string; systemPrompt?: string }
+    @Body(new ZodValidationPipe(createBrandSchema)) body: { brandName: string; aiPrompt?: string; systemPrompt?: string },
+    @Headers("authorization") authorization: string | undefined
   ): Promise<LayoutBuilderBrandResponse> {
-    return this.layoutService.createBrand(file, body);
+    return this.layoutService.createBrand(file, body, parseOptionalBearerToken(authorization));
   }
 
   @Get("recent")
@@ -149,9 +153,10 @@ export class BrandsController {
   @ApiOkResponse({ type: DeleteBrandResponseDto })
   @ApiNotFoundResponse({ description: "Brand was not found" })
   deleteBrand(
-    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Headers("authorization") authorization: string | undefined
   ): Promise<LayoutBuilderDeleteBrandResponse> {
-    return this.layoutService.deleteBrand(id);
+    return this.layoutService.deleteBrand(id, parseOptionalBearerToken(authorization));
   }
 
   @Get(":id/layout")

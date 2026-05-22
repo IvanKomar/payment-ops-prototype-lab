@@ -75,6 +75,17 @@ function brandRuntimePath(appUrl: string): string {
   return withoutProxyPrefix.replace(/\/app$/u, "/dashboard");
 }
 
+function adminAuthHeaders(): HeadersInit | undefined {
+  const token = window.localStorage.getItem("layout-admin-session");
+  return token ? { authorization: `Bearer ${token}` } : undefined;
+}
+
+function withAdminAuth(init: RequestInit = {}): RequestInit {
+  const headers = adminAuthHeaders();
+
+  return headers ? { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...headers } } : init;
+}
+
 export const api = {
   health: {
     sms: () => requestJson<HealthResponse>(apiBases.sms, "/health"),
@@ -131,17 +142,18 @@ export const api = {
     brandMemberships: (brandId: string) =>
       requestJson<LayoutBuilderBrandMembership[]>(
         apiBases.layout,
-        `/admin/brands/${encodeURIComponent(brandId)}/memberships`
+        `/admin/brands/${encodeURIComponent(brandId)}/memberships`,
+        withAdminAuth()
       ),
     createBrand: (brandName: string, logo: File | Blob) => {
       const formData = new FormData();
       formData.set("brandName", brandName);
       formData.set("logo", logo, logo instanceof File ? logo.name : "demo-mark.svg");
 
-      return requestJson<LayoutBuilderBrandResponse>(apiBases.layout, "/brands", {
+      return requestJson<LayoutBuilderBrandResponse>(apiBases.layout, "/brands", withAdminAuth({
         method: "POST",
         body: formData
-      });
+      }));
     },
     createAiBrand: (input: {
       brandName: string;
@@ -155,10 +167,10 @@ export const api = {
       formData.set("systemPrompt", input.systemPrompt);
       formData.set("logo", input.logo, input.logo instanceof File ? input.logo.name : "demo-mark.svg");
 
-      return requestJson<LayoutBuilderBrandResponse>(apiBases.layout, "/brands/ai", {
+      return requestJson<LayoutBuilderBrandResponse>(apiBases.layout, "/brands/ai", withAdminAuth({
         method: "POST",
         body: formData
-      });
+      }));
     },
     recent: () => requestJson<LayoutBuilderBrandListItem[]>(apiBases.layout, "/brands/recent"),
     schema: (brandId: string) =>
@@ -169,24 +181,24 @@ export const api = {
     runtimeConfig: <TContract>(endpoint: string) =>
       requestJson<TContract>(apiBases.layout, `${endpointPath(endpoint)}/runtime/config`),
     runtimeAdminResources: <TResources>(endpoint: string) =>
-      requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/resources`),
+      requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/resources`, withAdminAuth()),
     runtimeRequestLogs: <TLogs>(endpoint: string) =>
-      requestJson<TLogs>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/request-logs`),
+      requestJson<TLogs>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/request-logs`, withAdminAuth()),
     seedRuntimeDemoData: <TResources>(endpoint: string) =>
-      requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/seed`, {
-        method: "POST"
-      }),
+      requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/seed`, withAdminAuth({
+        method: "POST",
+      })),
     resetRuntimeDemoData: <TResources>(endpoint: string) =>
-      requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/reset-demo`, {
-        method: "POST"
-      }),
+      requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/reset-demo`, withAdminAuth({
+        method: "POST",
+      })),
     deleteBrand: (brandId: string) =>
       requestJson<LayoutBuilderDeleteBrandResponse>(
         apiBases.layout,
         `/brands/${encodeURIComponent(brandId)}`,
-        {
-          method: "DELETE"
-        }
+        withAdminAuth({
+          method: "DELETE",
+        })
       ),
     brandRuntimeUrl: (appUrl: string) => publicUrl(apiBases.brandRuntime, brandRuntimePath(appUrl)),
     publicUrl: (endpoint: string) => publicUrl(apiBases.layout, endpoint),

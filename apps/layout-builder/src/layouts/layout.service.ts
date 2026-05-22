@@ -61,7 +61,8 @@ export class LayoutService {
 
   async createBrand(
     file: UploadedLogoFile | undefined,
-    body: CreateBrandRequestInput
+    body: CreateBrandRequestInput,
+    adminSessionToken?: string
   ): Promise<LayoutBuilderBrandResponse> {
     this.assertLogo(file);
 
@@ -111,7 +112,7 @@ export class LayoutService {
       palette,
       schema
     });
-    await this.authBoundary.ensureBrandOwnerMembership(brand.id);
+    await this.authBoundary.ensureBrandOwnerMembership(brand.id, adminSessionToken);
 
     return this.toBrandResponse(brand);
   }
@@ -133,7 +134,8 @@ export class LayoutService {
     }));
   }
 
-  async deleteBrand(id: string): Promise<LayoutBuilderDeleteBrandResponse> {
+  async deleteBrand(id: string, adminSessionToken?: string): Promise<LayoutBuilderDeleteBrandResponse> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
     const brand = await this.getExistingBrand(id);
     await this.repository.deleteBrand(id);
     await this.logoStorage.remove(brand.logoPath).catch(() => undefined);
@@ -220,7 +222,12 @@ export class LayoutService {
     }
   }
 
-  async getRuntimeGatewayRequestLogs(id: string, slug: string): Promise<LayoutBuilderBffRequestLog[]> {
+  async getRuntimeGatewayRequestLogs(
+    id: string,
+    slug: string,
+    adminSessionToken?: string
+  ): Promise<LayoutBuilderBffRequestLog[]> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
     const brand = await this.getExistingBrand(id);
     this.assertBrandApiSlug(brand, slug);
     const logs = await this.repository.findRecentBffRequestLogs(brand.id, 30);
@@ -425,7 +432,8 @@ export class LayoutService {
     return toRuntimeBalanceTransactionsResponse(createBrandRuntimeContract(brand), response);
   }
 
-  async getRuntimeAdminResources(id: string, slug: string): Promise<unknown> {
+  async getRuntimeAdminResources(id: string, slug: string, adminSessionToken?: string): Promise<unknown> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
     const brand = await this.getExistingBrand(id);
     this.assertBrandApiSlug(brand, slug);
     const response = await this.paymentCoreClient.brandResources(brand.id);
@@ -433,7 +441,8 @@ export class LayoutService {
     return toRuntimeAdminResourcesResponse(createBrandRuntimeContract(brand), response);
   }
 
-  async seedRuntimeDemoData(id: string, slug: string): Promise<unknown> {
+  async seedRuntimeDemoData(id: string, slug: string, adminSessionToken?: string): Promise<unknown> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
     const brand = await this.getExistingBrand(id);
     this.assertBrandApiSlug(brand, slug);
     const response = await this.paymentCoreClient.seedBrandDemoData(brand.id);
@@ -449,7 +458,8 @@ export class LayoutService {
     return toRuntimeAdminResourcesResponse(createBrandRuntimeContract(brand), response);
   }
 
-  async resetRuntimeDemoData(id: string, slug: string): Promise<unknown> {
+  async resetRuntimeDemoData(id: string, slug: string, adminSessionToken?: string): Promise<unknown> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
     const brand = await this.getExistingBrand(id);
     this.assertBrandApiSlug(brand, slug);
     const response = await this.paymentCoreClient.resetBrandDemoData(brand.id);

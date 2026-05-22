@@ -8,7 +8,7 @@ import type {
 import { AuthBoundaryService } from "../auth/auth-boundary.service.js";
 import {
   brandIdSchema,
-  parseBearerToken,
+  parseOptionalBearerToken,
   ZodValidationPipe
 } from "../dto/layout.schemas.js";
 
@@ -26,18 +26,16 @@ export class AdminAuthController {
   @Get("auth/me")
   @ApiOkResponse({ description: "Current admin session with local fallback" })
   me(@Headers("authorization") authorization: string | undefined): Promise<LayoutBuilderAdminAuthResponse> {
-    return this.authBoundary.resolveAdminSession(optionalBearerToken(authorization));
+    return this.authBoundary.resolveAdminSession(parseOptionalBearerToken(authorization));
   }
 
   @Get("brands/:id/memberships")
   @ApiOkResponse({ description: "Brand memberships across the shared auth boundary" })
-  memberships(
-    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string
+  async memberships(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Headers("authorization") authorization: string | undefined
   ): Promise<LayoutBuilderBrandMembership[]> {
+    await this.authBoundary.resolveAdminSession(parseOptionalBearerToken(authorization));
     return this.authBoundary.listBrandMemberships(id);
   }
-}
-
-function optionalBearerToken(value: string | undefined): string | undefined {
-  return value ? parseBearerToken(value) : undefined;
 }

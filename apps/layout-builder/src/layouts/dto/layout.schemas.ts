@@ -170,3 +170,7 @@ export class ZodValidationPipe<TOutput> implements PipeTransform<unknown, TOutpu
 export function parseBearerToken(value: unknown): string {
   return new ZodValidationPipe(authHeaderSchema).transform(value);
 }
+
+export function parseOptionalBearerToken(value: unknown): string | undefined {
+  return typeof value === "string" ? parseBearerToken(value) : undefined;
+}
