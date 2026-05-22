@@ -173,6 +173,17 @@ export class BrandsController {
     return this.layoutService.renderBrandApp(id, slug);
   }
 
+  @Get(":id/:slug/generated/preview")
+  @Header("Content-Type", "text/html; charset=utf-8")
+  @ApiOkResponse({ description: "Generated brand artifact preview application" })
+  @ApiNotFoundResponse({ description: "Brand, schema endpoint, or generated artifact was not found" })
+  renderGeneratedPreview(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+  ): Promise<string> {
+    return this.layoutService.renderGeneratedArtifactPreview(id, slug);
+  }
+
   @Get(":id/:slug/data")
   @ApiOkResponse({ description: "Latest dashboard data for the public brand app" })
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })

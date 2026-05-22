@@ -106,6 +106,7 @@ export interface LayoutBuilderBrandSchemaResponse {
   endpoint: string;
   dataEndpoint: string;
   appUrl: string;
+  generatedPreviewUrl: string | null;
   method: "POST";
   methods: Array<"GET" | "POST">;
   fieldsStyle: LayoutBuilderFieldStyle;
@@ -132,6 +133,7 @@ export interface LayoutBuilderBrandListItem {
   palette: LayoutBuilderPalette;
   dataEndpoint: string;
   appUrl: string;
+  generatedPreviewUrl: string | null;
   generationProfile: LayoutBuilderAiGenerationProfile | null;
   generatedArtifact: LayoutBuilderGeneratedBrandArtifact | null;
   createdAt: string;

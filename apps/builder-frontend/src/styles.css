@@ -575,6 +575,13 @@ pre {
   min-width: 0;
 }
 
+.artifact-link {
+  justify-self: start;
+  min-height: 32px;
+  padding: 7px 10px;
+  text-decoration: none;
+}
+
 .artifact-files code {
   background: #edf4e5;
   border-radius: 5px;

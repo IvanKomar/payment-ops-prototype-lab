@@ -4,7 +4,9 @@ import type {
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
   LayoutBuilderConfigureResponse,
-  LayoutBuilderDeleteBrandResponse
+  LayoutBuilderDeleteBrandResponse,
+  LayoutBuilderAiGenerationProfile,
+  LayoutBuilderGeneratedBrandArtifact
 } from "@payment-ops/shared-types";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -38,6 +40,7 @@ import {
   toRuntimePaymentResponse,
   resolveBrandRuntimeGatewayOperation
 } from "./runtime/brand-runtime.types.js";
+import type { BrandRuntimeContract } from "./runtime/brand-runtime.types.js";
 
 @Injectable()
 export class LayoutService {
@@ -118,6 +121,7 @@ export class LayoutService {
       palette: brand.palette,
       dataEndpoint: this.brandDataEndpoint(brand),
       appUrl: this.brandAppUrl(brand),
+      generatedPreviewUrl: this.generatedPreviewUrl(brand),
       generationProfile: brand.schema.generationProfile,
       generatedArtifact: brand.schema.generatedArtifact,
       createdAt: brand.createdAt.toISOString(),
@@ -419,6 +423,27 @@ export class LayoutService {
     });
   }
 
+  async renderGeneratedArtifactPreview(id: string, slug: string): Promise<string> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+
+    if (!brand.schema.generatedArtifact || !brand.schema.generationProfile) {
+      throw new NotFoundException(`Generated artifact was not found: ${brand.id}/${slug}`);
+    }
+
+    return renderGeneratedArtifactPreview({
+      brand: {
+        brandId: brand.id,
+        name: brand.name,
+        logoDataUri: await logoDataUri(brand.logoPath, brand.logoMimeType),
+        palette: brand.palette
+      },
+      contract: createBrandRuntimeContract(brand),
+      generationProfile: brand.schema.generationProfile,
+      artifact: brand.schema.generatedArtifact
+    });
+  }
+
   async renderBrandLayout(id: string): Promise<string> {
     const brand = await this.getExistingBrand(id);
     const latestRequest = await this.repository.findLatestRequest(id);
@@ -480,6 +505,7 @@ export class LayoutService {
       endpoint: `/brands/${brand.id}/${brand.schema.slug}`,
       dataEndpoint: this.brandDataEndpoint(brand),
       appUrl: this.brandAppUrl(brand),
+      generatedPreviewUrl: this.generatedPreviewUrl(brand),
       method: "POST",
       methods: ["GET", "POST"],
       fieldsStyle: brand.schema.fieldsStyle,
@@ -498,6 +524,12 @@ export class LayoutService {
 
   private brandAppUrl(brand: BrandWithSchema): string {
     return `/brand-runtime/brands/${brand.id}/${brand.schema.slug}/dashboard`;
+  }
+
+  private generatedPreviewUrl(brand: BrandWithSchema): string | null {
+    return brand.schema.generatedArtifact
+      ? `/brands/${brand.id}/${brand.schema.slug}/generated/preview`
+      : null;
   }
 }
 
@@ -554,6 +586,308 @@ interface PublicBrandAppInput {
 interface RuntimeBrandAppInput {
   brand: PublicBrandAppInput["brand"];
   generationProfile: NonNullable<BrandWithSchema["schema"]["generationProfile"]>;
+}
+
+interface GeneratedArtifactPreviewInput {
+  brand: PublicBrandAppInput["brand"];
+  contract: BrandRuntimeContract;
+  generationProfile: LayoutBuilderAiGenerationProfile;
+  artifact: LayoutBuilderGeneratedBrandArtifact;
+}
+
+function renderGeneratedArtifactPreview(input: GeneratedArtifactPreviewInput): string {
+  const context = JSON.stringify(input).replace(/</gu, "\\u003c");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(input.brand.name)} generated preview</title>
+    <style>
+      :root { color: ${input.brand.palette.text}; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      * { box-sizing: border-box; }
+      body { background: #f6f7f9; margin: 0; }
+      button, input, select { font: inherit; }
+      button { cursor: pointer; }
+      .shell { display: grid; grid-template-columns: 284px minmax(0, 1fr); min-height: 100vh; }
+      .side { background: ${input.brand.palette.surface}; border-right: 1px solid #d8e0e8; display: grid; grid-template-rows: auto 1fr auto; gap: 20px; padding: 22px; }
+      .brand { align-items: center; display: grid; gap: 12px; grid-template-columns: 48px minmax(0, 1fr); }
+      .mark { align-items: center; background: ${input.brand.palette.primary}; border-radius: 8px; display: flex; height: 48px; justify-content: center; width: 48px; }
+      .mark img { height: 100%; object-fit: contain; padding: 6px; width: 100%; }
+      .brand strong, h1, h2 { color: ${input.brand.palette.text}; line-height: 1.1; margin: 0; overflow-wrap: anywhere; }
+      .brand span, .muted, .meta { color: #637181; }
+      .meta { display: grid; font-size: 12px; gap: 8px; }
+      .meta code, .artifact code { background: #eef3f8; border-radius: 5px; color: #243246; overflow-wrap: anywhere; padding: 4px 6px; }
+      .main { display: grid; gap: 18px; padding: 26px; }
+      .top { align-items: start; display: flex; gap: 18px; justify-content: space-between; }
+      .kicker { color: ${input.brand.palette.primary}; display: block; font-size: 12px; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; }
+      h1 { font-size: 32px; letter-spacing: 0; }
+      h2 { font-size: 16px; }
+      .muted { font-size: 13px; line-height: 1.45; margin: 8px 0 0; max-width: 760px; }
+      .grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 380px; }
+      .cards { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .card, .panel { background: ${input.brand.palette.surface}; border: 1px solid #d8e0e8; border-radius: 8px; }
+      .card { display: grid; gap: 6px; min-height: 92px; padding: 14px; }
+      .card span { color: #637181; font-size: 12px; font-weight: 900; text-transform: uppercase; }
+      .card strong { font-size: 22px; }
+      .panel { padding: 16px; }
+      .panel + .panel { margin-top: 16px; }
+      form { display: grid; gap: 10px; margin-top: 12px; }
+      label { color: #415163; display: grid; font-size: 13px; font-weight: 800; gap: 5px; }
+      input, select { background: #fff; border: 1px solid #bcc8d5; border-radius: 6px; color: ${input.brand.palette.text}; min-height: 40px; padding: 9px 10px; width: 100%; }
+      .row { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .primary, .secondary { border: 0; border-radius: 6px; font-weight: 900; min-height: 40px; padding: 0 13px; }
+      .primary { background: ${input.brand.palette.primary}; color: #fff; }
+      .secondary { background: #eef3f8; color: ${input.brand.palette.text}; }
+      .status { background: #f4f7fb; border: 1px solid #d8e0e8; border-radius: 8px; color: #526274; font-size: 13px; min-height: 42px; overflow-wrap: anywhere; padding: 10px; }
+      .table { border: 1px solid #d8e0e8; border-radius: 8px; overflow: auto; }
+      table { border-collapse: collapse; min-width: 760px; width: 100%; }
+      th, td { border-bottom: 1px solid #edf1f5; padding: 10px 12px; text-align: left; vertical-align: top; }
+      th { background: #f8fafc; color: #637181; font-size: 12px; text-transform: uppercase; }
+      .badge { border-radius: 999px; color: #fff; display: inline-flex; font-size: 12px; font-weight: 900; min-width: 86px; padding: 4px 8px; justify-content: center; }
+      .ok { background: #1d8f61; } .warn { background: #d88b18; } .bad { background: #c0392b; } .idle { background: #8492a3; }
+      .empty { color: #637181; padding: 18px; }
+      .artifact { display: grid; gap: 8px; }
+      .file-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+      @media (max-width: 980px) { .shell, .grid { grid-template-columns: 1fr; } .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 620px) { .cards, .row, .top { display: grid; grid-template-columns: 1fr; } .main { padding: 16px; } }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="side">
+        <div class="brand">
+          <div class="mark"><img src="${escapeHtml(input.brand.logoDataUri)}" alt="${escapeHtml(input.brand.name)} logo" /></div>
+          <div><strong>${escapeHtml(input.brand.name)}</strong><span>Generated payment frontend</span></div>
+        </div>
+        <div class="meta">
+          <span>Artifact</span>
+          <code>${escapeHtml(input.artifact.artifactId)}</code>
+          <span>BFF base</span>
+          <code>${escapeHtml(input.artifact.facadeBasePath)}</code>
+          <span>Resource</span>
+          <code>${escapeHtml(input.contract.resourceAlias)}</code>
+        </div>
+        <div class="artifact">
+          <strong>Manifest files</strong>
+          <div class="file-list">
+            ${input.artifact.files.map((file) => `<code>${escapeHtml(file.path)}</code>`).join("")}
+          </div>
+        </div>
+      </aside>
+      <section class="main">
+        <header class="top">
+          <div>
+            <span class="kicker">${escapeHtml(input.generationProfile.provider)} · ${escapeHtml(input.generationProfile.model)}</span>
+            <h1>${escapeHtml(input.generationProfile.resourceAlias)}</h1>
+            <p class="muted">${escapeHtml(input.generationProfile.visualDirection)}</p>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="refresh" type="button">${escapeHtml(input.generationProfile.actionLabels.history)}</button>
+            <button class="secondary" id="logout" type="button">Close session</button>
+          </div>
+        </header>
+        <section class="cards" id="metrics"></section>
+        <section class="grid">
+          <div class="panel">
+            <h2>${escapeHtml(input.generationProfile.actionLabels.history)}</h2>
+            <div class="table" id="payments"><div class="empty">No activity loaded.</div></div>
+          </div>
+          <div>
+            <section class="panel">
+              <h2>Workspace access</h2>
+              <div class="status" id="status">Register or sign in with this generated frontend.</div>
+              <form id="auth-form">
+                <label>Email <input name="email" value="client@example.com" type="email" required /></label>
+                <label>Password <input name="password" value="local-demo-password" type="password" required /></label>
+                <label>Display name <input name="displayName" value="Client User" /></label>
+                <div class="actions">
+                  <button class="primary" data-mode="register" type="submit">${escapeHtml(input.generationProfile.actionLabels.register)}</button>
+                  <button class="secondary" data-mode="login" type="button">${escapeHtml(input.generationProfile.actionLabels.login)}</button>
+                </div>
+              </form>
+            </section>
+            <section class="panel">
+              <h2>${escapeHtml(input.generationProfile.actionLabels.createPayment)}</h2>
+              <form id="payment-form">
+                <div class="row">
+                  <label>Amount <input name="amount" value="49.99" type="number" step="0.01" required /></label>
+                  <label>Currency <input name="currency" value="USD" required /></label>
+                </div>
+                <label>Customer or destination <input name="destination" value="settle-demo-address" required /></label>
+                <div class="row">
+                  <label>Method <select name="methodType"><option value="card">Card</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank transfer</option><option value="manual">Manual</option></select></label>
+                  <label>Scenario <select name="scenario"><option value="settle">Settle now</option><option value="review">Review</option><option value="reserve">Reserve</option><option value="fail">Decline</option><option value="refund">Refund</option></select></label>
+                </div>
+                <button class="primary" type="submit">${escapeHtml(input.generationProfile.actionLabels.createPayment)}</button>
+              </form>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script>window.__GENERATED_BRAND_ARTIFACT__ = ${context};</script>
+    <script>
+      const context = window.__GENERATED_BRAND_ARTIFACT__;
+      const contract = context.contract;
+      const fields = contract.fields;
+      const authFields = contract.authFields;
+      const sessionKey = "generated-brand-session:" + contract.brandId;
+      let sessionToken = localStorage.getItem(sessionKey) || "";
+      let state = { payments: [], account: null };
+
+      document.querySelector("#auth-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        authenticate("register").catch(showError);
+      });
+      document.querySelector("[data-mode='login']").addEventListener("click", () => authenticate("login").catch(showError));
+      document.querySelector("#payment-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        createPayment().catch(showError);
+      });
+      document.querySelector("#refresh").addEventListener("click", () => refreshHistory("History refreshed.").catch(showError));
+      document.querySelector("#logout").addEventListener("click", logout);
+      renderMetrics();
+      if (sessionToken) refreshHistory("Session restored.").catch(showError);
+
+      function endpoint(key) {
+        return context.artifact.facadeBasePath + "/" + contract.endpoints[key];
+      }
+
+      async function authenticate(mode) {
+        const form = new FormData(document.querySelector("#auth-form"));
+        const payload = {
+          [authFields.email]: String(form.get("email") || ""),
+          [authFields.password]: String(form.get("password") || ""),
+          [authFields.displayName]: String(form.get("displayName") || ""),
+          [authFields.currency]: "USD"
+        };
+        const response = await request(endpoint(mode), { method: "POST", body: JSON.stringify(payload) }, false);
+        sessionToken = response.sessionToken;
+        localStorage.setItem(sessionKey, sessionToken);
+        state.account = response.account;
+        await refreshHistory(mode === "register" ? "Account created through BFF alias." : "Signed in through BFF alias.");
+      }
+
+      async function createPayment() {
+        if (!sessionToken) {
+          setStatus("Sign in first.");
+          return;
+        }
+        const form = new FormData(document.querySelector("#payment-form"));
+        const payload = {
+          [fields.amount]: Number(form.get("amount") || 0),
+          [fields.currency]: String(form.get("currency") || "USD"),
+          [fields.destinationLabel]: String(form.get("destination") || ""),
+          [fields.methodType]: String(form.get("methodType") || "card"),
+          scenario: String(form.get("scenario") || "settle")
+        };
+        await request(endpoint("payments"), { method: "POST", body: JSON.stringify(payload) }, true);
+        await refreshHistory("Payment created through " + contract.endpoints.payments + ".");
+      }
+
+      async function refreshHistory(message) {
+        if (!sessionToken) {
+          setStatus("Sign in first.");
+          return;
+        }
+        const response = await request(endpoint("payments"), { method: "GET" }, true);
+        state.account = response.account;
+        state.payments = response[contract.resourceAlias] || [];
+        renderMetrics();
+        renderPayments();
+        setStatus(message);
+      }
+
+      async function request(url, init, authorized) {
+        const response = await fetch(url, {
+          ...init,
+          headers: {
+            accept: "application/json",
+            ...(init.body ? { "content-type": "application/json" } : {}),
+            ...(authorized ? { authorization: "Bearer " + sessionToken } : {})
+          }
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        return response.json();
+      }
+
+      function renderMetrics() {
+        const currency = state.account?.[contract.accountFields.currency] || "USD";
+        const balance = Number(state.account?.[contract.accountFields.balance] || 0);
+        const volume = state.payments.reduce((sum, payment) => sum + Number(payment[fields.amount] || 0), 0);
+        const review = state.payments.filter((payment) => statusClass(String(payment[fields.status] || "")) !== "ok").length;
+        document.querySelector("#metrics").innerHTML = [
+          metric("Available balance", money(balance, currency)),
+          metric("Gross volume", money(volume, currency)),
+          metric(contract.resourceAlias, String(state.payments.length)),
+          metric("Needs attention", String(review))
+        ].join("");
+      }
+
+      function renderPayments() {
+        if (!state.payments.length) {
+          document.querySelector("#payments").innerHTML = '<div class="empty">No activity yet.</div>';
+          return;
+        }
+        document.querySelector("#payments").innerHTML =
+          '<table><thead><tr><th>Payment</th><th>Status</th><th>Amount</th><th>Customer</th><th>Created</th></tr></thead><tbody>' +
+          state.payments.map((payment) =>
+            '<tr><td><strong>' + html(payment[fields.externalReference]) + '</strong></td>' +
+            '<td><span class="badge ' + statusClass(String(payment[fields.status] || "")) + '">' + html(payment[fields.status]) + '</span></td>' +
+            '<td>' + money(payment[fields.amount], payment[fields.currency]) + '</td>' +
+            '<td>' + html(payment[fields.destinationLabel]) + '</td>' +
+            '<td>' + dateTime(payment[fields.createdAt]) + '</td></tr>'
+          ).join("") + '</tbody></table>';
+      }
+
+      function logout() {
+        sessionToken = "";
+        state = { payments: [], account: null };
+        localStorage.removeItem(sessionKey);
+        renderMetrics();
+        renderPayments();
+        setStatus("Session closed.");
+      }
+
+      function metric(label, value) {
+        return '<article class="card"><span>' + html(label) + '</span><strong>' + html(value) + '</strong></article>';
+      }
+
+      function setStatus(value) {
+        document.querySelector("#status").textContent = value;
+      }
+
+      function showError(error) {
+        setStatus(error instanceof Error ? error.message : String(error));
+      }
+
+      function statusClass(value) {
+        const normalized = value.toLowerCase();
+        if (normalized.includes("cleared") || normalized.includes("posted") || normalized.includes("paid") || normalized.includes("closed") || normalized.includes("settled")) return "ok";
+        if (normalized.includes("reject") || normalized.includes("decline") || normalized.includes("failed")) return "bad";
+        if (normalized.includes("review") || normalized.includes("queue") || normalized.includes("routing") || normalized.includes("hold")) return "warn";
+        return "idle";
+      }
+
+      function money(amount, currency) {
+        return new Intl.NumberFormat("en", { style: "currency", currency: String(currency || "USD") }).format(Number(amount || 0));
+      }
+
+      function dateTime(value) {
+        return value ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(String(value))) : "";
+      }
+
+      function html(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+      }
+    </script>
+  </body>
+</html>`;
 }
 
 function renderRuntimeBrandApp(input: RuntimeBrandAppInput): string {

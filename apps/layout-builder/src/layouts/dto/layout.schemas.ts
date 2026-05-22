@@ -53,6 +53,9 @@ export class CreateBrandResponseDto {
   @ApiProperty({ type: String, example: "/brand-runtime/brands/br_.../koi_ab12cd34ef56/dashboard" })
   appUrl!: string;
 
+  @ApiProperty({ type: String, nullable: true, example: "/brands/br_.../koi_ab12cd34ef56/generated/preview" })
+  generatedPreviewUrl!: string | null;
+
   @ApiProperty({ type: String, example: "POST" })
   method!: "POST";
 
@@ -107,6 +110,9 @@ export class BrandListItemDto {
 
   @ApiProperty({ type: String, example: "/brand-runtime/brands/br_.../koi_ab12cd34ef56/dashboard" })
   appUrl!: string;
+
+  @ApiProperty({ type: String, nullable: true, example: "/brands/br_.../koi_ab12cd34ef56/generated/preview" })
+  generatedPreviewUrl!: string | null;
 
   @ApiProperty({ type: Object, nullable: true })
   generationProfile!: unknown | null;

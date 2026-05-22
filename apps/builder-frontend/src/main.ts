@@ -935,6 +935,7 @@ function generatedArtifactHtml(artifact: NonNullable<LayoutBuilderBrandSchemaRes
         <span>BFF base</span>
         <code>${escapeHtml(artifact.facadeBasePath)}</code>
       </div>
+      <a class="button secondary artifact-link" href="${escapeHtml(api.layout.publicUrl(`${artifact.facadeBasePath}/generated/preview`))}" target="_blank" rel="noreferrer">Open generated preview</a>
       <div class="artifact-files">
         ${artifact.files.map((file) => `<code>${escapeHtml(file.path)} · ${file.kind} · ${file.bytes}b</code>`).join("")}
       </div>
@@ -1003,6 +1004,7 @@ function endpointRows(
 ): string {
   const rows: Array<[string, string]> = [
     ["app", api.layout.brandRuntimeUrl(schema.appUrl)],
+    ...(schema.generatedPreviewUrl ? [["generated preview", api.layout.publicUrl(schema.generatedPreviewUrl)] as [string, string]] : []),
     ["config", runtimeEndpoint(schema.endpoint, runtimeContract, "config")],
     ["register", runtimeEndpoint(schema.endpoint, runtimeContract, "register")],
     ["login", runtimeEndpoint(schema.endpoint, runtimeContract, "login")],

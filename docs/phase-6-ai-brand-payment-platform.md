@@ -471,20 +471,25 @@ MVP progress:
   call only the alias endpoints from the contract.
 - the admin contract inspector shows the generated frontend artifact summary and
   full manifest next to endpoint, field, status, and live seeded resource data.
+- generated artifacts can now be opened through
+  `/brands/:id/:slug/generated/preview`. The preview renders from the stored
+  artifact/contract metadata and calls only BFF alias endpoints for auth,
+  payment creation, and payment history.
 
 Immediate next actions:
 
 1. Change the admin create-brand flow so the system prompt, brand brief, BFF
-   contract, and sample payloads drive artifact generation.
-2. Replace or bypass the hand-built brand runtime screens with a generated
-   artifact preview path, while keeping the current runtime as a fallback shell.
-3. Persist contract versions separately from brand metadata and expose a BFF
+   contract, and sample payloads drive artifact generation more explicitly in
+   the UI.
+2. Persist contract versions separately from brand metadata and expose a BFF
    contract inspector with endpoint aliases, field maps, payload structure, and
    status/action labels.
-4. Add request logging at the facade layer so the admin can see which generated
+3. Add request logging at the facade layer so the admin can see which generated
    UI endpoint called which internal canonical operation.
-5. Start extracting shared auth semantics: one auth/session model, admin roles,
+4. Start extracting shared auth semantics: one auth/session model, admin roles,
    merchant brand memberships, and brand-scoped runtime sessions.
+5. Replace the fallback hand-built brand runtime with generated artifacts as the
+   primary user-facing route once preview validation is stable.
 
 ### Phase 6.3: AI Gateway MVP
 
