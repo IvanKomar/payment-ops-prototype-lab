@@ -26,6 +26,7 @@ import type { BrandWithSchema, CreateBrandRequestInput, GeneratedSchema, Uploade
 import { SchemaGeneratorService } from "./schema/schema-generator.service.js";
 import { PayloadMapperService } from "./schema/payload-mapper.service.js";
 import { SvgRendererService } from "./render/svg-renderer.service.js";
+import { AiBrandArtifactValidatorService } from "./ai/ai-brand-artifact-validator.service.js";
 import { AiBrandGeneratorService } from "./ai/ai-brand-generator.service.js";
 import { PaymentCoreClientService } from "./runtime/payment-core-client.service.js";
 import {
@@ -57,6 +58,7 @@ export class LayoutService {
     @Inject(SchemaGeneratorService) private readonly schemaGenerator: SchemaGeneratorService,
     @Inject(PayloadMapperService) private readonly payloadMapper: PayloadMapperService,
     @Inject(SvgRendererService) private readonly renderer: SvgRendererService,
+    @Inject(AiBrandArtifactValidatorService) private readonly artifactValidator: AiBrandArtifactValidatorService,
     @Inject(AiBrandGeneratorService) private readonly aiBrandGenerator: AiBrandGeneratorService,
     @Inject(PaymentCoreClientService) private readonly paymentCoreClient: PaymentCoreClientService,
     @Inject(AuthBoundaryService) private readonly authBoundary: AuthBoundaryService
@@ -654,7 +656,13 @@ export class LayoutService {
 
     return {
       contractVersion,
-      generatedArtifact
+      generatedArtifact: this.artifactValidator.validate({
+        artifact: generatedArtifact,
+        brandId: brand.id,
+        contractVersionId: contractVersion.contractVersionId,
+        slug: versionedBrand.schema.slug,
+        contract
+      })
     };
   }
 

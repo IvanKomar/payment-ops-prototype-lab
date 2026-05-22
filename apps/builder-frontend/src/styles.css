@@ -628,6 +628,15 @@ pre {
   padding: 4px 6px;
 }
 
+.regeneration-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.regeneration-panel label {
+  margin-top: 8px;
+}
+
 .version-list {
   display: grid;
   gap: 6px;

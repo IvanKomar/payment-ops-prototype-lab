@@ -503,14 +503,18 @@ MVP progress:
   active version, and activate an older version for rollback. The generated
   preview and BFF alias resolution now prefer the active persisted contract
   version.
+- regeneration now exposes editable brand brief and system prompt fields in the
+  admin inspector. Generated artifacts pass a backend validation gate before
+  persistence: required routes/capabilities, one React entry file, BFF-only
+  endpoints, safe file paths, and no obvious internal platform references.
 
 Immediate next actions:
 
 1. Change the admin create-brand flow so the system prompt, brand brief, BFF
    contract, and sample payloads drive artifact generation more explicitly in
    the UI.
-2. Add richer prompt editing to regeneration so admins can revise the system
-   prompt and brand brief before creating a new contract version.
+2. Move generated artifacts from database manifests toward versioned static
+   asset directories so each active brand interface can be deployed directly.
 3. Remove fallback access from create/seed/reset/request-log operations once
    the explicit admin login is the default local workflow.
 4. Decide whether merchant auth sessions remain owned by payment-core or move

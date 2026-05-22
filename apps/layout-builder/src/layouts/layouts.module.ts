@@ -15,6 +15,7 @@ import { PaletteService } from "./palette/palette.service.js";
 import { SvgRendererService } from "./render/svg-renderer.service.js";
 import { PayloadMapperService } from "./schema/payload-mapper.service.js";
 import { SchemaGeneratorService } from "./schema/schema-generator.service.js";
+import { AiBrandArtifactValidatorService } from "./ai/ai-brand-artifact-validator.service.js";
 import { AiBrandGeneratorService } from "./ai/ai-brand-generator.service.js";
 import { PaymentCoreClientService } from "./runtime/payment-core-client.service.js";
 
@@ -29,6 +30,7 @@ import { PaymentCoreClientService } from "./runtime/payment-core-client.service.
     LayoutRepository,
     LayoutService,
     AuthBoundaryService,
+    AiBrandArtifactValidatorService,
     AiBrandGeneratorService,
     PaymentCoreClientService,
     LogoStorageService,

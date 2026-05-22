@@ -1089,7 +1089,11 @@ function renderContractInspector(
       <strong>${escapeHtml(runtimeContract.resourceAlias)}</strong>
       <small>${escapeHtml(profile.contractSummary)}</small>
     </div>
-    ${schema.generatedArtifact ? generatedArtifactHtml(schema.generatedArtifact, schema.contractVersion, contractVersions) : ""}
+    ${
+      schema.generatedArtifact
+        ? generatedArtifactHtml(schema.generatedArtifact, schema.contractVersion, contractVersions, profile)
+        : ""
+    }
     <div class="contract-grid">
       <div class="contract-card">
         <h4>Endpoints</h4>
@@ -1139,7 +1143,8 @@ function renderContractInspector(
 function generatedArtifactHtml(
   artifact: NonNullable<LayoutBuilderBrandSchemaResponse["generatedArtifact"]>,
   contractVersion: LayoutBuilderBrandSchemaResponse["contractVersion"],
-  contractVersions: LayoutBuilderContractVersionRecord[]
+  contractVersions: LayoutBuilderContractVersionRecord[],
+  profile: NonNullable<LayoutBuilderBrandSchemaResponse["generationProfile"]>
 ): string {
   return `
     <div class="contract-card artifact-card">
@@ -1170,7 +1175,18 @@ function generatedArtifactHtml(
         <code>${escapeHtml(artifact.facadeBasePath)}</code>
       </div>
       <a class="button secondary artifact-link" href="${escapeHtml(api.layout.publicUrl(`${artifact.facadeBasePath}/generated/preview`))}" target="_blank" rel="noreferrer">Open generated preview</a>
-      <button class="button secondary artifact-link" type="button" data-regenerate-contract>Regenerate version</button>
+      <details class="contract-json regeneration-panel">
+        <summary>Regenerate with prompt</summary>
+        <label>
+          Brand brief
+          <textarea id="contract-regenerate-brief" rows="5">${escapeHtml(profile.adminPrompt)}</textarea>
+        </label>
+        <label>
+          System prompt
+          <textarea id="contract-regenerate-system-prompt" rows="7">${escapeHtml(profile.systemPrompt)}</textarea>
+        </label>
+        <button class="button secondary artifact-link" type="button" data-regenerate-contract>Create new version</button>
+      </details>
       ${contractVersionHistoryHtml(contractVersion?.contractVersionId ?? artifact.contractVersionId, contractVersions)}
       <div class="artifact-files">
         ${artifact.files.map((file) => `<code>${escapeHtml(file.path)} · ${file.kind} · ${file.bytes}b</code>`).join("")}
@@ -1418,7 +1434,12 @@ async function regenerateActiveContractVersion(): Promise<void> {
   `;
 
   try {
-    await api.layout.regenerateContractVersion(brand.brandId);
+    const aiPrompt = textAreaValue("contract-regenerate-brief");
+    const systemPrompt = textAreaValue("contract-regenerate-system-prompt");
+    await api.layout.regenerateContractVersion(brand.brandId, {
+      ...(aiPrompt ? { aiPrompt } : {}),
+      ...(systemPrompt ? { systemPrompt } : {})
+    });
     await reloadActiveBrandAfterVersionChange(brand.brandId);
   } catch (error) {
     contractInspector.innerHTML = `
@@ -1428,6 +1449,18 @@ async function regenerateActiveContractVersion(): Promise<void> {
       </div>
     `;
   }
+}
+
+function textAreaValue(id: string): string | undefined {
+  const element = document.getElementById(id);
+
+  if (!(element instanceof HTMLTextAreaElement)) {
+    return undefined;
+  }
+
+  const value = element.value.trim();
+
+  return value.length > 0 ? value : undefined;
 }
 
 async function activateContractVersion(contractVersionId: string): Promise<void> {
