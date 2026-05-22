@@ -394,14 +394,17 @@ MVP progress:
   methods, balance transactions, payment intents, and existing payment rows;
 - the React brand runtime sends structured customer and payment method payloads
   through the facade instead of packing those values into `destinationLabel`.
+- first-class read endpoints are available in `payment-core` and the brand
+  facade for customers, payment methods, payment intents, and balance
+  transactions. Payment creation still owns customer/payment-method creation in
+  this MVP slice.
 
 Immediate next actions:
 
-1. Add first-class facade endpoints for customers, payment methods, payment
-   intents, and balance transactions instead of exposing them only through
-   payment history.
-2. Update the admin console contract inspector to show live payment core data
+1. Update the admin console contract inspector to show live payment core data
    for each generated brand and merchant account.
+2. Add explicit create/update endpoints for saved customers and payment methods
+   once the merchant UX needs saved reusable instruments.
 3. Add seed/demo scenarios for successful card payment, declined card, bank
    account pending, refund, review/hold, and saved customer payment method.
 4. Add admin tools to inspect brand merchant accounts, reset seed data, and open

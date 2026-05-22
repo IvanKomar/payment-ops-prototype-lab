@@ -8,9 +8,13 @@ import {
 } from "@nestjs/common";
 import type {
   PaymentCoreAuthResponse,
+  PaymentCoreBalanceTransactionsResponse,
   PaymentCoreCreatePaymentResponse,
+  PaymentCoreCustomersResponse,
   PaymentCoreHistoryResponse,
   PaymentCoreMethodType,
+  PaymentCorePaymentIntentsResponse,
+  PaymentCorePaymentMethodsResponse,
   PaymentCoreStatus
 } from "@payment-ops/shared-types";
 import type { Payment, PaymentAccount, PaymentCustomer, PaymentMethod, PaymentUser, Prisma } from "@prisma/client";
@@ -24,6 +28,7 @@ import {
   toBalanceTransactionResponse,
   toCustomerResponse,
   toPaymentEventResponse,
+  toPaymentIntentResponse,
   toPaymentMethodResponse,
   toPaymentResponse,
   toUserResponse,
@@ -188,6 +193,82 @@ export class PaymentsService {
       payments: payments.map(toPaymentResponse),
       customers: customers.map(toCustomerResponse),
       paymentMethods: paymentMethods.map(toPaymentMethodResponse),
+      balanceTransactions: balanceTransactions.map(toBalanceTransactionResponse)
+    };
+  }
+
+  async customers(sessionToken: string): Promise<PaymentCoreCustomersResponse> {
+    const { user, account } = await this.authenticate(sessionToken);
+    const customers = await this.prisma.paymentCustomer.findMany({
+      where: {
+        brandId: user.brandId,
+        accountId: account.id
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 100
+    });
+
+    return {
+      account: toAccountResponse(account),
+      customers: customers.map(toCustomerResponse)
+    };
+  }
+
+  async paymentMethods(sessionToken: string): Promise<PaymentCorePaymentMethodsResponse> {
+    const { user, account } = await this.authenticate(sessionToken);
+    const paymentMethods = await this.prisma.paymentMethod.findMany({
+      where: {
+        brandId: user.brandId,
+        accountId: account.id
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 100
+    });
+
+    return {
+      account: toAccountResponse(account),
+      paymentMethods: paymentMethods.map(toPaymentMethodResponse)
+    };
+  }
+
+  async paymentIntents(sessionToken: string): Promise<PaymentCorePaymentIntentsResponse> {
+    const { user, account } = await this.authenticate(sessionToken);
+    const paymentIntents = await this.prisma.paymentIntent.findMany({
+      where: {
+        brandId: user.brandId,
+        accountId: account.id
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 100
+    });
+
+    return {
+      account: toAccountResponse(account),
+      paymentIntents: paymentIntents.map(toPaymentIntentResponse)
+    };
+  }
+
+  async balanceTransactions(sessionToken: string): Promise<PaymentCoreBalanceTransactionsResponse> {
+    const { user, account } = await this.authenticate(sessionToken);
+    const balanceTransactions = await this.prisma.balanceTransaction.findMany({
+      where: {
+        brandId: user.brandId,
+        accountId: account.id
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 100
+    });
+
+    return {
+      account: toAccountResponse(account),
       balanceTransactions: balanceTransactions.map(toBalanceTransactionResponse)
     };
   }

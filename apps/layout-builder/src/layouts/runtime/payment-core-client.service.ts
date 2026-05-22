@@ -1,9 +1,13 @@
 import { BadGatewayException, Inject, Injectable } from "@nestjs/common";
 import type {
   PaymentCoreAuthResponse,
+  PaymentCoreBalanceTransactionsResponse,
   PaymentCoreCreatePaymentRequest,
   PaymentCoreCreatePaymentResponse,
-  PaymentCoreHistoryResponse
+  PaymentCoreCustomersResponse,
+  PaymentCoreHistoryResponse,
+  PaymentCorePaymentIntentsResponse,
+  PaymentCorePaymentMethodsResponse
 } from "@payment-ops/shared-types";
 
 import type { LayoutBuilderEnv } from "../../config/env.schema.js";
@@ -43,6 +47,34 @@ export class PaymentCoreClientService {
 
   history(sessionToken: string): Promise<PaymentCoreHistoryResponse> {
     return this.request("/payments/history", {
+      method: "GET",
+      sessionToken
+    });
+  }
+
+  customers(sessionToken: string): Promise<PaymentCoreCustomersResponse> {
+    return this.request("/customers", {
+      method: "GET",
+      sessionToken
+    });
+  }
+
+  paymentMethods(sessionToken: string): Promise<PaymentCorePaymentMethodsResponse> {
+    return this.request("/payment-methods", {
+      method: "GET",
+      sessionToken
+    });
+  }
+
+  paymentIntents(sessionToken: string): Promise<PaymentCorePaymentIntentsResponse> {
+    return this.request("/payment-intents", {
+      method: "GET",
+      sessionToken
+    });
+  }
+
+  balanceTransactions(sessionToken: string): Promise<PaymentCoreBalanceTransactionsResponse> {
+    return this.request("/balance-transactions", {
       method: "GET",
       sessionToken
     });

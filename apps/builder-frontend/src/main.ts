@@ -868,7 +868,11 @@ function endpointRows(
     ["config", runtimeEndpoint(schema.endpoint, runtimeContract, "config")],
     ["register", runtimeEndpoint(schema.endpoint, runtimeContract, "register")],
     ["login", runtimeEndpoint(schema.endpoint, runtimeContract, "login")],
-    ["payments", runtimeEndpoint(schema.endpoint, runtimeContract, "payments")]
+    ["payments", runtimeEndpoint(schema.endpoint, runtimeContract, "payments")],
+    ["customers", runtimeEndpoint(schema.endpoint, runtimeContract, "customers")],
+    ["payment methods", runtimeEndpoint(schema.endpoint, runtimeContract, "paymentMethods")],
+    ["payment intents", runtimeEndpoint(schema.endpoint, runtimeContract, "paymentIntents")],
+    ["balance transactions", runtimeEndpoint(schema.endpoint, runtimeContract, "balanceTransactions")]
   ];
 
   return rows.map(([label, value]) => contractRow(label, value)).join("");

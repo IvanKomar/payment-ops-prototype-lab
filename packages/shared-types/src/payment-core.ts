@@ -145,6 +145,26 @@ export interface PaymentCoreHistoryResponse {
   balanceTransactions: PaymentCoreBalanceTransaction[];
 }
 
+export interface PaymentCoreCustomersResponse {
+  account: PaymentCoreAccount;
+  customers: PaymentCoreCustomer[];
+}
+
+export interface PaymentCorePaymentMethodsResponse {
+  account: PaymentCoreAccount;
+  paymentMethods: PaymentCorePaymentMethod[];
+}
+
+export interface PaymentCorePaymentIntentsResponse {
+  account: PaymentCoreAccount;
+  paymentIntents: PaymentCorePaymentIntent[];
+}
+
+export interface PaymentCoreBalanceTransactionsResponse {
+  account: PaymentCoreAccount;
+  balanceTransactions: PaymentCoreBalanceTransaction[];
+}
+
 export interface PaymentCoreCreatePaymentRequest {
   amount: number;
   currency?: string;

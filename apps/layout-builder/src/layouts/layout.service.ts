@@ -25,7 +25,11 @@ import {
   createBrandRuntimeContract,
   toCorePaymentRequest,
   toRuntimeAuthResponse,
+  toRuntimeBalanceTransactionsResponse,
+  toRuntimeCustomersResponse,
   toRuntimeHistoryResponse,
+  toRuntimePaymentIntentsResponse,
+  toRuntimePaymentMethodsResponse,
   toRuntimePaymentResponse
 } from "./runtime/brand-runtime.types.js";
 
@@ -188,6 +192,38 @@ export class LayoutService {
     const response = await this.paymentCoreClient.history(sessionToken);
 
     return toRuntimeHistoryResponse(createBrandRuntimeContract(brand), response);
+  }
+
+  async getRuntimeCustomers(id: string, slug: string, sessionToken: string): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const response = await this.paymentCoreClient.customers(sessionToken);
+
+    return toRuntimeCustomersResponse(createBrandRuntimeContract(brand), response);
+  }
+
+  async getRuntimePaymentMethods(id: string, slug: string, sessionToken: string): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const response = await this.paymentCoreClient.paymentMethods(sessionToken);
+
+    return toRuntimePaymentMethodsResponse(createBrandRuntimeContract(brand), response);
+  }
+
+  async getRuntimePaymentIntents(id: string, slug: string, sessionToken: string): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const response = await this.paymentCoreClient.paymentIntents(sessionToken);
+
+    return toRuntimePaymentIntentsResponse(createBrandRuntimeContract(brand), response);
+  }
+
+  async getRuntimeBalanceTransactions(id: string, slug: string, sessionToken: string): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const response = await this.paymentCoreClient.balanceTransactions(sessionToken);
+
+    return toRuntimeBalanceTransactionsResponse(createBrandRuntimeContract(brand), response);
   }
 
   async createRuntimePayment(

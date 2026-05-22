@@ -1,11 +1,15 @@
 import type {
   LayoutBuilderAiGenerationProfile,
   PaymentCoreAccount,
+  PaymentCoreBalanceTransactionsResponse,
   PaymentCoreMethodType,
   PaymentCoreAuthResponse,
   PaymentCoreCreatePaymentRequest,
+  PaymentCoreCustomersResponse,
   PaymentCoreHistoryResponse,
   PaymentCorePayment,
+  PaymentCorePaymentIntentsResponse,
+  PaymentCorePaymentMethodsResponse,
   PaymentCoreStatus,
   PaymentCoreUser
 } from "@payment-ops/shared-types";
@@ -77,6 +81,10 @@ export interface BrandRuntimeContract {
     register: string;
     login: string;
     payments: string;
+    customers: string;
+    paymentMethods: string;
+    paymentIntents: string;
+    balanceTransactions: string;
     config: string;
   };
 }
@@ -149,6 +157,10 @@ export function createBrandRuntimeContract(brand: BrandWithSchema): BrandRuntime
       register: "runtime/register",
       login: "runtime/login",
       payments: "runtime/payments",
+      customers: "runtime/customers",
+      paymentMethods: "runtime/payment-methods",
+      paymentIntents: "runtime/payment-intents",
+      balanceTransactions: "runtime/balance-transactions",
       config: "runtime/config"
     }
   };
@@ -173,16 +185,57 @@ export function toRuntimeHistoryResponse(
     account: mapAccount(contract, response.account),
     customers: response.customers.map((customer) => mapCustomer(contract, customer)),
     paymentMethods: response.paymentMethods.map((method) => mapPaymentMethod(contract, method)),
-    balanceTransactions: response.balanceTransactions.map((transaction) => ({
-      [contract.balanceFields.balanceTransactionId]: transaction.balanceTransactionId,
-      [contract.balanceFields.paymentId]: transaction.paymentId,
-      [contract.balanceFields.type]: transaction.type,
-      [contract.balanceFields.amount]: transaction.amount,
-      [contract.balanceFields.currency]: transaction.currency,
-      [contract.balanceFields.description]: transaction.description,
-      [contract.balanceFields.createdAt]: transaction.createdAt
-    })),
+    balanceTransactions: response.balanceTransactions.map((transaction) => mapBalanceTransaction(contract, transaction)),
     [contract.resourceAlias]: response.payments.map((payment) => mapPayment(contract, payment))
+  };
+}
+
+export function toRuntimeCustomersResponse(
+  contract: BrandRuntimeContract,
+  response: PaymentCoreCustomersResponse
+): unknown {
+  return {
+    account: mapAccount(contract, response.account),
+    customers: response.customers.map((customer) => mapCustomer(contract, customer))
+  };
+}
+
+export function toRuntimePaymentMethodsResponse(
+  contract: BrandRuntimeContract,
+  response: PaymentCorePaymentMethodsResponse
+): unknown {
+  return {
+    account: mapAccount(contract, response.account),
+    paymentMethods: response.paymentMethods.map((method) => mapPaymentMethod(contract, method))
+  };
+}
+
+export function toRuntimePaymentIntentsResponse(
+  contract: BrandRuntimeContract,
+  response: PaymentCorePaymentIntentsResponse
+): unknown {
+  return {
+    account: mapAccount(contract, response.account),
+    paymentIntents: response.paymentIntents.map((intent) => ({
+      [contract.fields.paymentIntentId]: intent.paymentIntentId,
+      [contract.fields.externalReference]: intent.externalReference,
+      [contract.fields.customerId]: intent.customerId,
+      [contract.fields.paymentMethodId]: intent.paymentMethodId,
+      [contract.fields.status]: contract.statusMap[intent.status] ?? intent.status,
+      [contract.fields.amount]: intent.amount,
+      [contract.fields.currency]: intent.currency,
+      [contract.fields.createdAt]: intent.createdAt
+    }))
+  };
+}
+
+export function toRuntimeBalanceTransactionsResponse(
+  contract: BrandRuntimeContract,
+  response: PaymentCoreBalanceTransactionsResponse
+): unknown {
+  return {
+    account: mapAccount(contract, response.account),
+    balanceTransactions: response.balanceTransactions.map((transaction) => mapBalanceTransaction(contract, transaction))
   };
 }
 
@@ -282,6 +335,21 @@ function mapPaymentMethod(
     [contract.paymentMethodFields.expiryMonth]: method.expiryMonth,
     [contract.paymentMethodFields.expiryYear]: method.expiryYear,
     [contract.paymentMethodFields.bankName]: method.bankName
+  };
+}
+
+function mapBalanceTransaction(
+  contract: BrandRuntimeContract,
+  transaction: PaymentCoreBalanceTransactionsResponse["balanceTransactions"][number]
+): Record<string, unknown> {
+  return {
+    [contract.balanceFields.balanceTransactionId]: transaction.balanceTransactionId,
+    [contract.balanceFields.paymentId]: transaction.paymentId,
+    [contract.balanceFields.type]: transaction.type,
+    [contract.balanceFields.amount]: transaction.amount,
+    [contract.balanceFields.currency]: transaction.currency,
+    [contract.balanceFields.description]: transaction.description,
+    [contract.balanceFields.createdAt]: transaction.createdAt
   };
 }
 
