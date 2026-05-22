@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Inject, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Inject, Param, Post } from "@nestjs/common";
 import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type {
   LayoutBuilderAdminAuthResponse,
@@ -7,6 +7,8 @@ import type {
 
 import { AuthBoundaryService } from "../auth/auth-boundary.service.js";
 import {
+  adminLoginSchema,
+  type AdminLoginInput,
   brandIdSchema,
   parseOptionalBearerToken,
   ZodValidationPipe
@@ -21,6 +23,14 @@ export class AdminAuthController {
   @ApiOkResponse({ description: "Local prototype admin session" })
   createDevSession(): Promise<LayoutBuilderAdminAuthResponse> {
     return this.authBoundary.createDevAdminSession();
+  }
+
+  @Post("auth/login")
+  @ApiOkResponse({ description: "Admin session from configured credentials" })
+  login(
+    @Body(new ZodValidationPipe(adminLoginSchema)) body: AdminLoginInput
+  ): Promise<LayoutBuilderAdminAuthResponse> {
+    return this.authBoundary.loginAdmin(body);
   }
 
   @Get("auth/me")

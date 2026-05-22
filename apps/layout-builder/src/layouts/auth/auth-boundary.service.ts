@@ -7,18 +7,39 @@ import type {
 import type { AdminIdentity, AdminSession, BrandMembership } from "@prisma/client";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
+import type { LayoutBuilderEnv } from "../../config/env.schema.js";
 import { PrismaService } from "../../prisma/prisma.service.js";
+import { LAYOUT_BUILDER_CONFIG } from "../layout.constants.js";
 
-const DEV_ADMIN_EMAIL = "admin@payment-ops.local";
 const DEV_ADMIN_NAME = "Local Platform Admin";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class AuthBoundaryService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(LAYOUT_BUILDER_CONFIG) private readonly config: LayoutBuilderEnv
+  ) {}
+
+  async loginAdmin(input: { email: string; password: string }): Promise<LayoutBuilderAdminAuthResponse> {
+    if (input.email !== this.config.LAYOUT_ADMIN_EMAIL || input.password !== this.config.LAYOUT_ADMIN_PASSWORD) {
+      throw new UnauthorizedException("Invalid admin email or password");
+    }
+
+    const admin = await this.ensureDevAdmin();
+    return this.createSessionForAdmin(admin);
+  }
 
   async createDevAdminSession(): Promise<LayoutBuilderAdminAuthResponse> {
+    if (!this.config.LAYOUT_DEV_ADMIN_FALLBACK) {
+      throw new UnauthorizedException("Dev admin fallback is disabled");
+    }
+
     const admin = await this.ensureDevAdmin();
+    return this.createSessionForAdmin(admin);
+  }
+
+  private async createSessionForAdmin(admin: AdminIdentity): Promise<LayoutBuilderAdminAuthResponse> {
     const sessionToken = `adm_${randomBytes(32).toString("hex")}`;
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
     const session = await this.prisma.adminSession.create({
@@ -35,6 +56,10 @@ export class AuthBoundaryService {
 
   async resolveAdminSession(sessionToken: string | undefined): Promise<LayoutBuilderAdminAuthResponse> {
     if (!sessionToken) {
+      if (!this.config.LAYOUT_DEV_ADMIN_FALLBACK) {
+        throw new UnauthorizedException("Admin session is required");
+      }
+
       return this.createDevAdminSession();
     }
 
@@ -136,11 +161,11 @@ export class AuthBoundaryService {
   private async ensureDevAdmin(): Promise<AdminIdentity> {
     return this.prisma.adminIdentity.upsert({
       where: {
-        email: DEV_ADMIN_EMAIL
+        email: this.config.LAYOUT_ADMIN_EMAIL
       },
       create: {
         id: `admin_${randomId()}`,
-        email: DEV_ADMIN_EMAIL,
+        email: this.config.LAYOUT_ADMIN_EMAIL,
         displayName: DEV_ADMIN_NAME,
         role: "platform_admin"
       },

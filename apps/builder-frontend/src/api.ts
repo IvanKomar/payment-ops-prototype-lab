@@ -1,6 +1,7 @@
 import type {
   HealthResponse,
   LayoutBuilderAdminAuthResponse,
+  LayoutBuilderAdminLoginRequest,
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandMembership,
   LayoutBuilderBrandResponse,
@@ -132,6 +133,14 @@ export const api = {
     adminDevSession: () =>
       requestJson<LayoutBuilderAdminAuthResponse>(apiBases.layout, "/admin/auth/dev-session", {
         method: "POST"
+      }),
+    adminLogin: (payload: LayoutBuilderAdminLoginRequest) =>
+      requestJson<LayoutBuilderAdminAuthResponse>(apiBases.layout, "/admin/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(payload)
       }),
     adminMe: (sessionToken?: string) =>
       requestJson<LayoutBuilderAdminAuthResponse>(

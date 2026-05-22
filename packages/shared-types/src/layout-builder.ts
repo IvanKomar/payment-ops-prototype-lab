@@ -98,6 +98,11 @@ export interface LayoutBuilderAdminAuthResponse {
   expiresAt: string;
 }
 
+export interface LayoutBuilderAdminLoginRequest {
+  email: string;
+  password: string;
+}
+
 export interface LayoutBuilderBrandMembership {
   membershipId: string;
   brandId: string;

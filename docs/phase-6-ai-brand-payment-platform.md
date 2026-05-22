@@ -488,6 +488,10 @@ MVP progress:
   admin bearer token. The local prototype still falls back to a generated dev
   admin session when no token is present, so one-command local startup remains
   usable.
+- the admin console now has an explicit admin login control. It can sign in
+  with configured `LAYOUT_ADMIN_EMAIL` / `LAYOUT_ADMIN_PASSWORD`, store the
+  admin session token, or intentionally create a local dev session while
+  `LAYOUT_DEV_ADMIN_FALLBACK=true`.
 
 Immediate next actions:
 
@@ -497,8 +501,8 @@ Immediate next actions:
 2. Persist contract versions separately from brand metadata and expose a BFF
    contract inspector with endpoint aliases, field maps, payload structure, and
    status/action labels.
-3. Replace the prototype dev admin fallback with explicit admin login and
-   remove fallback access from create/seed/reset/request-log operations.
+3. Remove fallback access from create/seed/reset/request-log operations once
+   the explicit admin login is the default local workflow.
 4. Decide whether merchant auth sessions remain owned by payment-core or move
    fully into the shared identity boundary.
 5. Replace the fallback hand-built brand runtime with generated artifacts as the

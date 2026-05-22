@@ -29,6 +29,12 @@ export const layoutBuilderEnvSchema = createEnvSchema({
   LOG_LEVEL: z.string().default("info"),
   LAYOUT_LOGO_UPLOAD_DIR: z.string().default("uploads/logos"),
   LAYOUT_MAX_UPLOAD_BYTES: numberFromString(3 * 1024 * 1024),
+  LAYOUT_ADMIN_EMAIL: z.string().email().default("admin@payment-ops.local"),
+  LAYOUT_ADMIN_PASSWORD: z.string().min(8).default("local-admin-password"),
+  LAYOUT_DEV_ADMIN_FALLBACK: z
+    .string()
+    .default("true")
+    .transform((value) => value === "true"),
   PAYMENT_CORE_BASE_URL: z.string().url().default("http://localhost:3005")
 });
 

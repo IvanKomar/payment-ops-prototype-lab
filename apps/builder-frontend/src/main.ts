@@ -96,7 +96,14 @@ app.innerHTML = `
       <p class="eyebrow">Payment Ops Prototype</p>
       <h1>Local demo console</h1>
     </div>
-    <button class="button secondary" id="refresh-all" type="button">Refresh</button>
+    <div class="topbar-actions">
+      <div class="admin-chip" id="admin-chip">
+        <span>Admin</span>
+        <strong>Not signed in</strong>
+      </div>
+      <button class="button secondary" id="open-admin-login" type="button">Admin login</button>
+      <button class="button secondary" id="refresh-all" type="button">Refresh</button>
+    </div>
   </header>
 
   <main class="shell">
@@ -276,9 +283,38 @@ app.innerHTML = `
       </form>
     </section>
   </div>
+
+  <div class="modal-backdrop" id="admin-modal" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
+      <div class="modal-header">
+        <h3 id="admin-modal-title">Admin login</h3>
+        <button class="icon-button" id="close-admin-modal" type="button" aria-label="Close admin login dialog">X</button>
+      </div>
+      <form id="admin-form" class="form-grid">
+        <label>
+          Email
+          <input name="email" value="admin@payment-ops.local" type="email" required />
+        </label>
+        <label>
+          Password
+          <input name="password" value="local-admin-password" type="password" required />
+        </label>
+        <div class="button-row">
+          <button class="button" type="submit">Sign in</button>
+          <button class="button secondary" id="use-dev-admin" type="button">Use dev session</button>
+          <button class="button secondary" id="admin-logout" type="button">Logout</button>
+        </div>
+        <span class="modal-status" id="admin-modal-status"></span>
+      </form>
+    </section>
+  </div>
 `;
 
 const refreshAllButton = required<HTMLButtonElement>("#refresh-all");
+const adminChip = required<HTMLElement>("#admin-chip");
+const adminForm = required<HTMLFormElement>("#admin-form");
+const adminModal = required<HTMLElement>("#admin-modal");
+const adminModalStatus = required<HTMLElement>("#admin-modal-status");
 const smsForm = required<HTMLFormElement>("#sms-form");
 const smsResult = required<HTMLElement>("#sms-result");
 const smsRecent = required<HTMLElement>("#sms-recent");
@@ -319,6 +355,22 @@ required<HTMLButtonElement>("#layout-refresh").addEventListener("click", () => {
   void refreshBrands();
 });
 
+required<HTMLButtonElement>("#open-admin-login").addEventListener("click", () => {
+  openAdminModal();
+});
+
+required<HTMLButtonElement>("#close-admin-modal").addEventListener("click", () => {
+  closeAdminModal();
+});
+
+required<HTMLButtonElement>("#use-dev-admin").addEventListener("click", () => {
+  void createDevAdminSession();
+});
+
+required<HTMLButtonElement>("#admin-logout").addEventListener("click", () => {
+  logoutAdmin();
+});
+
 required<HTMLButtonElement>("#open-brand-modal").addEventListener("click", () => {
   openBrandModal();
 });
@@ -330,6 +382,12 @@ required<HTMLButtonElement>("#close-brand-modal").addEventListener("click", () =
 brandModal.addEventListener("click", (event) => {
   if (event.target === brandModal) {
     closeBrandModal();
+  }
+});
+
+adminModal.addEventListener("click", (event) => {
+  if (event.target === adminModal) {
+    closeAdminModal();
   }
 });
 
@@ -346,6 +404,11 @@ receiptForm.addEventListener("submit", (event) => {
 brandForm.addEventListener("submit", (event) => {
   event.preventDefault();
   void createBrand();
+});
+
+adminForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void loginAdmin();
 });
 
 deleteBrandButton.addEventListener("click", () => {
@@ -427,13 +490,28 @@ async function setActiveRoute(route: DemoRoute): Promise<void> {
 async function refreshAdminSession(): Promise<void> {
   try {
     const storedToken = window.localStorage.getItem("layout-admin-session") ?? undefined;
-    const session = storedToken ? await api.layout.adminMe(storedToken) : await api.layout.adminDevSession();
+    if (!storedToken) {
+      layoutState.activeAdminSession = null;
+      renderAdminSession();
+      return;
+    }
+
+    const session = await api.layout.adminMe(storedToken);
     layoutState.activeAdminSession = session;
     window.localStorage.setItem("layout-admin-session", session.sessionToken);
   } catch {
     layoutState.activeAdminSession = null;
     window.localStorage.removeItem("layout-admin-session");
+  } finally {
+    renderAdminSession();
   }
+}
+
+function renderAdminSession(): void {
+  const session = layoutState.activeAdminSession;
+  adminChip.innerHTML = session
+    ? `<span>${escapeHtml(session.admin.role)}</span><strong>${escapeHtml(session.admin.email)}</strong>`
+    : "<span>Admin</span><strong>Not signed in</strong>";
 }
 
 async function refreshHealth(): Promise<void> {
@@ -664,6 +742,66 @@ function openBrandModal(): void {
 function closeBrandModal(): void {
   brandModal.hidden = true;
   brandModalStatus.textContent = "";
+}
+
+function openAdminModal(): void {
+  adminModal.hidden = false;
+  adminModalStatus.textContent = layoutState.activeAdminSession
+    ? `Signed in as ${layoutState.activeAdminSession.admin.email}`
+    : "";
+  adminForm.querySelector<HTMLInputElement>('input[name="email"]')?.focus();
+}
+
+function closeAdminModal(): void {
+  adminModal.hidden = true;
+  adminModalStatus.textContent = "";
+}
+
+async function loginAdmin(): Promise<void> {
+  const formData = new FormData(adminForm);
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  adminModalStatus.textContent = "Signing in...";
+
+  try {
+    const session = await api.layout.adminLogin({ email, password });
+    layoutState.activeAdminSession = session;
+    window.localStorage.setItem("layout-admin-session", session.sessionToken);
+    renderAdminSession();
+    adminModalStatus.textContent = "Signed in.";
+    closeAdminModal();
+    if (layoutState.activeBrand) {
+      await loadBrandContract(layoutState.activeBrand.brandId);
+    }
+  } catch (error) {
+    adminModalStatus.textContent = errorMessage(error);
+  }
+}
+
+async function createDevAdminSession(): Promise<void> {
+  adminModalStatus.textContent = "Creating dev session...";
+
+  try {
+    const session = await api.layout.adminDevSession();
+    layoutState.activeAdminSession = session;
+    window.localStorage.setItem("layout-admin-session", session.sessionToken);
+    renderAdminSession();
+    adminModalStatus.textContent = "Dev session ready.";
+    closeAdminModal();
+    if (layoutState.activeBrand) {
+      await loadBrandContract(layoutState.activeBrand.brandId);
+    }
+  } catch (error) {
+    adminModalStatus.textContent = errorMessage(error);
+  }
+}
+
+function logoutAdmin(): void {
+  layoutState.activeAdminSession = null;
+  window.localStorage.removeItem("layout-admin-session");
+  renderAdminSession();
+  adminModalStatus.textContent = "Signed out.";
 }
 
 async function createBrand(): Promise<void> {

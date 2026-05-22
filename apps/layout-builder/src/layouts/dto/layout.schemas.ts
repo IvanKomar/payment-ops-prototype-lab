@@ -28,6 +28,11 @@ export const createBrandSchema = z.object({
   systemPrompt: z.string().trim().min(1).max(6000).optional()
 });
 
+export const adminLoginSchema = z.object({
+  email: z.string().trim().email().max(160),
+  password: z.string().min(8).max(200)
+});
+
 export class CreateBrandResponseDto {
   @ApiProperty({ type: String, example: "br_01d9326390ac4c1898da7c6cd25b66e1" })
   brandId!: string;
@@ -174,3 +179,5 @@ export function parseBearerToken(value: unknown): string {
 export function parseOptionalBearerToken(value: unknown): string | undefined {
   return typeof value === "string" ? parseBearerToken(value) : undefined;
 }
+
+export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
