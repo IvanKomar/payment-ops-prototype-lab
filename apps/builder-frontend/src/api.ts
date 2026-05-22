@@ -157,6 +157,10 @@ export const api = {
       requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/seed`, {
         method: "POST"
       }),
+    resetRuntimeDemoData: <TResources>(endpoint: string) =>
+      requestJson<TResources>(apiBases.layout, `${endpointPath(endpoint)}/runtime/admin/reset-demo`, {
+        method: "POST"
+      }),
     deleteBrand: (brandId: string) =>
       requestJson<LayoutBuilderDeleteBrandResponse>(
         apiBases.layout,

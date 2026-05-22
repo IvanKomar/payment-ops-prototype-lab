@@ -11,6 +11,7 @@ import type {
   PaymentCorePayment,
   PaymentCorePaymentIntentsResponse,
   PaymentCorePaymentMethodsResponse,
+  PaymentCoreSeedBrandDemoResponse,
   PaymentCoreStatus,
   PaymentCoreUser
 } from "@payment-ops/shared-types";
@@ -242,7 +243,7 @@ export function toRuntimeBalanceTransactionsResponse(
 
 export function toRuntimeAdminResourcesResponse(
   contract: BrandRuntimeContract,
-  response: PaymentCoreBrandResourcesResponse
+  response: PaymentCoreBrandResourcesResponse | PaymentCoreSeedBrandDemoResponse
 ): unknown {
   return {
     accounts: response.accounts.map((account) => mapAccount(contract, account)),
@@ -261,7 +262,15 @@ export function toRuntimeAdminResourcesResponse(
     })),
     paymentMethods: response.paymentMethods.map((method) => mapPaymentMethod(contract, method)),
     payments: response.payments.map((payment) => mapPayment(contract, payment)),
-    users: response.users.map((user) => mapUser(contract, user))
+    users: response.users.map((user) => mapUser(contract, user)),
+    ...("createdPayments" in response
+      ? {
+          createdPayments: response.createdPayments.map((payment) => mapPayment(contract, payment)),
+          demoAccount: mapAccount(contract, response.demoAccount),
+          demoSessionToken: response.demoSessionToken,
+          demoUser: mapUser(contract, response.demoUser)
+        }
+      : {})
   };
 }
 

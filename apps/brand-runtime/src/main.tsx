@@ -129,6 +129,18 @@ function BrandRuntimeApp() {
   }, [locationState.brandId]);
 
   useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("sessionToken");
+
+    if (!token) {
+      return;
+    }
+
+    localStorage.setItem(sessionKey(locationState), token);
+    setSessionToken(token);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [locationState.brandId, locationState.slug]);
+
+  useEffect(() => {
     if (!contract || !sessionToken) {
       return;
     }

@@ -38,6 +38,7 @@ interface BrandRuntimeResources {
   accounts: Array<Record<string, unknown>>;
   balanceTransactions: Array<Record<string, unknown>>;
   customers: Array<Record<string, unknown>>;
+  demoSessionToken?: string;
   paymentIntents: Array<Record<string, unknown>>;
   paymentMethods: Array<Record<string, unknown>>;
   payments: Array<Record<string, unknown>>;
@@ -202,6 +203,8 @@ app.innerHTML = `
               </div>
               <div class="button-row preview-actions">
                 <button class="button secondary" id="seed-brand-demo" type="button" disabled>Seed demo data</button>
+                <button class="button secondary" id="reset-brand-demo" type="button" disabled>Reset demo data</button>
+                <button class="button secondary" id="open-demo-merchant" type="button" disabled>Open as demo merchant</button>
                 <button class="button secondary" id="open-brand-app" type="button" disabled>Open user app</button>
               </div>
             </div>
@@ -270,6 +273,8 @@ const brandList = required<HTMLElement>("#brand-list");
 const selectedBrandTitle = required<HTMLElement>("#selected-brand-title");
 const contractInspector = required<HTMLElement>("#contract-inspector");
 const openBrandAppButton = required<HTMLButtonElement>("#open-brand-app");
+const openDemoMerchantButton = required<HTMLButtonElement>("#open-demo-merchant");
+const resetBrandDemoButton = required<HTMLButtonElement>("#reset-brand-demo");
 const seedBrandDemoButton = required<HTMLButtonElement>("#seed-brand-demo");
 const deleteBrandButton = required<HTMLButtonElement>("#delete-brand");
 const livePreview = required<HTMLElement>("#live-preview");
@@ -329,6 +334,14 @@ deleteBrandButton.addEventListener("click", () => {
 
 seedBrandDemoButton.addEventListener("click", () => {
   void seedActiveBrandDemoData();
+});
+
+resetBrandDemoButton.addEventListener("click", () => {
+  void resetActiveBrandDemoData();
+});
+
+openDemoMerchantButton.addEventListener("click", () => {
+  openActiveBrandAsDemoMerchant();
 });
 
 openBrandAppButton.addEventListener("click", () => {
@@ -748,6 +761,8 @@ function applyBrandPreview(
   );
   deleteBrandButton.disabled = false;
   openBrandAppButton.disabled = false;
+  openDemoMerchantButton.disabled = !layoutState.activeRuntimeResources?.demoSessionToken;
+  resetBrandDemoButton.disabled = false;
   seedBrandDemoButton.disabled = false;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `
@@ -782,6 +797,7 @@ async function loadBrandContract(brandId: string): Promise<void> {
     layoutState.activeSchema = schema;
     layoutState.activeRuntimeContract = runtimeContract;
     layoutState.activeRuntimeResources = runtimeResources;
+    openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
     renderContractInspector(activeBrand, schema, runtimeContract, runtimeResources);
   } catch (error) {
     contractInspector.innerHTML = `
@@ -808,6 +824,8 @@ function clearLayoutSelection(): void {
   contractInspector.innerHTML = "";
   deleteBrandButton.disabled = true;
   openBrandAppButton.disabled = true;
+  openDemoMerchantButton.disabled = true;
+  resetBrandDemoButton.disabled = true;
   seedBrandDemoButton.disabled = true;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `<div class="empty">Select a brand to load the preview.</div>`;
@@ -961,7 +979,8 @@ function endpointRows(
     ["payment intents", runtimeEndpoint(schema.endpoint, runtimeContract, "paymentIntents")],
     ["balance transactions", runtimeEndpoint(schema.endpoint, runtimeContract, "balanceTransactions")],
     ["admin resources", `${schema.endpoint}/runtime/admin/resources`],
-    ["seed demo data", `${schema.endpoint}/runtime/admin/seed`]
+    ["seed demo data", `${schema.endpoint}/runtime/admin/seed`],
+    ["reset demo data", `${schema.endpoint}/runtime/admin/reset-demo`]
   ];
 
   return rows.map(([label, value]) => contractRow(label, value)).join("");
@@ -1035,6 +1054,7 @@ async function seedActiveBrandDemoData(): Promise<void> {
   try {
     const runtimeResources = await api.layout.seedRuntimeDemoData<BrandRuntimeResources>(schema.endpoint);
     layoutState.activeRuntimeResources = runtimeResources;
+    openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
     renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources);
   } catch (error) {
     livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
@@ -1042,6 +1062,43 @@ async function seedActiveBrandDemoData(): Promise<void> {
     seedBrandDemoButton.disabled = false;
     seedBrandDemoButton.textContent = "Seed demo data";
   }
+}
+
+async function resetActiveBrandDemoData(): Promise<void> {
+  const schema = layoutState.activeSchema;
+  const brand = layoutState.activeBrand;
+
+  if (!schema || !brand || !window.confirm("Reset demo data for this brand?")) {
+    return;
+  }
+
+  resetBrandDemoButton.disabled = true;
+  resetBrandDemoButton.textContent = "Resetting...";
+
+  try {
+    const runtimeResources = await api.layout.resetRuntimeDemoData<BrandRuntimeResources>(schema.endpoint);
+    layoutState.activeRuntimeResources = runtimeResources;
+    openDemoMerchantButton.disabled = true;
+    renderContractInspector(brand, schema, layoutState.activeRuntimeContract, runtimeResources);
+  } catch (error) {
+    livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
+  } finally {
+    resetBrandDemoButton.disabled = false;
+    resetBrandDemoButton.textContent = "Reset demo data";
+  }
+}
+
+function openActiveBrandAsDemoMerchant(): void {
+  const appUrl = layoutState.activeBrand?.appUrl;
+  const sessionToken = layoutState.activeRuntimeResources?.demoSessionToken;
+
+  if (!appUrl || !sessionToken) {
+    return;
+  }
+
+  const url = new URL(api.layout.brandRuntimeUrl(appUrl), window.location.origin);
+  url.searchParams.set("sessionToken", sessionToken);
+  window.open(url.toString(), "_blank", "noopener,noreferrer");
 }
 
 function fieldCard(label: string, value: string): string {

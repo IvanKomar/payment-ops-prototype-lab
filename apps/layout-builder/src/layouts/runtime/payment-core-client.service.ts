@@ -94,6 +94,12 @@ export class PaymentCoreClientService {
     });
   }
 
+  resetBrandDemoData(brandId: string): Promise<PaymentCoreBrandResourcesResponse> {
+    return this.request(`/admin/brands/${encodeURIComponent(brandId)}/reset-demo`, {
+      method: "POST"
+    });
+  }
+
   createPayment(
     sessionToken: string,
     input: PaymentCoreCreatePaymentRequest

@@ -243,6 +243,14 @@ export class LayoutService {
     return toRuntimeAdminResourcesResponse(createBrandRuntimeContract(brand), response);
   }
 
+  async resetRuntimeDemoData(id: string, slug: string): Promise<unknown> {
+    const brand = await this.getExistingBrand(id);
+    this.assertBrandApiSlug(brand, slug);
+    const response = await this.paymentCoreClient.resetBrandDemoData(brand.id);
+
+    return toRuntimeAdminResourcesResponse(createBrandRuntimeContract(brand), response);
+  }
+
   async createRuntimePayment(
     id: string,
     slug: string,

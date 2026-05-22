@@ -58,4 +58,10 @@ export class GatewayResourcesController {
   seedBrandDemoData(@Param("brandId") brandId: string): Promise<PaymentCoreSeedBrandDemoResponse> {
     return this.paymentsService.seedBrandDemoData(brandId);
   }
+
+  @Post("admin/brands/:brandId/reset-demo")
+  @ApiOkResponse({ description: "Remove prototype demo data for a brand" })
+  resetBrandDemoData(@Param("brandId") brandId: string): Promise<PaymentCoreBrandResourcesResponse> {
+    return this.paymentsService.resetBrandDemoData(brandId);
+  }
 }

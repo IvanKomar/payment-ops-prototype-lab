@@ -406,14 +406,15 @@ MVP progress:
 - the admin console can seed a selected brand with demo merchant data covering
   settled card payment, bank review, declined card, authorization reserve, and
   refunded wallet scenarios.
+- seeded demo data can be reset from the admin console, and the selected brand
+  can be opened directly as the seeded demo merchant through a one-time runtime
+  session token.
 
 Immediate next actions:
 
 1. Add explicit create/update endpoints for saved customers and payment methods
    once the merchant UX needs saved reusable instruments.
-2. Add admin tools to reset seed data and open each brand as a merchant user
-   from a known demo account.
-3. Split `PaymentUser` into clearer merchant-owner and future customer auth
+2. Split `PaymentUser` into clearer merchant-owner and future customer auth
    boundaries once the prototype needs customer-side checkout sessions.
 
 ### Phase 6.3: AI Gateway MVP

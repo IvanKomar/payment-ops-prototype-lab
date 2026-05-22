@@ -121,6 +121,16 @@ export class BrandRuntimeController {
     return this.layoutService.seedRuntimeDemoData(id, slug);
   }
 
+  @Post("admin/reset-demo")
+  @ApiOkResponse({ description: "Remove prototype demo data for this brand" })
+  @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })
+  resetDemoData(
+    @Param("id", new ZodValidationPipe<string>(brandIdSchema)) id: string,
+    @Param("slug", new ZodValidationPipe<string>(slugSchema)) slug: string
+  ): Promise<unknown> {
+    return this.layoutService.resetRuntimeDemoData(id, slug);
+  }
+
   @Post("payments")
   @ApiOkResponse({ description: "Create a brand-specific payment" })
   @ApiNotFoundResponse({ description: "Brand or schema endpoint was not found" })

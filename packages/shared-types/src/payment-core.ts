@@ -178,6 +178,7 @@ export interface PaymentCoreBrandResourcesResponse {
 
 export interface PaymentCoreSeedBrandDemoResponse extends PaymentCoreBrandResourcesResponse {
   demoAccount: PaymentCoreAccount;
+  demoSessionToken: string;
   demoUser: PaymentCoreUser;
   createdPayments: PaymentCorePayment[];
 }

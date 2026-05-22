@@ -429,8 +429,28 @@ export class PaymentsService {
       ...resources,
       createdPayments,
       demoAccount: toAccountResponse(account),
+      demoSessionToken: sessionToken,
       demoUser: toUserResponse(user)
     };
+  }
+
+  async resetBrandDemoData(brandId: string): Promise<PaymentCoreBrandResourcesResponse> {
+    const demoUser = await this.prisma.paymentUser.findUnique({
+      where: {
+        brandId_email: {
+          brandId,
+          email: demoMerchantEmail(brandId)
+        }
+      }
+    });
+
+    if (demoUser) {
+      await this.prisma.paymentUser.delete({
+        where: { id: demoUser.id }
+      });
+    }
+
+    return this.brandResources(brandId);
   }
 
   async createPayment(
@@ -625,7 +645,7 @@ export class PaymentsService {
   }
 
   private async ensureDemoMerchant(brandId: string): Promise<{ user: PaymentUser; account: PaymentAccount }> {
-    const email = `demo-merchant+${brandId}@payment-ops.local`;
+    const email = demoMerchantEmail(brandId);
     const existing = await this.prisma.paymentUser.findUnique({
       where: {
         brandId_email: {
@@ -884,6 +904,10 @@ function randomId(): string {
 
 function displayNameFromEmail(email: string): string {
   return email.split("@")[0] || "Payment user";
+}
+
+function demoMerchantEmail(brandId: string): string {
+  return `demo-merchant+${brandId}@payment-ops.local`;
 }
 
 function externalReference(brandId: string): string {
