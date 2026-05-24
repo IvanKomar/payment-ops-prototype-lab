@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useState } from "react";
+import { StrictMode, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -6,71 +6,149 @@ import "./styles.css";
 
 type RuntimeView = "login" | "dashboard" | "payments" | "customers" | "balances";
 
-interface RuntimeContract {
-  brandId: string;
-  brandName: string;
-  resourceAlias: string;
-  statusMap: Record<string, string>;
-  actionLabels: {
-    register: string;
-    login: string;
-    createPayment: string;
-    history: string;
-    refund: string;
-  };
-  fields: Record<string, string>;
-  accountFields: Record<string, string>;
-  balanceFields: Record<string, string>;
-  customerFields: Record<string, string>;
-  paymentMethodFields: Record<string, string>;
-  userFields: Record<string, string>;
-  authFields: Record<string, string>;
-  endpoints: Record<string, string>;
-}
+type RuntimePresentation = NonNullable<RuntimeShell["ui"]>["presentation"];
 
 interface RuntimeLocation {
-  brandId: string;
   routeBase: string;
   slug: string;
   view: RuntimeView;
 }
 
-interface RuntimeAuthResponse {
-  sessionToken: string;
-  user: Record<string, unknown>;
-  account: Record<string, unknown>;
-}
-
-interface RuntimeHistoryResponse {
-  account: Record<string, unknown>;
-  [resourceAlias: string]: unknown;
-}
-
-interface BrandSchemaResponse {
-  appUrl: string;
-  brandId: string;
-  endpoint: string;
-  generationProfile: {
+interface RuntimeShell {
+  brand: {
+    logoDataUri: string | null;
+    name: string;
+    palette: {
+      accent: string;
+      background: string;
+      primary: string;
+      secondary: string;
+      surface: string;
+      text: string;
+    };
+  };
+  copy: {
     contractSummary: string;
     visualDirection: string;
-  } | null;
-  name: string;
-  palette: {
-    accent: string;
-    background: string;
-    primary: string;
-    secondary: string;
-    surface: string;
-    text: string;
   };
+  labels: {
+    balances: string;
+    createPayment: string;
+    customers: string;
+    history: string;
+    login: string;
+    overview: string;
+    payments: string;
+    register: string;
+  };
+  routes: {
+    account: string;
+    balances: string;
+    customers: string;
+    login: string;
+    metrics: string;
+    paymentMethods: string;
+    payments: string;
+    register: string;
+  };
+  auth: {
+    tokenResponseKey: string;
+    fields: {
+      currency: string;
+      displayName: string;
+      email: string;
+      password: string;
+    };
+  };
+  fields: {
+    account: Record<string, string>;
+    balance: Record<string, string>;
+    customer: Record<string, string>;
+    metrics: Record<string, string>;
+    payment: Record<string, string>;
+    paymentMethod: Record<string, string>;
+    responseKeys: Record<string, string>;
+  };
+  ui: {
+    presentation: {
+      layout: string;
+      density: string;
+      navigationPattern: string;
+      dashboardComposition: string[];
+      visualTokens: {
+        palette: string[];
+        typography: string;
+        radius: string;
+        spacing: string;
+        surfaces: string;
+        buttons: string;
+      };
+      copyTone: string;
+      componentLabels: Record<string, string>;
+      emptyStates: Record<string, string>;
+    };
+  } | null;
 }
 
-interface BrandShell {
-  logoDataUri: string | null;
-  schema: BrandSchemaResponse;
+interface RuntimeAccount {
+  id: string;
+  balance: number;
+  currency: string;
 }
 
-const layoutApiBase = import.meta.env.VITE_LAYOUT_API_BASE ?? "/layout-api";
+interface RuntimeCustomer {
+  id: string;
+  email: string | null;
+  name: string;
+  phone: string | null;
+}
+
+interface RuntimePaymentMethod {
+  id: string;
+  bankName: string | null;
+  brand: string | null;
+  label: string;
+  last4: string | null;
+  type: string;
+}
+
+interface RuntimePayment {
+  id: string;
+  amount: number;
+  createdAt: string;
+  currency: string;
+  customer: RuntimeCustomer | null;
+  destination: string | null;
+  methodType: string;
+  paymentMethod: RuntimePaymentMethod | null;
+  reference: string;
+  status: string;
+}
+
+interface RuntimeMetrics {
+  count: number;
+  currency: string;
+  customers: number;
+  review: number;
+  volume: number;
+}
+
+interface RuntimeOverview {
+  account: RuntimeAccount | null;
+  customers: RuntimeCustomer[];
+  metrics: RuntimeMetrics;
+  paymentMethods: RuntimePaymentMethod[];
+  payments: RuntimePayment[];
+}
+
+type RuntimeAuthResponse = Record<string, unknown>;
+
+declare global {
+  interface Window {
+    __BRAND_RUNTIME_SHELL__?: RuntimeShell;
+  }
+}
+
 const root = document.querySelector("#root");
 
 if (!root) {
@@ -85,12 +163,13 @@ createRoot(root).render(
 
 function BrandRuntimeApp() {
   const [locationState, setLocationState] = useState(() => parseRuntimeLocation());
-  const [brandShell, setBrandShell] = useState<BrandShell | null>(null);
-  const [contract, setContract] = useState<RuntimeContract | null>(null);
+  const [shell] = useState<RuntimeShell | null>(() => window.__BRAND_RUNTIME_SHELL__ ?? null);
   const [sessionToken, setSessionToken] = useState(() => localStorage.getItem(sessionKey(locationState)));
-  const [identity, setIdentity] = useState<RuntimeAuthResponse | null>(null);
-  const [historyState, setHistoryState] = useState<RuntimeHistoryResponse | null>(null);
-  const [status, setStatus] = useState("Sign in to open this payments workspace.");
+  const [overview, setOverview] = useState<RuntimeOverview | null>(null);
+  const [status, setStatus] = useState(
+    window.__BRAND_RUNTIME_SHELL__ ? "Sign in to open this payments workspace." : "Runtime bootstrap was not injected."
+  );
+  const [isNavigationOpen, setNavigationOpen] = useState(false);
 
   useEffect(() => {
     const onPopState = () => setLocationState(parseRuntimeLocation());
@@ -100,33 +179,12 @@ function BrandRuntimeApp() {
   }, []);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadBrand() {
-      const [schema, runtimeContract] = await Promise.all([
-        requestJson<BrandSchemaResponse>(`${layoutApiBase}/brands/${locationState.brandId}/schema`),
-        requestJson<RuntimeContract>(runtimeUrl(locationState, "config"))
-      ]);
-      const logoDataUri = await loadLogoDataUri(locationState.brandId);
-
-      if (!active) {
-        return;
-      }
-
-      setBrandShell({ logoDataUri, schema });
-      setContract(runtimeContract);
-    }
-
-    loadBrand().catch((error: unknown) => setStatus(errorMessage(error)));
-
-    return () => {
-      active = false;
-    };
-  }, [locationState.brandId, locationState.slug]);
+    setSessionToken(localStorage.getItem(sessionKey(locationState)));
+  }, [locationState.slug]);
 
   useEffect(() => {
-    setSessionToken(localStorage.getItem(sessionKey(locationState)));
-  }, [locationState.brandId]);
+    setNavigationOpen(false);
+  }, [locationState.view]);
 
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("sessionToken");
@@ -138,108 +196,113 @@ function BrandRuntimeApp() {
     localStorage.setItem(sessionKey(locationState), token);
     setSessionToken(token);
     window.history.replaceState(null, "", window.location.pathname);
-  }, [locationState.brandId, locationState.slug]);
+  }, [locationState.slug]);
 
   useEffect(() => {
-    if (!contract || !sessionToken) {
+    if (!shell || !sessionToken) {
       return;
     }
 
-    refreshHistory().catch((error: unknown) => setStatus(errorMessage(error)));
-  }, [contract, sessionToken]);
+    refreshOverview(sessionToken).catch((error: unknown) => setStatus(errorMessage(error)));
+  }, [shell, sessionToken]);
 
-  const payments = useMemo(
-    () => paymentsFromHistory(contract, historyState),
-    [contract, historyState]
-  );
-  const account = historyState?.account ?? identity?.account ?? null;
-  const metrics = contract ? paymentMetrics(contract, payments) : emptyMetrics();
+  const payments = overview?.payments ?? [];
+  const account = overview?.account ?? null;
+  const metrics = overview?.metrics ?? emptyMetrics();
 
-  if (!locationState.brandId || !locationState.slug) {
-    return <ErrorScreen message="Open a brand route like /brands/:brandId/:slug/login." />;
+  if (!locationState.slug) {
+    return <ErrorScreen message="Open a brand route like /:brandSlug/app/dashboard." />;
   }
 
-  if (!brandShell || !contract) {
+  if (!shell) {
     return <ErrorScreen message={status === "" ? "Loading brand runtime." : status} />;
   }
 
   const view = sessionToken ? locationState.view : "login";
-  const shellStyle = {
-    "--accent": brandShell.schema.palette.accent,
-    "--primary": brandShell.schema.palette.primary,
-    "--secondary": brandShell.schema.palette.secondary,
-    "--surface": brandShell.schema.palette.surface,
-    "--text": brandShell.schema.palette.text
-  } as CSSProperties;
+  const shellStyle = runtimeThemeStyle(shell);
+  const presentation = shell.ui?.presentation;
+  const runtimeClass = `layout-${presentation?.layout ?? "sidebar-ledger"} density-${presentation?.density ?? "balanced"} nav-${presentation?.navigationPattern ?? "sidebar"}`;
 
   async function authenticate(mode: "login" | "register", form: HTMLFormElement) {
-    if (!contract) {
+    if (!shell) {
       return;
     }
 
     const formData = new FormData(form);
-    const payload = {
-      [contract.authFields.email ?? "email"]: String(formData.get("email") ?? ""),
-      [contract.authFields.password ?? "password"]: String(formData.get("password") ?? ""),
-      [contract.authFields.displayName ?? "displayName"]: String(formData.get("displayName") ?? ""),
-      [contract.authFields.currency ?? "currency"]: String(formData.get("currency") ?? "USD")
-    };
-    const response = await requestJson<RuntimeAuthResponse>(runtimeUrl(locationState, mode), {
-      body: JSON.stringify(payload),
+    const response = await requestJson<RuntimeAuthResponse>(entityUrl(locationState, shell.routes[mode]), {
+      body: JSON.stringify(aliasPayload(shell.auth.fields, {
+        currency: String(formData.get("currency") ?? "USD"),
+        displayName: String(formData.get("displayName") ?? ""),
+        email: String(formData.get("email") ?? ""),
+        password: String(formData.get("password") ?? "")
+      })),
       headers: { "content-type": "application/json" },
       method: "POST"
     });
 
-    localStorage.setItem(sessionKey(locationState), response.sessionToken);
-    setSessionToken(response.sessionToken);
-    setIdentity(response);
+    const token = String(response[shell.auth.tokenResponseKey] ?? response.sessionToken ?? "");
+    localStorage.setItem(sessionKey(locationState), token);
+    setSessionToken(token);
     setStatus(mode === "register" ? "Account created." : "Signed in.");
-    await refreshHistory(response.sessionToken);
+    await refreshOverview(token);
     navigateTo(locationState, "dashboard", setLocationState);
   }
 
-  async function refreshHistory(token = sessionToken) {
+  async function refreshOverview(token = sessionToken) {
+    if (!shell) {
+      setStatus("Runtime bootstrap was not injected.");
+      return;
+    }
+
     if (!token) {
       setStatus("Sign in first.");
       return;
     }
 
-    const response = await requestJson<RuntimeHistoryResponse>(runtimeUrl(locationState, "payments"), {
-      headers: { authorization: `Bearer ${token}` }
-    });
+    const headers = { authorization: `Bearer ${token}` };
+    const [account, metrics, payments, customers, paymentMethods] = await Promise.all([
+      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.account), { headers }),
+      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.metrics), { headers }),
+      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.payments), { headers }),
+      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.customers), { headers }),
+      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.paymentMethods), { headers })
+    ]);
 
-    setHistoryState(response);
+    setOverview({
+      account: decodeAccount(shell, account[responseKey(shell, "account")] ?? account.account),
+      customers: arrayValue(customers[responseKey(shell, "customers")] ?? customers.customers).map((customer) => decodeCustomer(shell, customer)),
+      metrics: decodeMetrics(shell, metrics[responseKey(shell, "metrics")] ?? metrics.metrics),
+      paymentMethods: arrayValue(paymentMethods[responseKey(shell, "paymentMethods")] ?? paymentMethods.paymentMethods).map((method) =>
+        decodePaymentMethod(shell, method)
+      ),
+      payments: arrayValue(payments[responseKey(shell, "payments")] ?? payments.payments).map((payment) => decodePayment(shell, payment))
+    });
     setStatus("Workspace refreshed.");
   }
 
   async function createPayment(form: HTMLFormElement) {
-    if (!contract || !sessionToken) {
+    if (!shell || !sessionToken) {
       setStatus("Sign in first.");
       navigateTo(locationState, "login", setLocationState);
       return;
     }
 
     const formData = new FormData(form);
-    const fields = contract.fields;
-    const customerName = String(formData.get("customerName") ?? "").trim();
-    const customerEmail = String(formData.get("customerEmail") ?? "").trim();
     const methodType = String(formData.get("methodType") ?? "card");
     const instrumentReference = String(formData.get("instrumentReference") ?? "").trim();
-    const paymentMethod = paymentMethodPayload(contract, methodType, instrumentReference);
-    const payload = {
-      [fields.amount ?? "amount"]: Number(formData.get("amount")),
-      [fields.currency ?? "currency"]: String(formData.get("currency") ?? "USD"),
-      [fields.methodType ?? "methodType"]: methodType,
-      customer: {
-        [contract.customerFields.name ?? "name"]: customerName || "Customer",
-        [contract.customerFields.email ?? "email"]: customerEmail || "customer@example.com"
-      },
-      paymentMethod,
-      scenario: String(formData.get("scenario") ?? "settle")
-    };
 
-    await requestJson<unknown>(runtimeUrl(locationState, "payments"), {
-      body: JSON.stringify(payload),
+    await requestJson<unknown>(entityUrl(locationState, shell.routes.payments), {
+      body: JSON.stringify(aliasPayload(shell.fields.payment, {
+        amount: Number(formData.get("amount")),
+        currency: String(formData.get("currency") ?? "USD"),
+        customer: {
+          email: String(formData.get("customerEmail") ?? "customer@example.com"),
+          name: String(formData.get("customerName") ?? "Customer")
+        },
+        methodType,
+        paymentMethod: paymentMethodPayload(methodType, instrumentReference),
+        scenario: String(formData.get("scenario") ?? "settle")
+      })),
       headers: {
         authorization: `Bearer ${sessionToken}`,
         "content-type": "application/json"
@@ -247,83 +310,30 @@ function BrandRuntimeApp() {
       method: "POST"
     });
     setStatus("Payment created.");
-    await refreshHistory();
+    await refreshOverview();
     navigateTo(locationState, "payments", setLocationState);
-  }
-
-  async function createCustomer(form: HTMLFormElement) {
-    if (!contract || !sessionToken) {
-      setStatus("Sign in first.");
-      return;
-    }
-
-    const formData = new FormData(form);
-    const payload = {
-      [contract.customerFields.name ?? "name"]: String(formData.get("name") ?? ""),
-      [contract.customerFields.email ?? "email"]: String(formData.get("email") ?? ""),
-      [contract.customerFields.phone ?? "phone"]: String(formData.get("phone") ?? "")
-    };
-
-    await requestJson<unknown>(runtimeUrl(locationState, "customers"), {
-      body: JSON.stringify(payload),
-      headers: {
-        authorization: `Bearer ${sessionToken}`,
-        "content-type": "application/json"
-      },
-      method: "POST"
-    });
-    setStatus("Customer saved.");
-    await refreshHistory();
-  }
-
-  async function createPaymentMethod(form: HTMLFormElement) {
-    if (!contract || !sessionToken) {
-      setStatus("Sign in first.");
-      return;
-    }
-
-    const formData = new FormData(form);
-    const payload = {
-      [contract.customerFields.customerId ?? "customerId"]: String(formData.get("customerId") ?? ""),
-      [contract.paymentMethodFields.type ?? "type"]: String(formData.get("type") ?? "card"),
-      [contract.paymentMethodFields.label ?? "label"]: String(formData.get("label") ?? ""),
-      [contract.paymentMethodFields.last4 ?? "last4"]: String(formData.get("last4") ?? ""),
-      [contract.paymentMethodFields.brand ?? "brand"]: String(formData.get("brand") ?? ""),
-      [contract.paymentMethodFields.bankName ?? "bankName"]: String(formData.get("bankName") ?? "")
-    };
-
-    await requestJson<unknown>(runtimeUrl(locationState, "payment-methods"), {
-      body: JSON.stringify(payload),
-      headers: {
-        authorization: `Bearer ${sessionToken}`,
-        "content-type": "application/json"
-      },
-      method: "POST"
-    });
-    setStatus("Payment method saved.");
-    await refreshHistory();
   }
 
   function logout() {
     localStorage.removeItem(sessionKey(locationState));
     setSessionToken("");
-    setIdentity(null);
-    setHistoryState(null);
+    setOverview(null);
     setStatus("Session closed.");
     navigateTo(locationState, "login", setLocationState);
   }
 
   if (view === "login") {
     return (
-      <main className="login-shell" style={shellStyle}>
+      <main className={`login-shell ${runtimeClass}`} style={shellStyle}>
         <section className="login-panel">
-          <BrandLockup brand={brandShell} />
+          <BrandLockup shell={shell} />
           <div>
-            <span className="kicker">{brandShell.schema.generationProfile?.contractSummary ?? "Payments workspace"}</span>
+            <span className="kicker">{shell.copy.contractSummary}</span>
             <h1>Sign in to your account</h1>
             <p className="subtle">Register or sign in as a merchant to process customer card and account payments.</p>
           </div>
           <AuthForm
+            labels={shell.labels}
             onSubmit={(mode, form) => {
               void authenticate(mode, form);
             }}
@@ -335,23 +345,36 @@ function BrandRuntimeApp() {
   }
 
   return (
-    <main className="app-shell" style={shellStyle}>
+    <main className={`app-shell ${runtimeClass}`} style={shellStyle}>
       <aside className="sidebar">
-        <BrandLockup brand={brandShell} />
-        <Navigation current={view} locationState={locationState} setLocationState={setLocationState} />
-        <div className="sidebar-footer">Process customer card and account payments for this merchant.</div>
+        <BrandLockup shell={shell} />
+        <button
+          aria-controls="runtime-navigation"
+          aria-expanded={isNavigationOpen}
+          className="nav-toggle"
+          type="button"
+          onClick={() => setNavigationOpen((open) => !open)}
+        >
+          Menu
+        </button>
+        <Navigation
+          current={view}
+          isOpen={isNavigationOpen}
+          labels={shell.labels}
+          locationState={locationState}
+          navigationPattern={presentation?.navigationPattern ?? "sidebar"}
+          setLocationState={setLocationState}
+        />
+        <div className="sidebar-footer">{presentation?.copyTone ?? "Process customer card and account payments for this merchant."}</div>
       </aside>
       <section className="main">
         <header className="topline">
           <div>
-            <span className="kicker">{brandShell.schema.generationProfile?.contractSummary ?? "Payments workspace"}</span>
-            <h1>{viewTitle(view)}</h1>
-            <p className="subtle">{brandShell.schema.generationProfile?.visualDirection ?? "Operate payments, balances, and account activity from one workspace."}</p>
+            <span className="kicker">{shell.copy.contractSummary}</span>
+            <h1>{viewTitle(view, shell)}</h1>
+            <p className="subtle">{shell.copy.visualDirection}</p>
           </div>
           <div className="top-actions">
-            <button className="secondary" type="button" onClick={() => void refreshHistory()}>
-              Refresh
-            </button>
             <button className="secondary" type="button" onClick={logout}>
               Sign out
             </button>
@@ -361,41 +384,37 @@ function BrandRuntimeApp() {
         {view === "dashboard" ? (
           <DashboardView
             account={account}
-            contract={contract}
+            labels={shell.labels}
             metrics={metrics}
             onCreatePayment={(form) => {
               void createPayment(form);
             }}
             payments={payments}
+            presentation={presentation}
             status={status}
           />
         ) : null}
-        {view === "payments" ? <PaymentsView contract={contract} payments={payments} /> : null}
+        {view === "payments" ? <PaymentsView labels={shell.labels} payments={payments} /> : null}
         {view === "customers" ? (
           <CustomersView
-            contract={contract}
-            historyState={historyState}
-            onCreateCustomer={(form) => {
-              void createCustomer(form);
-            }}
-            onCreatePaymentMethod={(form) => {
-              void createPaymentMethod(form);
-            }}
+            customers={overview?.customers ?? []}
+            labels={shell.labels}
+            methods={overview?.paymentMethods ?? []}
             payments={payments}
           />
         ) : null}
-        {view === "balances" ? <BalancesView account={account} contract={contract} metrics={metrics} /> : null}
+        {view === "balances" ? <BalancesView account={account} metrics={metrics} /> : null}
       </section>
     </main>
   );
 }
 
-function BrandLockup({ brand }: { brand: BrandShell }) {
+function BrandLockup({ shell }: { shell: RuntimeShell }) {
   return (
     <div className="brand-lockup">
-      <div className="brand-mark">{brand.logoDataUri ? <img alt={`${brand.schema.name} logo`} src={brand.logoDataUri} /> : null}</div>
+      <div className="brand-mark">{shell.brand.logoDataUri ? <img alt={`${shell.brand.name} logo`} src={shell.brand.logoDataUri} /> : null}</div>
       <div>
-        <strong>{brand.schema.name}</strong>
+        <strong>{shell.brand.name}</strong>
         <small>Merchant gateway</small>
       </div>
     </div>
@@ -404,23 +423,27 @@ function BrandLockup({ brand }: { brand: BrandShell }) {
 
 function Navigation({
   current,
+  isOpen,
+  labels,
   locationState,
+  navigationPattern,
   setLocationState
 }: {
   current: RuntimeView;
+  isOpen: boolean;
+  labels: RuntimeShell["labels"];
   locationState: RuntimeLocation;
+  navigationPattern: string;
   setLocationState: (value: RuntimeLocation) => void;
 }) {
   const primaryItems: Array<[RuntimeView, string]> = [
-    ["dashboard", "Overview"],
-    ["payments", "Payments"],
-    ["customers", "Customers"],
-    ["balances", "Balances"]
+    ["dashboard", labels.overview],
+    ["payments", labels.payments],
+    ["customers", labels.customers],
+    ["balances", labels.balances]
   ];
-
-  return (
-    <div className="nav-section">
-      <span className="nav-label">Merchant tools</span>
+  const navItems = (
+    <div className="nav-items">
       {primaryItems.map(([view, label]) => (
         <button
           className={`nav-item${current === view ? " active" : ""}`}
@@ -433,37 +456,122 @@ function Navigation({
       ))}
     </div>
   );
+
+  if (navigationPattern === "command-rail") {
+    return (
+      <details className={`nav-section nav-collapsible${isOpen ? " open" : ""}`} id="runtime-navigation" open>
+        <summary>Merchant tools</summary>
+        {navItems}
+      </details>
+    );
+  }
+
+  return (
+    <nav aria-label="Merchant tools" className={`nav-section${isOpen ? " open" : ""}`} id="runtime-navigation">
+      <span className="nav-label">Merchant tools</span>
+      {navItems}
+    </nav>
+  );
 }
 
 function DashboardView({
   account,
-  contract,
+  labels,
   metrics,
   onCreatePayment,
   payments,
+  presentation,
   status
 }: {
-  account: Record<string, unknown> | null;
-  contract: RuntimeContract;
+  account: RuntimeAccount | null;
+  labels: RuntimeShell["labels"];
   metrics: RuntimeMetrics;
   onCreatePayment: (form: HTMLFormElement) => void;
-  payments: Array<Record<string, unknown>>;
+  payments: RuntimePayment[];
+  presentation: RuntimePresentation | undefined;
   status: string;
 }) {
+  const variant = presentation?.layout ?? "sidebar-ledger";
+
+  if (variant === "compact-terminal") {
+    return (
+      <TerminalDashboard
+        account={account}
+        labels={labels}
+        metrics={metrics}
+        onCreatePayment={onCreatePayment}
+        payments={payments}
+        status={status}
+      />
+    );
+  }
+
+  if (variant === "command-center") {
+    return (
+      <CommandCenterDashboard
+        account={account}
+        labels={labels}
+        metrics={metrics}
+        onCreatePayment={onCreatePayment}
+        payments={payments}
+        status={status}
+      />
+    );
+  }
+
+  if (variant === "card-operations") {
+    return (
+      <CardOperationsDashboard
+        account={account}
+        labels={labels}
+        metrics={metrics}
+        onCreatePayment={onCreatePayment}
+        payments={payments}
+        status={status}
+      />
+    );
+  }
+
+  if (variant === "split-workspace") {
+    return (
+      <SplitWorkspaceDashboard
+        account={account}
+        labels={labels}
+        metrics={metrics}
+        onCreatePayment={onCreatePayment}
+        payments={payments}
+        status={status}
+      />
+    );
+  }
+
+  if (variant === "topbar-console") {
+    return (
+      <TopbarConsoleDashboard
+        account={account}
+        labels={labels}
+        metrics={metrics}
+        onCreatePayment={onCreatePayment}
+        payments={payments}
+        status={status}
+      />
+    );
+  }
+
   return (
     <>
-      <MetricSummary account={account} contract={contract} metrics={metrics} />
+      <MetricSummary account={account} metrics={metrics} />
       <div className="content-grid">
         <section className="panel">
           <div className="section-title">
-            <h2>Recent payments</h2>
+            <h2>Recent {labels.payments.toLowerCase()}</h2>
           </div>
-          <PaymentsTable contract={contract} payments={payments.slice(0, 8)} />
+          <PaymentsTable payments={payments.slice(0, 8)} />
         </section>
         <section className="panel">
           <div className="side-stack">
             <div className="status">{status}</div>
-            <PaymentForm onSubmit={onCreatePayment} />
+            <PaymentForm label={labels.createPayment} onSubmit={onCreatePayment} />
           </div>
         </section>
       </div>
@@ -471,41 +579,199 @@ function DashboardView({
   );
 }
 
-function PaymentsView({ contract, payments }: { contract: RuntimeContract; payments: Array<Record<string, unknown>> }) {
+function TerminalDashboard({
+  account,
+  labels,
+  metrics,
+  onCreatePayment,
+  payments,
+  status
+}: DashboardViewProps) {
+  return (
+    <div className="dashboard-terminal">
+      <section className="terminal-command panel">
+        <div>
+          <span className="matrix-label">Live matrix</span>
+          <strong>{account ? formatAmount(account.balance, account.currency) : formatAmount(0, metrics.currency)}</strong>
+        </div>
+        <div>
+          <span>Volume</span>
+          <strong>{formatAmount(metrics.volume, metrics.currency)}</strong>
+        </div>
+        <div>
+          <span>Flow count</span>
+          <strong>{metrics.count}</strong>
+        </div>
+        <div>
+          <span>Exceptions</span>
+          <strong>{metrics.review}</strong>
+        </div>
+      </section>
+      <section className="terminal-stream panel">
+        <div className="section-title">
+          <h2>{labels.history}</h2>
+        </div>
+        <PaymentSignalList payments={payments.slice(0, 9)} />
+      </section>
+      <section className="terminal-bridge panel">
+        <div className="status">{status}</div>
+        <PaymentForm label={labels.createPayment} onSubmit={onCreatePayment} />
+      </section>
+    </div>
+  );
+}
+
+function CommandCenterDashboard({
+  account,
+  labels,
+  metrics,
+  onCreatePayment,
+  payments,
+  status
+}: DashboardViewProps) {
+  return (
+    <div className="dashboard-command">
+      <section className="command-metrics panel">
+        <MetricDeck account={account} metrics={metrics} />
+      </section>
+      <section className="command-board panel">
+        <div className="section-title">
+          <h2>{labels.history}</h2>
+        </div>
+        <PaymentSignalList payments={payments.slice(0, 8)} />
+      </section>
+      <section className="command-form panel">
+        <div className="status">{status}</div>
+        <PaymentForm label={labels.createPayment} onSubmit={onCreatePayment} />
+      </section>
+    </div>
+  );
+}
+
+function CardOperationsDashboard({
+  account,
+  labels,
+  metrics,
+  onCreatePayment,
+  payments,
+  status
+}: DashboardViewProps) {
+  return (
+    <div className="dashboard-cardops">
+      <section className="payment-command panel">
+        <div className="status">{status}</div>
+        <PaymentForm label={labels.createPayment} onSubmit={onCreatePayment} />
+      </section>
+      <section className="ops-metrics">
+        <MetricDeck account={account} metrics={metrics} />
+      </section>
+      <section className="receipt-wall panel">
+        <div className="section-title">
+          <h2>{labels.payments}</h2>
+        </div>
+        <PaymentTiles payments={payments.slice(0, 6)} />
+      </section>
+    </div>
+  );
+}
+
+function SplitWorkspaceDashboard({
+  account,
+  labels,
+  metrics,
+  onCreatePayment,
+  payments,
+  status
+}: DashboardViewProps) {
+  return (
+    <div className="dashboard-split">
+      <aside className="split-rail panel">
+        <MetricDeck account={account} metrics={metrics} />
+      </aside>
+      <section className="split-ledger panel">
+        <div className="section-title">
+          <h2>{labels.history}</h2>
+        </div>
+        <PaymentsTable payments={payments.slice(0, 10)} />
+      </section>
+      <section className="split-command panel">
+        <div className="status">{status}</div>
+        <PaymentForm label={labels.createPayment} onSubmit={onCreatePayment} />
+      </section>
+    </div>
+  );
+}
+
+function TopbarConsoleDashboard({
+  account,
+  labels,
+  metrics,
+  onCreatePayment,
+  payments,
+  status
+}: DashboardViewProps) {
+  return (
+    <div className="dashboard-topbar">
+      <MetricSummary account={account} metrics={metrics} />
+      <section className="console-band panel">
+        <PaymentSignalList payments={payments.slice(0, 5)} />
+      </section>
+      <section className="console-grid">
+        <div className="panel">
+          <div className="section-title">
+            <h2>{labels.history}</h2>
+          </div>
+          <PaymentsTable payments={payments.slice(0, 8)} />
+        </div>
+        <div className="panel">
+          <div className="status">{status}</div>
+          <PaymentForm label={labels.createPayment} onSubmit={onCreatePayment} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+interface DashboardViewProps {
+  account: RuntimeAccount | null;
+  labels: RuntimeShell["labels"];
+  metrics: RuntimeMetrics;
+  onCreatePayment: (form: HTMLFormElement) => void;
+  payments: RuntimePayment[];
+  status: string;
+}
+
+function PaymentsView({ labels, payments }: { labels: RuntimeShell["labels"]; payments: RuntimePayment[] }) {
   return (
     <section className="panel">
       <div className="section-title">
-        <h2>Payment ledger</h2>
+        <h2>{labels.history}</h2>
       </div>
-      <PaymentsTable contract={contract} payments={payments} />
+      <PaymentsTable payments={payments} />
     </section>
   );
 }
 
 function CustomersView({
-  contract,
-  historyState,
-  onCreateCustomer,
-  onCreatePaymentMethod,
+  customers,
+  labels,
+  methods,
   payments
 }: {
-  contract: RuntimeContract;
-  historyState: RuntimeHistoryResponse | null;
-  onCreateCustomer: (form: HTMLFormElement) => void;
-  onCreatePaymentMethod: (form: HTMLFormElement) => void;
-  payments: Array<Record<string, unknown>>;
+  customers: RuntimeCustomer[];
+  labels: RuntimeShell["labels"];
+  methods: RuntimePaymentMethod[];
+  payments: RuntimePayment[];
 }) {
-  const customers = customersFromPayments(contract, payments);
-  const savedCustomers = savedCustomersFromHistory(contract, historyState);
-  const savedPaymentMethods = savedPaymentMethodsFromHistory(contract, historyState);
+  const customerSummaries = customers.length > 0 ? customerRows(customers, payments) : customersFromPayments(payments);
 
   return (
     <div className="content-grid">
       <section className="panel">
         <div className="section-title">
-          <h2>Customers</h2>
+          <h2>{labels.customers}</h2>
         </div>
-        {customers.length === 0 ? (
+        {customerSummaries.length === 0 ? (
           <div className="empty">Customers appear after the merchant processes payments.</div>
         ) : (
           <div className="table-wrap">
@@ -519,7 +785,7 @@ function CustomersView({
                 </tr>
               </thead>
               <tbody>
-                {customers.map((customer) => (
+                {customerSummaries.map((customer) => (
                   <tr key={customer.name}>
                     <td>
                       <strong>{customer.name}</strong>
@@ -527,7 +793,7 @@ function CustomersView({
                     </td>
                     <td>{customer.count}</td>
                     <td>{formatAmount(customer.volume, customer.currency)}</td>
-                    <td>{formatDateTime(customer.lastPaymentAt)}</td>
+                    <td>{customer.lastPaymentAt ? formatDateTime(customer.lastPaymentAt) : "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -536,52 +802,55 @@ function CustomersView({
         )}
       </section>
       <section className="panel">
-        <div className="side-stack">
-          <SavedCustomerForm onSubmit={onCreateCustomer} />
-          <SavedPaymentMethodForm
-            contract={contract}
-            customers={savedCustomers}
-            methods={savedPaymentMethods}
-            onSubmit={onCreatePaymentMethod}
-          />
+        <div className="section-title">
+          <h2>Payment sources</h2>
         </div>
+        {methods.length === 0 ? (
+          <div className="empty">Payment sources appear after seeded or live payments are loaded.</div>
+        ) : (
+          <div className="table-wrap compact-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Type</th>
+                  <th>Institution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {methods.map((method) => (
+                  <tr key={method.id}>
+                    <td>
+                      <strong>{method.label}</strong>
+                      <small>{method.last4 ? `Ending ${method.last4}` : method.id}</small>
+                    </td>
+                    <td>{paymentSourceLabel(method.type)}</td>
+                    <td>{method.bankName ?? method.brand ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );
 }
 
-function BalancesView({
-  account,
-  contract,
-  metrics
-}: {
-  account: Record<string, unknown> | null;
-  contract: RuntimeContract;
-  metrics: RuntimeMetrics;
-}) {
+function BalancesView({ account, metrics }: { account: RuntimeAccount | null; metrics: RuntimeMetrics }) {
   return (
     <>
-      <MetricSummary account={account} contract={contract} metrics={metrics} />
+      <MetricSummary account={account} metrics={metrics} />
       <section className="panel account-card">
         <h2>Balance account</h2>
-        <IdentityRows account={account} contract={contract} identity={null} />
+        <IdentityRows account={account} />
       </section>
     </>
   );
 }
 
-function MetricSummary({
-  account,
-  contract,
-  metrics
-}: {
-  account: Record<string, unknown> | null;
-  contract: RuntimeContract;
-  metrics: RuntimeMetrics;
-}) {
-  const balance = account
-    ? formatAmount(account[contract.accountFields.balance ?? "balance"], account[contract.accountFields.currency ?? "currency"])
-    : formatAmount(0, metrics.currency);
+function MetricSummary({ account, metrics }: { account: RuntimeAccount | null; metrics: RuntimeMetrics }) {
+  const balance = account ? formatAmount(account.balance, account.currency) : formatAmount(0, metrics.currency);
 
   return (
     <div className="summary">
@@ -589,6 +858,17 @@ function MetricSummary({
       <Metric caption="Current workspace" label="Gross volume" value={formatAmount(metrics.volume, metrics.currency)} />
       <Metric caption={`${metrics.customers} customers`} label="Payments" value={String(metrics.count)} />
       <Metric caption="Review, failed, or pending" label="Needs attention" value={String(metrics.review)} />
+    </div>
+  );
+}
+
+function MetricDeck({ account, metrics }: { account: RuntimeAccount | null; metrics: RuntimeMetrics }) {
+  return (
+    <div className="metric-deck">
+      <Metric caption={account ? account.currency : metrics.currency} label="Float" value={account ? formatAmount(account.balance, account.currency) : formatAmount(0, metrics.currency)} />
+      <Metric caption="Converted volume" label="Volume" value={formatAmount(metrics.volume, metrics.currency)} />
+      <Metric caption={`${metrics.customers} profiles`} label="Reach" value={String(metrics.count)} />
+      <Metric caption="Queued states" label="Review" value={String(metrics.review)} />
     </div>
   );
 }
@@ -603,7 +883,13 @@ function Metric({ caption, label, value }: { caption: string; label: string; val
   );
 }
 
-function AuthForm({ onSubmit }: { onSubmit: (mode: "login" | "register", form: HTMLFormElement) => void }) {
+function AuthForm({
+  labels,
+  onSubmit
+}: {
+  labels: RuntimeShell["labels"];
+  onSubmit: (mode: "login" | "register", form: HTMLFormElement) => void;
+}) {
   return (
     <form
       onSubmit={(event) => {
@@ -626,7 +912,7 @@ function AuthForm({ onSubmit }: { onSubmit: (mode: "login" | "register", form: H
       <input name="currency" type="hidden" value="USD" />
       <div className="button-row">
         <button className="primary" type="submit">
-          Register merchant
+          {labels.register}
         </button>
         <button
           className="secondary"
@@ -639,14 +925,14 @@ function AuthForm({ onSubmit }: { onSubmit: (mode: "login" | "register", form: H
             }
           }}
         >
-          Sign in
+          {labels.login}
         </button>
       </div>
     </form>
   );
 }
 
-function PaymentForm({ onSubmit }: { onSubmit: (form: HTMLFormElement) => void }) {
+function PaymentForm({ label, onSubmit }: { label: string; onSubmit: (form: HTMLFormElement) => void }) {
   return (
     <form
       onSubmit={(event) => {
@@ -654,7 +940,7 @@ function PaymentForm({ onSubmit }: { onSubmit: (form: HTMLFormElement) => void }
         onSubmit(event.currentTarget);
       }}
     >
-      <h2>Process a payment</h2>
+      <h2>{label}</h2>
       <div className="row">
         <label>
           Amount
@@ -691,120 +977,21 @@ function PaymentForm({ onSubmit }: { onSubmit: (form: HTMLFormElement) => void }
       </div>
       <label>
         Processing route
-          <select defaultValue="settle" name="scenario">
+        <select defaultValue="settle" name="scenario">
           <option value="settle">Authorize and capture</option>
-            <option value="review">Hold for review</option>
-            <option value="reserve">Reserve funds</option>
-            <option value="fail">Decline</option>
-          </select>
-      </label>
-      <button className="primary" type="submit">
-        Process payment
-      </button>
-    </form>
-  );
-}
-
-function SavedCustomerForm({ onSubmit }: { onSubmit: (form: HTMLFormElement) => void }) {
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit(event.currentTarget);
-      }}
-    >
-      <h2>Save customer</h2>
-      <label>
-        Name
-        <input defaultValue="Saved Customer" name="name" required />
-      </label>
-      <label>
-        Email
-        <input defaultValue="saved@example.com" name="email" type="email" />
-      </label>
-      <label>
-        Phone
-        <input name="phone" placeholder="+15551234567" />
-      </label>
-      <button className="primary" type="submit">
-        Save customer
-      </button>
-    </form>
-  );
-}
-
-function SavedPaymentMethodForm({
-  contract,
-  customers,
-  methods,
-  onSubmit
-}: {
-  contract: RuntimeContract;
-  customers: Array<Record<string, unknown>>;
-  methods: Array<Record<string, unknown>>;
-  onSubmit: (form: HTMLFormElement) => void;
-}) {
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit(event.currentTarget);
-      }}
-    >
-      <h2>Save payment method</h2>
-      <label>
-        Customer
-        <select name="customerId">
-          <option value="">No customer</option>
-          {customers.map((customer) => (
-            <option
-              key={String(customer[contract.customerFields.customerId ?? "customerId"])}
-              value={String(customer[contract.customerFields.customerId ?? "customerId"])}
-            >
-              {String(customer[contract.customerFields.name ?? "name"] ?? "Customer")}
-            </option>
-          ))}
+          <option value="review">Hold for review</option>
+          <option value="reserve">Reserve funds</option>
+          <option value="fail">Decline</option>
         </select>
       </label>
-      <div className="row">
-        <label>
-          Type
-          <select defaultValue="card" name="type">
-            <option value="card">Card</option>
-            <option value="bank_transfer">Bank transfer</option>
-            <option value="wallet">Wallet</option>
-          </select>
-        </label>
-        <label>
-          Last 4
-          <input defaultValue="4242" name="last4" required />
-        </label>
-      </div>
-      <label>
-        Label
-        <input defaultValue="Saved card ending 4242" name="label" required />
-      </label>
-      <div className="row">
-        <label>
-          Brand
-          <input defaultValue="visa" name="brand" />
-        </label>
-        <label>
-          Bank
-          <input name="bankName" placeholder="Demo Bank" />
-        </label>
-      </div>
       <button className="primary" type="submit">
-        Save method
+        {label}
       </button>
-      <small>{methods.length} saved methods</small>
     </form>
   );
 }
 
-function PaymentsTable({ contract, payments }: { contract: RuntimeContract; payments: Array<Record<string, unknown>> }) {
-  const fields = contract.fields;
-
+function PaymentsTable({ payments }: { payments: RuntimePayment[] }) {
   if (payments.length === 0) {
     return <div className="empty">No payment activity yet.</div>;
   }
@@ -824,22 +1011,20 @@ function PaymentsTable({ contract, payments }: { contract: RuntimeContract; paym
         </thead>
         <tbody>
           {payments.map((payment) => {
-            const reference = String(payment[fields.externalReference ?? "externalReference"] ?? "");
-            const status = String(payment[fields.status ?? "status"] ?? "");
-            const customer = customerFromPayment(contract, payment);
+            const customer = customerFromPayment(payment);
 
             return (
-              <tr key={String(payment[fields.paymentId ?? "paymentId"] ?? reference)}>
+              <tr key={payment.id}>
                 <td>
-                  <strong>{reference}</strong>
+                  <strong>{payment.reference}</strong>
                 </td>
                 <td>
-                  <span className={`badge ${statusClass(status)}`}>{status}</span>
+                  <span className={`badge ${statusClass(payment.status)}`}>{payment.status}</span>
                 </td>
-                <td>{formatAmount(payment[fields.amount ?? "amount"], payment[fields.currency ?? "currency"])}</td>
+                <td>{formatAmount(payment.amount, payment.currency)}</td>
                 <td>{customer.name}</td>
                 <td>{customer.instrument}</td>
-                <td>{formatDateTime(payment[fields.createdAt ?? "createdAt"])}</td>
+                <td>{formatDateTime(payment.createdAt)}</td>
               </tr>
             );
           })}
@@ -849,38 +1034,68 @@ function PaymentsTable({ contract, payments }: { contract: RuntimeContract; paym
   );
 }
 
-function IdentityRows({
-  account,
-  contract,
-  identity
-}: {
-  account: Record<string, unknown> | null;
-  contract: RuntimeContract;
-  identity: RuntimeAuthResponse | null;
-}) {
-  const user = identity?.user ?? null;
-  const candidateRows: Array<[string, unknown]> = [
-    ["Email", user?.[contract.userFields.email ?? "email"]],
-    ["Owner", user?.[contract.userFields.displayName ?? "displayName"]],
-    ["Account", account?.[contract.accountFields.accountId ?? "accountId"]],
-    ["Currency", account?.[contract.accountFields.currency ?? "currency"]]
-  ];
-  const rows = candidateRows.filter((row): row is [string, string | number | boolean] => {
-    const value = row[1];
+function PaymentSignalList({ payments }: { payments: RuntimePayment[] }) {
+  if (payments.length === 0) {
+    return <div className="empty">No payment activity yet.</div>;
+  }
 
-    return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
-  });
+  return (
+    <div className="signal-list">
+      {payments.map((payment) => (
+        <article className="signal-row" key={payment.id}>
+          <span className={`signal-dot ${statusClass(payment.status)}`} />
+          <div>
+            <strong>{payment.reference}</strong>
+            <small>{customerFromPayment(payment).name}</small>
+          </div>
+          <span>{payment.status}</span>
+          <strong>{formatAmount(payment.amount, payment.currency)}</strong>
+        </article>
+      ))}
+    </div>
+  );
+}
 
-  if (rows.length === 0) {
+function PaymentTiles({ payments }: { payments: RuntimePayment[] }) {
+  if (payments.length === 0) {
+    return <div className="empty">No payment activity yet.</div>;
+  }
+
+  return (
+    <div className="payment-tiles">
+      {payments.map((payment) => {
+        const customer = customerFromPayment(payment);
+
+        return (
+          <article className="payment-tile" key={payment.id}>
+            <span className={`badge ${statusClass(payment.status)}`}>{payment.status}</span>
+            <strong>{formatAmount(payment.amount, payment.currency)}</strong>
+            <small>{customer.name}</small>
+            <span>{payment.reference}</span>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function IdentityRows({ account }: { account: RuntimeAccount | null }) {
+  if (!account) {
     return <div className="empty">Account details appear after sign in.</div>;
   }
+
+  const rows: Array<[string, string | number]> = [
+    ["Account", account.id],
+    ["Currency", account.currency],
+    ["Available", account.balance]
+  ];
 
   return (
     <>
       {rows.map(([label, value]) => (
         <div className="identity-row" key={label}>
           <span>{label}</span>
-          <strong>{String(value)}</strong>
+          <strong>{label === "Available" ? formatAmount(value, account.currency) : String(value)}</strong>
         </div>
       ))}
     </>
@@ -898,29 +1113,6 @@ function ErrorScreen({ message }: { message: string }) {
   );
 }
 
-interface RuntimeMetrics {
-  count: number;
-  currency: string;
-  customers: number;
-  review: number;
-  volume: number;
-}
-
-function paymentMetrics(contract: RuntimeContract, payments: Array<Record<string, unknown>>): RuntimeMetrics {
-  const fields = contract.fields;
-  const currency = String(payments[0]?.[fields.currency ?? "currency"] ?? "USD");
-  const review = payments.filter((payment) => statusClass(String(payment[fields.status ?? "status"] ?? "")) !== "ok").length;
-  const volume = payments.reduce((sum, payment) => sum + Number(payment[fields.amount ?? "amount"] ?? 0), 0);
-
-  return {
-    count: payments.length,
-    currency,
-    customers: customersFromPayments(contract, payments).length,
-    review,
-    volume
-  };
-}
-
 function emptyMetrics(): RuntimeMetrics {
   return {
     count: 0,
@@ -931,81 +1123,77 @@ function emptyMetrics(): RuntimeMetrics {
   };
 }
 
-interface RuntimeCustomer {
+interface RuntimeCustomerSummary {
   count: number;
   currency: string;
   instrument: string;
-  lastPaymentAt: unknown;
+  lastPaymentAt: string;
   name: string;
   volume: number;
 }
 
-function customersFromPayments(contract: RuntimeContract, payments: Array<Record<string, unknown>>): RuntimeCustomer[] {
-  const fields = contract.fields;
-  const customers = new Map<string, RuntimeCustomer>();
+function customerRows(customers: RuntimeCustomer[], payments: RuntimePayment[]): RuntimeCustomerSummary[] {
+  return customers.map((customer) => {
+    const customerPayments = payments.filter((payment) => payment.customer?.id === customer.id || payment.customer?.name === customer.name);
+    const latestPayment = customerPayments[0];
+    const volume = customerPayments.reduce((sum, payment) => sum + payment.amount, 0);
+
+    return {
+      count: customerPayments.length,
+      currency: latestPayment?.currency ?? "USD",
+      instrument: customer.email ?? customer.phone ?? customer.id,
+      lastPaymentAt: latestPayment?.createdAt ?? "",
+      name: customer.name,
+      volume
+    };
+  });
+}
+
+function customersFromPayments(payments: RuntimePayment[]): RuntimeCustomerSummary[] {
+  const customers = new Map<string, RuntimeCustomerSummary>();
 
   for (const payment of payments) {
-    const customer = customerFromPayment(contract, payment);
-    const amount = Number(payment[fields.amount ?? "amount"] ?? 0);
-    const currency = String(payment[fields.currency ?? "currency"] ?? "USD");
-    const createdAt = payment[fields.createdAt ?? "createdAt"];
+    const customer = customerFromPayment(payment);
     const current = customers.get(customer.name);
 
     if (current) {
       current.count += 1;
-      current.volume += amount;
-      current.lastPaymentAt = createdAt;
+      current.volume += payment.amount;
+      current.lastPaymentAt = payment.createdAt;
     } else {
       customers.set(customer.name, {
         count: 1,
-        currency,
+        currency: payment.currency,
         instrument: customer.instrument,
-        lastPaymentAt: createdAt,
+        lastPaymentAt: payment.createdAt,
         name: customer.name,
-        volume: amount
+        volume: payment.amount
       });
     }
   }
 
-  return [...customers.values()].sort((left, right) => Number(right.volume) - Number(left.volume));
+  return [...customers.values()].sort((left, right) => right.volume - left.volume);
 }
 
-function customerFromPayment(contract: RuntimeContract, payment: Record<string, unknown>) {
-  const customer = objectValue(payment.customer);
-  const paymentMethod = objectValue(payment.paymentMethod);
-  const structuredName = stringValue(customer?.[contract.customerFields.name ?? "name"] ?? customer?.name);
-  const structuredEmail = stringValue(customer?.[contract.customerFields.email ?? "email"] ?? customer?.email);
-  const structuredMethodLabel = stringValue(paymentMethod?.[contract.paymentMethodFields.label ?? "label"] ?? paymentMethod?.label);
-  const structuredMethodLast4 = stringValue(paymentMethod?.[contract.paymentMethodFields.last4 ?? "last4"] ?? paymentMethod?.last4);
-
-  if (structuredName || structuredEmail || structuredMethodLabel || structuredMethodLast4) {
-    return {
-      instrument: structuredMethodLabel || (structuredMethodLast4 ? `Source ending ${structuredMethodLast4}` : "Payment source"),
-      name: structuredName || structuredEmail || "Customer"
-    };
-  }
-
-  const rawDestination = String(payment[contract.fields.destinationLabel ?? "destinationLabel"] ?? "Customer");
-  const [name = "Customer", emailOrId = "", instrument = "Payment source"] = rawDestination
-    .split("|")
-    .map((part) => part.trim());
+function customerFromPayment(payment: RuntimePayment) {
+  const name = payment.customer?.name || payment.destination || "Customer";
+  const source = payment.paymentMethod?.label || payment.paymentMethod?.last4 || payment.methodType || "Payment source";
 
   return {
-    instrument: instrument.length > 0 ? instrument : emailOrId,
-    name: name.length > 0 ? name : "Customer"
+    instrument: source,
+    name
   };
 }
 
-function paymentMethodPayload(contract: RuntimeContract, methodType: string, instrumentReference: string) {
+function paymentMethodPayload(methodType: string, instrumentReference: string) {
   const last4 = instrumentSummary(instrumentReference).replace(/[^\dA-Za-z]/gu, "");
-  const fields = contract.paymentMethodFields;
 
   return {
-    [fields.type ?? "type"]: methodType,
-    [fields.label ?? "label"]: `${paymentSourceLabel(methodType)} ${instrumentSummary(instrumentReference)}`,
-    [fields.last4 ?? "last4"]: last4,
-    ...(methodType === "card" ? { [fields.brand ?? "brand"]: cardBrand(instrumentReference) } : {}),
-    ...(methodType === "bank_transfer" ? { [fields.bankName ?? "bankName"]: "Demo Bank" } : {})
+    label: `${paymentSourceLabel(methodType)} ${instrumentSummary(instrumentReference)}`,
+    last4,
+    type: methodType,
+    ...(methodType === "card" ? { brand: cardBrand(instrumentReference) } : {}),
+    ...(methodType === "bank_transfer" ? { bankName: "Demo Bank" } : {})
   };
 }
 
@@ -1045,62 +1233,187 @@ function instrumentSummary(value: string) {
   return `•••• ${compact.slice(-4)}`;
 }
 
-function objectValue(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+function runtimeThemeStyle(shell: RuntimeShell): CSSProperties {
+  const theme = resolveRuntimeTheme(shell);
+
+  return {
+    "--accent": theme.accent,
+    "--primary": theme.primary,
+    "--secondary": theme.secondary,
+    "--surface": theme.surface,
+    "--text": theme.text,
+    "--runtime-active-bg": theme.activeBg,
+    "--runtime-bg": theme.background,
+    "--runtime-border": theme.border,
+    "--runtime-font": theme.fontFamily,
+    "--runtime-muted": theme.muted,
+    "--runtime-on-primary": theme.onPrimary,
+    "--runtime-panel": theme.panel,
+    "--runtime-panel-alt": theme.panelAlt,
+    "--runtime-primary": theme.primary,
+    "--runtime-radius": theme.radius,
+    "--runtime-rail": theme.rail,
+    "--runtime-secondary": theme.secondary,
+    "--runtime-shadow": theme.shadow,
+    "--runtime-sidebar-text": theme.sidebarText,
+    "--runtime-shell-text": theme.shellText
+  } as CSSProperties;
 }
 
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+interface RuntimeTheme {
+  accent: string;
+  activeBg: string;
+  background: string;
+  border: string;
+  fontFamily: string;
+  muted: string;
+  onPrimary: string;
+  panel: string;
+  panelAlt: string;
+  primary: string;
+  radius: string;
+  rail: string;
+  secondary: string;
+  shadow: string;
+  sidebarText: string;
+  shellText: string;
+  surface: string;
+  text: string;
 }
 
-function paymentsFromHistory(
-  contract: RuntimeContract | null,
-  historyResponse: RuntimeHistoryResponse | null
-): Array<Record<string, unknown>> {
-  if (!contract || !historyResponse) {
-    return [];
+function resolveRuntimeTheme(shell: RuntimeShell): RuntimeTheme {
+  const presentation = shell.ui?.presentation;
+  const tokens = presentation?.visualTokens.palette ?? [];
+  const colors = tokens.map(colorForToken).filter((color): color is string => Boolean(color));
+  const vividColors = colors.filter((color) => !NEUTRAL_COLORS.has(color));
+  const darkColor = colors.find(isDarkColor);
+  const primary = vividColors.find((color) => !isDarkColor(color)) ?? vividColors[0] ?? shell.brand.palette.primary;
+  const accent = vividColors.find((color) => color !== primary && !isDarkColor(color)) ?? shell.brand.palette.accent;
+  const rail = darkColor ?? shell.brand.palette.secondary;
+  const isDarkLayout = presentation?.layout === "command-center" || presentation?.layout === "compact-terminal";
+  const surface = isDarkLayout
+    ? "rgba(255, 255, 255, 0.07)"
+    : colors.find((color) => color === "#ffffff" || color === "#f8fafc") ?? shell.brand.palette.surface;
+
+  return {
+    accent,
+    activeBg: isDarkLayout ? "rgba(255, 255, 255, 0.12)" : `color-mix(in srgb, ${primary} 11%, ${surface})`,
+    background: isDarkLayout ? rail : "#f4f7f8",
+    border: isDarkLayout ? "rgba(255, 255, 255, 0.14)" : "#d8e2e8",
+    fontFamily: fontStackFor(presentation?.visualTokens.typography),
+    muted: isDarkLayout ? "#a9b7c2" : "#647482",
+    onPrimary: "#ffffff",
+    panel: surface,
+    panelAlt: isDarkLayout ? "rgba(255, 255, 255, 0.08)" : "#f8fafc",
+    primary,
+    radius: presentation?.visualTokens.radius ?? "8px",
+    rail: isDarkLayout ? rail : surface,
+    secondary: darkColor ?? shell.brand.palette.secondary,
+    shadow: isDarkLayout ? "0 22px 60px rgba(0, 0, 0, 0.28)" : "0 16px 42px rgba(22, 35, 48, 0.08)",
+    sidebarText: isDarkLayout ? "#f8fafc" : shell.brand.palette.text,
+    shellText: isDarkLayout ? "#f8fafc" : shell.brand.palette.text,
+    surface,
+    text: isDarkLayout ? "#f8fafc" : shell.brand.palette.text
+  };
+}
+
+function colorForToken(value: string): string | null {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/gu, " ").trim();
+  const direct = COLOR_TOKENS[normalized];
+
+  if (direct) {
+    return direct;
   }
 
-  const rawPayments = historyResponse[contract.resourceAlias];
+  const match = Object.entries(COLOR_TOKENS).find(([token]) => normalized.includes(token));
 
-  return Array.isArray(rawPayments)
-    ? rawPayments.filter((payment): payment is Record<string, unknown> => Boolean(payment) && typeof payment === "object" && !Array.isArray(payment))
-    : [];
+  return match?.[1] ?? null;
 }
 
-function savedCustomersFromHistory(
-  _contract: RuntimeContract,
-  historyResponse: RuntimeHistoryResponse | null
-): Array<Record<string, unknown>> {
-  const rawCustomers = historyResponse?.customers;
-
-  return Array.isArray(rawCustomers)
-    ? rawCustomers.filter((customer): customer is Record<string, unknown> => Boolean(customer) && typeof customer === "object" && !Array.isArray(customer))
-    : [];
+function isDarkColor(color: string): boolean {
+  return DARK_COLORS.has(color);
 }
 
-function savedPaymentMethodsFromHistory(
-  _contract: RuntimeContract,
-  historyResponse: RuntimeHistoryResponse | null
-): Array<Record<string, unknown>> {
-  const rawMethods = historyResponse?.paymentMethods;
+function fontStackFor(value: string | undefined): string {
+  const normalized = value?.toLowerCase() ?? "";
 
-  return Array.isArray(rawMethods)
-    ? rawMethods.filter((method): method is Record<string, unknown> => Boolean(method) && typeof method === "object" && !Array.isArray(method))
-    : [];
+  if (normalized.includes("mono-adjacent")) {
+    return "\"IBM Plex Sans Condensed\", \"Aptos Narrow\", \"Arial Narrow\", ui-sans-serif, system-ui, sans-serif";
+  }
+
+  if (normalized.includes("terminal") || normalized.includes("mono")) {
+    return "\"JetBrains Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace";
+  }
+
+  if (normalized.includes("condensed") || normalized.includes("compact")) {
+    return "\"IBM Plex Sans Condensed\", \"Aptos Narrow\", \"Arial Narrow\", ui-sans-serif, system-ui, sans-serif";
+  }
+
+  if (normalized.includes("geometric") || normalized.includes("airy")) {
+    return "\"Space Grotesk\", \"Avenir Next\", \"Century Gothic\", ui-sans-serif, system-ui, sans-serif";
+  }
+
+  if (normalized.includes("humanist") || normalized.includes("retail")) {
+    return "\"Source Sans 3\", Aptos, \"Segoe UI\", Frutiger, ui-sans-serif, system-ui, sans-serif";
+  }
+
+  if (normalized.includes("finance") || normalized.includes("treasury")) {
+    return "Manrope, Inter, ui-sans-serif, system-ui, sans-serif";
+  }
+
+  return "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif";
 }
+
+const COLOR_TOKENS: Record<string, string> = {
+  amber: "#d97706",
+  black: "#020617",
+  blue: "#2563eb",
+  charcoal: "#111827",
+  cream: "#fff7ed",
+  cyan: "#0891b2",
+  emerald: "#059669",
+  forest: "#176f52",
+  green: "#16a34a",
+  ink: "#111827",
+  magenta: "#be185d",
+  midnight: "#101820",
+  navy: "#172554",
+  orange: "#ea580c",
+  purple: "#6d28d9",
+  "electric cyan": "#22d3ee",
+  "glass violet": "#8b5cf6",
+  "liquidity gold": "#f5c542",
+  "matrix green": "#00ff9c",
+  "signal green": "#22c55e",
+  slate: "#334155",
+  teal: "#0f766e",
+  violet: "#7c3aed",
+  white: "#ffffff"
+};
+
+const DARK_COLORS = new Set(["#020617", "#101820", "#111827", "#172554", "#334155"]);
+const NEUTRAL_COLORS = new Set(["#ffffff", "#f8fafc", "#020617", "#101820", "#111827", "#334155"]);
 
 function parseRuntimeLocation(): RuntimeLocation {
   const parts = window.location.pathname.split("/").filter(Boolean);
   const brandIndex = parts.indexOf("brands");
-  const brandId = brandIndex >= 0 ? parts[brandIndex + 1] ?? "" : "";
-  const slug = brandIndex >= 0 ? parts[brandIndex + 2] ?? "" : "";
-  const rawView = brandIndex >= 0 ? parts[brandIndex + 3] ?? "dashboard" : "dashboard";
-  const routeBase = brandIndex >= 0 ? `/${parts.slice(0, brandIndex + 3).join("/")}` : "";
+
+  if (brandIndex >= 0) {
+    const slug = parts[brandIndex + 2] ?? "";
+    const rawView = parts[brandIndex + 3] ?? "dashboard";
+
+    return {
+      routeBase: `/${parts.slice(0, brandIndex + 3).join("/")}`,
+      slug,
+      view: isRuntimeView(rawView) ? rawView : "dashboard"
+    };
+  }
+
+  const slug = parts[0] ?? "";
+  const rawView = parts[1] === "app" ? parts[2] ?? "dashboard" : parts[1] ?? "dashboard";
 
   return {
-    brandId,
-    routeBase,
+    routeBase: slug ? `/${slug}/app` : "",
     slug,
     view: isRuntimeView(rawView) ? rawView : "dashboard"
   };
@@ -1124,19 +1437,103 @@ function isRuntimeView(value: string): value is RuntimeView {
   return ["login", "dashboard", "payments", "customers", "balances"].includes(value);
 }
 
-function runtimeUrl(
-  locationState: RuntimeLocation,
-  key: "config" | "customers" | "login" | "payment-methods" | "payments" | "register"
-) {
-  return `${runtimeBasePath(locationState)}/runtime/${key}`;
+function entityUrl(locationState: RuntimeLocation, entity: string) {
+  return `/${locationState.slug}/${entity}`;
 }
 
-function runtimeBasePath(locationState: RuntimeLocation) {
-  return `${layoutApiBase}/brands/${locationState.brandId}/${locationState.slug}`;
+function aliasPayload(fields: Record<string, string>, payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(payload).map(([key, value]) => [fields[key] ?? key, value]));
+}
+
+function responseKey(shell: RuntimeShell, key: string): string {
+  return shell.fields.responseKeys[key] ?? key;
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function arrayValue(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry)) : [];
+}
+
+function valueAt(source: Record<string, unknown>, fields: Record<string, string>, key: string, fallback?: string): unknown {
+  return source[fields[key] ?? key] ?? (fallback ? source[fallback] : undefined);
+}
+
+function decodeAccount(shell: RuntimeShell, value: unknown): RuntimeAccount | null {
+  const source = objectValue(value);
+
+  if (Object.keys(source).length === 0) {
+    return null;
+  }
+
+  return {
+    id: String(valueAt(source, shell.fields.account, "accountId", "id") ?? ""),
+    balance: Number(valueAt(source, shell.fields.account, "balance") ?? 0),
+    currency: String(valueAt(source, shell.fields.account, "currency") ?? "USD")
+  };
+}
+
+function decodeCustomer(shell: RuntimeShell, value: unknown): RuntimeCustomer {
+  const source = objectValue(value);
+
+  return {
+    id: String(valueAt(source, shell.fields.customer, "customerId", "id") ?? ""),
+    email: nullableString(valueAt(source, shell.fields.customer, "email")),
+    name: String(valueAt(source, shell.fields.customer, "name") ?? "Customer"),
+    phone: nullableString(valueAt(source, shell.fields.customer, "phone"))
+  };
+}
+
+function decodePaymentMethod(shell: RuntimeShell, value: unknown): RuntimePaymentMethod {
+  const source = objectValue(value);
+
+  return {
+    id: String(valueAt(source, shell.fields.paymentMethod, "paymentMethodId", "id") ?? ""),
+    bankName: nullableString(valueAt(source, shell.fields.paymentMethod, "bankName")),
+    brand: nullableString(valueAt(source, shell.fields.paymentMethod, "brand")),
+    label: String(valueAt(source, shell.fields.paymentMethod, "label") ?? "Payment source"),
+    last4: nullableString(valueAt(source, shell.fields.paymentMethod, "last4")),
+    type: String(valueAt(source, shell.fields.paymentMethod, "type") ?? "card")
+  };
+}
+
+function decodePayment(shell: RuntimeShell, value: unknown): RuntimePayment {
+  const source = objectValue(value);
+
+  return {
+    id: String(valueAt(source, shell.fields.payment, "paymentId", "id") ?? ""),
+    amount: Number(valueAt(source, shell.fields.payment, "amount") ?? 0),
+    createdAt: String(valueAt(source, shell.fields.payment, "createdAt") ?? new Date().toISOString()),
+    currency: String(valueAt(source, shell.fields.payment, "currency") ?? "USD"),
+    customer: source.customer ? decodeCustomer(shell, source.customer) : null,
+    destination: nullableString(valueAt(source, shell.fields.payment, "destinationLabel", "destination")),
+    methodType: String(valueAt(source, shell.fields.payment, "methodType") ?? "card"),
+    paymentMethod: source.paymentMethod ? decodePaymentMethod(shell, source.paymentMethod) : null,
+    reference: String(valueAt(source, shell.fields.payment, "externalReference", "reference") ?? ""),
+    status: String(valueAt(source, shell.fields.payment, "status") ?? "unknown")
+  };
+}
+
+function decodeMetrics(_shell: RuntimeShell, value: unknown): RuntimeMetrics {
+  const source = objectValue(value);
+
+  return {
+    count: Number(source.count ?? 0),
+    currency: String(source.currency ?? "USD"),
+    customers: Number(source.customers ?? 0),
+    review: Number(source.review ?? 0),
+    volume: Number(source.volume ?? 0)
+  };
+}
+
+function nullableString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function sessionKey(locationState: RuntimeLocation) {
-  return `brand-runtime-session:${locationState.brandId}`;
+  return `brand-runtime-session:${locationState.slug}`;
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -1155,26 +1552,12 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function loadLogoDataUri(brandId: string): Promise<string | null> {
-  const response = await fetch(`${layoutApiBase}/brands/${brandId}/layout`, {
-    headers: {
-      accept: "image/svg+xml"
-    }
-  });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  return `data:image/svg+xml;base64,${window.btoa(await response.text())}`;
-}
-
-function viewTitle(view: RuntimeView) {
+function viewTitle(view: RuntimeView, shell: RuntimeShell) {
   switch (view) {
     case "payments":
-      return "Payments";
+      return shell.labels.payments;
     case "customers":
-      return "Customers";
+      return shell.labels.customers;
     case "balances":
       return "Balances";
     default:

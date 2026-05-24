@@ -59,23 +59,101 @@ model Brand {
   palette              Json
   schemas              BrandSchema[]
   requests             BrandRequest[]
+  bffRequestLogs       BrandBffRequestLog[]
+  generationDrafts     BrandGenerationDraft[]
+  memberships          BrandMembership[]
+  contractVersions     ContractVersion[]
+  generatedArtifacts   GeneratedArtifact[]
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
   @@map("brands")
 }
 
+model BrandGenerationDraft {
+  id               String   @id
+  brandId          String?
+  brand            Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  brandName        String
+  adminPrompt      String
+  systemPrompt     String
+  provider         String
+  model            String
+  controls         Json
+  messages         Json
+  spec             Json?
+  validationIssues Json
+  status           String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([brandId])
+  @@index([createdAt])
+  @@map("brand_generation_drafts")
+}
+
+model AdminIdentity {
+  id           String            @id
+  email        String            @unique
+  displayName  String
+  role         String
+  passwordHash String?
+  sessions     AdminSession[]
+  memberships  BrandMembership[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@map("admin_identities")
+}
+
+model AdminSession {
+  id        String        @id
+  adminId   String
+  admin     AdminIdentity @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  tokenHash String        @unique
+  expiresAt DateTime
+  createdAt DateTime      @default(now())
+
+  @@index([adminId])
+  @@map("admin_sessions")
+}
+
+model BrandMembership {
+  id                  String         @id
+  brandId             String
+  brand               Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  subjectType         String
+  subjectKey          String
+  role                String
+  source              String
+  adminId             String?
+  admin               AdminIdentity? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  merchantUserId      String?
+  merchantEmail       String?
+  merchantDisplayName String?
+  merchantAccountId   String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@unique([brandId, subjectKey])
+  @@index([adminId])
+  @@index([brandId, role])
+  @@map("brand_memberships")
+}
+
 model BrandSchema {
-  id          String         @id
-  brandId     String
-  brand       Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  slug        String         @unique
-  fieldsStyle String
-  structure   String
-  fields      Json
-  requests    BrandRequest[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id               String         @id
+  brandId          String
+  brand            Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  slug             String         @unique
+  fieldsStyle      String
+  structure        String
+  fields           Json
+  requests         BrandRequest[]
+  bffRequestLogs   BrandBffRequestLog[]
+  contractVersions ContractVersion[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([brandId])
   @@map("brand_schemas")
@@ -98,19 +176,85 @@ model BrandRequest {
   @@map("brand_requests")
 }
 
+model BrandBffRequestLog {
+  id                 String      @id
+  brandId            String
+  brand              Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  schemaId           String
+  schema             BrandSchema @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+  method             String
+  alias              String
+  publicEndpoint     String
+  operation          String
+  status             String
+  requestPayload     Json?
+  responseSummary    Json?
+  errorMessage       String?
+  durationMs         Int
+  createdAt          DateTime    @default(now())
+
+  @@index([brandId, createdAt])
+  @@index([schemaId, createdAt])
+  @@map("brand_bff_request_logs")
+}
+
+model ContractVersion {
+  id               String              @id
+  brandId          String
+  brand            Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  schemaId         String
+  schema           BrandSchema         @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+  slug             String
+  resourceAlias    String
+  payloadStructure String
+  fieldMap         Json
+  statusMap        Json
+  actionLabels     Json
+  endpoints        Json
+  aiSpec           Json?
+  active           Boolean             @default(false)
+  artifacts        GeneratedArtifact[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([brandId, active])
+  @@index([schemaId, createdAt])
+  @@map("contract_versions")
+}
+
+model GeneratedArtifact {
+  id                String          @id
+  brandId           String
+  brand             Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contractVersionId String
+  contractVersion   ContractVersion @relation(fields: [contractVersionId], references: [id], onDelete: Cascade)
+  provider          String
+  model             String
+  framework         String
+  entryFile         String
+  manifest          Json
+  active            Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([brandId, active])
+  @@index([contractVersionId, active])
+  @@map("generated_artifacts")
+}
+
 model PaymentUser {
-  id           String           @id
-  brandId      String
-  email        String
-  passwordHash String
-  displayName  String
-  accounts     PaymentAccount[]
-  sessions     PaymentSession[]
-  customers    PaymentCustomer[]
+  id             String            @id
+  brandId        String
+  email          String
+  passwordHash   String
+  displayName    String
+  accounts       PaymentAccount[]
+  sessions       PaymentSession[]
+  customers      PaymentCustomer[]
   paymentIntents PaymentIntent[]
-  payments     Payment[]
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  payments       Payment[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@unique([brandId, email])
   @@map("payment_users")

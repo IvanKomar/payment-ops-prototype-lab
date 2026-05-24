@@ -18,6 +18,10 @@ const numberFromString = (defaultValue: number) =>
 
       return parsed;
     });
+const booleanFromString = z
+  .string()
+  .default("false")
+  .transform((value) => value === "true");
 
 export const layoutBuilderEnvSchema = createEnvSchema({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -35,7 +39,11 @@ export const layoutBuilderEnvSchema = createEnvSchema({
     .string()
     .default("true")
     .transform((value) => value === "true"),
-  PAYMENT_CORE_BASE_URL: z.string().url().default("http://localhost:3005")
+  PAYMENT_CORE_BASE_URL: z.string().url().default("http://localhost:3005"),
+  BRAND_AI_PROVIDER: z.enum(["local", "gemini"]).default("local"),
+  GEMINI_ENABLED: booleanFromString,
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash-lite")
 });
 
 export type LayoutBuilderEnv = z.infer<typeof layoutBuilderEnvSchema>;

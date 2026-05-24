@@ -121,6 +121,11 @@ const FORBIDDEN_SOURCE_PATTERNS = [
   /\bPaymentCore\b/u,
   /\bPrisma\b/u,
   /\bDATABASE_URL\b/u,
+  /\bbrandId\b/u,
+  /\bbff\b/iu,
+  /\/bff\b/iu,
   /\/runtime\//u,
+  /\/profile\b/iu,
+  /\/rest-api\b/iu,
   /^https?:\/\//imu
 ];

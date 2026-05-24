@@ -3,6 +3,8 @@ import type {
   LayoutBuilderContractVersion,
   LayoutBuilderGeneratedBrandArtifact,
   LayoutBuilderAiGenerationProfile,
+  LayoutBuilderAiProvider,
+  LayoutBuilderClarificationAnswers,
   LayoutBuilderFieldStyle,
   LayoutBuilderPalette,
   LayoutBuilderPayloadStructure
@@ -60,6 +62,9 @@ export interface CreateBrandRequestInput {
   brandName: string;
   aiPrompt?: string;
   systemPrompt?: string;
+  aiProvider?: LayoutBuilderAiProvider;
+  aiModel?: string;
+  clarificationAnswers?: LayoutBuilderClarificationAnswers;
 }
 
 export interface SaveBrandRequestInput {

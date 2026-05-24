@@ -240,36 +240,33 @@ curl -X POST http://localhost:3003/brands \
   -F logo=@/path/to/logo.svg
 ```
 
-Create a brand through the local AI generation path:
+Create a brand through the current AI draft flow:
+
+1. Open `http://localhost:3004/#layouts`.
+2. Click `Create AI brand` in the `Brands` sidebar.
+3. Generate and preview the spec.
+4. Create the brand once validation passes.
+
+External AI agents such as Codex, Gemini, or Claude Code should start from the
+machine-readable manifest:
 
 ```bash
-curl -X POST http://localhost:3003/brands/ai \
-  -F brandName="Nova Ledger" \
-  -F aiPrompt="Create a premium treasury payment portal with settlement-focused wording" \
-  -F systemPrompt="Generate a brand runtime contract that integrates only through the public facade" \
-  -F logo=@/path/to/logo.svg
+curl http://localhost:3003/ai-agent/brand-generation-manifest
 ```
+
+See [AI Brand Generation](./docs/ai-brand-generation.md) for the complete
+built-in UI flow, external-agent flow, Gemini env setup, and validation
+checklist.
 
 Open the returned `appUrl` to use the generated brand as a user. The app is a
 React/Vite payments dashboard with routes for login, overview, payments,
-customers, and balances. It calls:
+customers, and balances. Browser-visible calls use the generated brand slug and
+brand-specific entity routes; internal BFF/runtime/payment-core details are
+mapped server-side.
 
-- `GET /brands/:id/:slug/runtime/config`
-- `POST /brands/:id/:slug/runtime/register`
-- `POST /brands/:id/:slug/runtime/login`
-- `GET /brands/:id/:slug/runtime/payments`
-- `POST /brands/:id/:slug/runtime/payments`
-
-The runtime facade maps these calls to `payment-core` through
-`PAYMENT_CORE_BASE_URL`, then maps payment fields and statuses back to the
-brand-specific contract. Runtime contracts include generated request fields for
-auth payloads and payment payloads, while the user-facing React app presents a
-Stripe-like payments workspace instead of exposing those field keys. The admin
-UI shows the live runtime contract and opens the selected brand as a standalone
-user app.
-
-The service accepts JPEG, PNG, WebP, and SVG logos. Gemini is not used for V1
-template generation; SVG layouts are rendered by deterministic local logic.
+The service accepts JPEG, PNG, WebP, and SVG logos. Gemini is used only when
+`BRAND_AI_PROVIDER=gemini`, `GEMINI_ENABLED=true`, and `GEMINI_API_KEY` are
+configured. Otherwise, the deterministic local generator remains the fallback.
 
 ## Workspace
 
@@ -332,13 +329,19 @@ pnpm run docker:logs
   and stores generated runtime metadata for later OpenAI/Gemini/Claude adapters.
   AI-created brands now serve a user-facing runtime app that can register/login
   users and create/list payments through brand-specific facade endpoints backed
-  by `payment-core`.
+  by `payment-core`. AI-created brands are seeded during creation with demo
+  merchant data so the runtime opens with realistic payment activity.
 - `brand-runtime`: React/Vite client app for generated brands. It owns the
   merchant-facing routes for login, dashboard, payment ledger, customers, and
-  balances.
+  balances. Runtime UI presentation now varies by AI spec: terminal, command
+  center, card operations, split workspace, and topbar console layouts use
+  different dashboard widgets, navigation patterns, palettes, and Google Font
+  stacks.
 - `builder-frontend`: implemented in Phase 5. It provides a compact Vite demo
   UI for the backend flows and uses local proxy routes so the browser can drive
-  all services from `http://localhost:5173`.
+  all services from `http://localhost:3004`. In the Layout Builder tab, the
+  lower-priority Integration inspector sits below the runtime preview instead
+  of occupying the main right column.
 - `payment-core`: Phase 6 foundation service. It supports brand-scoped user
   registration/login, session tokens, account payment history, simulated local
   payments, and a Stripe-like 10-status state machine.
@@ -407,6 +410,7 @@ missing, quotas are exhausted, or providers fail.
 ## Documentation
 
 - [Architecture](./docs/architecture.md)
+- [AI Brand Generation](./docs/ai-brand-generation.md)
 - [Phase 6 AI-Generated Brand Payment Platform](./docs/phase-6-ai-brand-payment-platform.md)
 - [ADR 0001: Builder Frontend Uses Vite Proxy Routes](./docs/adr/0001-builder-frontend-vite-proxy.md)
 - [Phase 2 SMS Gateway Plan](./docs/phase-2-sms-gateway.md)

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -22,20 +23,33 @@ import {
 import type {
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandResponse,
+  LayoutBuilderBrandGenerationDraft,
   LayoutBuilderBrandSchemaResponse,
+  LayoutBuilderAppendBrandDraftMessageRequest,
+  LayoutBuilderAiGenerationControls,
+  LayoutBuilderClarifyBrandRequest,
+  LayoutBuilderClarifyBrandResponse,
   LayoutBuilderContractVersionRecord,
   LayoutBuilderConfigureResponse,
+  LayoutBuilderCreateBrandDraftFromSpecRequest,
+  LayoutBuilderCreateBrandDraftRequest,
   LayoutBuilderDeleteBrandResponse,
+  LayoutBuilderAgentManifest,
   LayoutBuilderRegenerateContractRequest
 } from "@payment-ops/shared-types";
+import type { z } from "zod";
 
 import { loadLayoutBuilderConfig } from "../../config/layout-builder.config.js";
 import {
   brandIdSchema,
+  appendBrandDraftMessageSchema,
   BrandListItemDto,
   BrandResponseDto,
+  clarifyBrandSchema,
   ConfigureBrandResponseDto,
   contractVersionIdSchema,
+  createBrandDraftSchema,
+  createBrandDraftFromSpecSchema,
   createBrandSchema,
   CreateBrandResponseDto,
   DeleteBrandResponseDto,
@@ -45,7 +59,7 @@ import {
   ZodValidationPipe
 } from "../dto/layout.schemas.js";
 import { LayoutService } from "../layout.service.js";
-import type { UploadedLogoFile } from "../layout.types.js";
+import type { CreateBrandRequestInput, UploadedLogoFile } from "../layout.types.js";
 
 const config = loadLayoutBuilderConfig();
 
@@ -90,10 +104,101 @@ export class BrandsController {
   @ApiOkResponse({ type: BrandResponseDto })
   createBrand(
     @UploadedFile() file: UploadedLogoFile | undefined,
-    @Body(new ZodValidationPipe(createBrandSchema)) body: { brandName: string },
+    @Body(new ZodValidationPipe(createBrandSchema)) body: CreateBrandRequestInput,
     @Headers("authorization") authorization: string | undefined
   ): Promise<LayoutBuilderBrandResponse> {
     return this.layoutService.createBrand(file, body, parseOptionalBearerToken(authorization));
+  }
+
+  @Post("ai/clarify")
+  @ApiOkResponse({ description: "AI clarification questions for brand generation" })
+  clarifyAiBrand(
+    @Body(new ZodValidationPipe(clarifyBrandSchema)) body: LayoutBuilderClarifyBrandRequest
+  ): LayoutBuilderClarifyBrandResponse {
+    return this.layoutService.clarifyAiBrand(body);
+  }
+
+  @Post("ai/drafts")
+  @ApiOkResponse({ description: "Create an AI-generated brand contract draft" })
+  createBrandDraft(
+    @Body(new ZodValidationPipe(createBrandDraftSchema)) body: LayoutBuilderCreateBrandDraftRequest,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandGenerationDraft> {
+    return this.layoutService.createBrandGenerationDraft(body, parseOptionalBearerToken(authorization));
+  }
+
+  @Get("ai/agent-manifest")
+  @ApiOkResponse({ description: "Machine-readable AI agent integration manifest for brand generation" })
+  getAgentManifest(): LayoutBuilderAgentManifest {
+    return this.layoutService.getAgentManifest();
+  }
+
+  @Post("ai/drafts/from-spec")
+  @ApiOkResponse({ description: "Create an AI brand draft from an externally generated spec" })
+  createBrandDraftFromSpec(
+    @Body(new ZodValidationPipe(createBrandDraftFromSpecSchema)) body: LayoutBuilderCreateBrandDraftFromSpecRequest,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandGenerationDraft> {
+    return this.layoutService.createBrandGenerationDraftFromSpec(body, parseOptionalBearerToken(authorization));
+  }
+
+  @Post("ai/drafts/from-spec/create")
+  @UseInterceptors(
+    FileInterceptor("logo", {
+      limits: {
+        fileSize: config.LAYOUT_MAX_UPLOAD_BYTES
+      }
+    })
+  )
+  @ApiConsumes("multipart/form-data")
+  @ApiOkResponse({ type: BrandResponseDto })
+  createBrandFromExternalSpec(
+    @UploadedFile() file: UploadedLogoFile | undefined,
+    @Body("payload") payload: string | undefined,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandResponse> {
+    return this.layoutService.createBrandFromExternalSpec(
+      parseFromSpecPayload(payload),
+      file,
+      parseOptionalBearerToken(authorization)
+    );
+  }
+
+  @Get("ai/drafts/:draftId")
+  @ApiOkResponse({ description: "Read an AI-generated brand contract draft" })
+  getBrandDraft(
+    @Param("draftId") draftId: string,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandGenerationDraft> {
+    return this.layoutService.getBrandGenerationDraft(draftId, parseOptionalBearerToken(authorization));
+  }
+
+  @Post("ai/drafts/:draftId/messages")
+  @ApiOkResponse({ description: "Append a chat message and regenerate the draft spec" })
+  appendBrandDraftMessage(
+    @Param("draftId") draftId: string,
+    @Body(new ZodValidationPipe(appendBrandDraftMessageSchema)) body: LayoutBuilderAppendBrandDraftMessageRequest,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandGenerationDraft> {
+    return this.layoutService.appendBrandGenerationDraftMessage(draftId, body, parseOptionalBearerToken(authorization));
+  }
+
+  @Post("ai/drafts/:draftId/create")
+  @UseInterceptors(
+    FileInterceptor("logo", {
+      limits: {
+        fileSize: config.LAYOUT_MAX_UPLOAD_BYTES
+      }
+    })
+  )
+  @ApiConsumes("multipart/form-data")
+  @ApiOkResponse({ type: BrandResponseDto })
+  createBrandFromDraft(
+    @Param("draftId") draftId: string,
+    @UploadedFile() file: UploadedLogoFile | undefined,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandResponse> {
+    return this.layoutService.createBrandFromDraft(draftId, file, parseOptionalBearerToken(authorization));
   }
 
   @Post("ai")
@@ -125,6 +230,18 @@ export class BrandsController {
         systemPrompt: {
           type: "string",
           example: "Generate a brand runtime contract that maps to Payment Core without exposing internals"
+        },
+        aiProvider: {
+          type: "string",
+          example: "local"
+        },
+        aiModel: {
+          type: "string",
+          example: "local-brand-runtime-v1"
+        },
+        clarificationAnswers: {
+          type: "string",
+          example: "{\"audience\":\"Crypto payment teams\"}"
         }
       }
     }
@@ -132,7 +249,7 @@ export class BrandsController {
   @ApiOkResponse({ type: BrandResponseDto })
   createAiBrand(
     @UploadedFile() file: UploadedLogoFile | undefined,
-    @Body(new ZodValidationPipe(createBrandSchema)) body: { brandName: string; aiPrompt?: string; systemPrompt?: string },
+    @Body(new ZodValidationPipe(createBrandSchema)) body: CreateBrandRequestInput,
     @Headers("authorization") authorization: string | undefined
   ): Promise<LayoutBuilderBrandResponse> {
     return this.layoutService.createBrand(file, body, parseOptionalBearerToken(authorization));
@@ -255,4 +372,54 @@ export class BrandsController {
   ): Promise<LayoutBuilderConfigureResponse> {
     return this.layoutService.configureBrand(id, slug, payload);
   }
+}
+
+function parseJsonPayload(payload: string | undefined): unknown {
+  if (!payload) {
+    throw new BadRequestException("payload is required");
+  }
+
+  try {
+    return JSON.parse(payload);
+  } catch {
+    throw new BadRequestException("payload must be valid JSON");
+  }
+}
+
+function parseFromSpecPayload(payload: string | undefined): LayoutBuilderCreateBrandDraftFromSpecRequest {
+  const parsed = createBrandDraftFromSpecSchema.safeParse(parseJsonPayload(payload));
+
+  if (!parsed.success) {
+    throw new BadRequestException(parsed.error.issues.map((issue) => `${issue.path.join(".") || "payload"}: ${issue.message}`).join("; "));
+  }
+
+  return cleanFromSpecRequest(parsed.data);
+}
+
+function cleanFromSpecRequest(input: z.infer<typeof createBrandDraftFromSpecSchema>): LayoutBuilderCreateBrandDraftFromSpecRequest {
+  return {
+    brandName: input.brandName,
+    provider: input.provider,
+    spec: input.spec,
+    ...(input.adminPrompt ? { adminPrompt: input.adminPrompt } : {}),
+    ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.controls ? { controls: cleanControls(input.controls) } : {})
+  };
+}
+
+function cleanControls(input: z.infer<typeof createBrandDraftFromSpecSchema>["controls"]): Partial<LayoutBuilderAiGenerationControls> {
+  if (!input) {
+    return {};
+  }
+
+  return {
+    ...(input.payloadStructure ? { payloadStructure: input.payloadStructure } : {}),
+    ...(input.fieldStyle ? { fieldStyle: input.fieldStyle } : {}),
+    ...(input.authShape ? { authShape: input.authShape } : {}),
+    ...(input.responseEnvelope ? { responseEnvelope: input.responseEnvelope } : {}),
+    ...(input.routeNaming ? { routeNaming: input.routeNaming } : {}),
+    ...(input.errorStyle ? { errorStyle: input.errorStyle } : {}),
+    ...(input.namingIntensity ? { namingIntensity: input.namingIntensity } : {})
+  };
 }

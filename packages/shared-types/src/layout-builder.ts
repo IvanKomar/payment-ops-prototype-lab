@@ -3,6 +3,25 @@ import type { PaymentCoreStatus } from "./payment-core.js";
 export type LayoutBuilderFieldStyle = "camelCase" | "snake_case" | "kebab-case";
 export type LayoutBuilderPayloadStructure = "flat" | "nested" | "key-value-array";
 export type LayoutBuilderIdentityRole = "platform_admin" | "brand_operator" | "merchant_owner";
+export type LayoutBuilderAiProvider = "local" | "openai" | "gemini" | "anthropic" | "codex";
+export type LayoutBuilderAiCredentialMode = "none" | "server_api_key";
+export type LayoutBuilderBrandDraftStatus = "draft" | "valid" | "invalid" | "created";
+export type LayoutBuilderClarificationQuestionType = "text" | "single_select" | "multi_select";
+export type LayoutBuilderClarificationAnswerValue = string | string[];
+export type LayoutBuilderClarificationAnswers = Record<string, LayoutBuilderClarificationAnswerValue>;
+export type LayoutBuilderAiFieldStyle = LayoutBuilderFieldStyle;
+export type LayoutBuilderAiEnvelopeStyle = "plain" | "resource_key" | "data" | "result";
+export type LayoutBuilderAiNamingIntensity = "moderate" | "high" | "maximum";
+export type LayoutBuilderAiUiLayout =
+  | "sidebar-ledger"
+  | "topbar-console"
+  | "split-workspace"
+  | "command-center"
+  | "card-operations"
+  | "compact-terminal";
+export type LayoutBuilderAiUiDensity = "compact" | "balanced" | "spacious";
+export type LayoutBuilderAiUiNavigationPattern = "sidebar" | "top-tabs" | "command-rail";
+export type LayoutBuilderAiDashboardBlock = "metrics" | "recentPayments" | "balances" | "customers" | "createPayment";
 export type LayoutBuilderLayoutVariant =
   | "classic"
   | "summary-left"
@@ -11,11 +30,188 @@ export type LayoutBuilderLayoutVariant =
   | "finance-ledger"
   | "compact-review";
 
+export interface LayoutBuilderClarificationQuestion {
+  id: string;
+  label: string;
+  type: LayoutBuilderClarificationQuestionType;
+  required: boolean;
+  options?: string[];
+  placeholder?: string;
+}
+
+export interface LayoutBuilderClarifyBrandRequest {
+  brandName: string;
+  aiPrompt: string;
+  aiProvider?: LayoutBuilderAiProvider;
+  aiModel?: string;
+}
+
+export interface LayoutBuilderClarifyBrandResponse {
+  aiProvider: LayoutBuilderAiProvider;
+  aiModel: string;
+  credentialMode: LayoutBuilderAiCredentialMode;
+  questions: LayoutBuilderClarificationQuestion[];
+  readyToGenerate: boolean;
+}
+
+export interface LayoutBuilderAiGenerationControls {
+  payloadStructure: LayoutBuilderPayloadStructure;
+  fieldStyle: LayoutBuilderAiFieldStyle;
+  authShape: "credentials" | "access_key" | "workspace";
+  responseEnvelope: LayoutBuilderAiEnvelopeStyle;
+  routeNaming: "product" | "finance" | "abstract";
+  errorStyle: "standard" | "branded";
+  namingIntensity: LayoutBuilderAiNamingIntensity;
+}
+
+export interface LayoutBuilderAiEntitySpec {
+  route: string;
+  method: "GET" | "POST";
+  requiresSession: boolean;
+  requestKey: string;
+  responseKey: string;
+  emptyState: string;
+}
+
+export interface LayoutBuilderAiAuthSpec {
+  tokenResponseKey: string;
+  tokenStorageKey: string;
+  errorKey: string;
+  fields: {
+    email: string;
+    password: string;
+    displayName: string;
+    currency: string;
+  };
+}
+
+export interface LayoutBuilderAiUiPresentationSpec {
+  layout: LayoutBuilderAiUiLayout;
+  density: LayoutBuilderAiUiDensity;
+  navigationPattern: LayoutBuilderAiUiNavigationPattern;
+  dashboardComposition: LayoutBuilderAiDashboardBlock[];
+  visualTokens: {
+    palette: string[];
+    typography: string;
+    radius: string;
+    spacing: string;
+    surfaces: string;
+    buttons: string;
+  };
+  copyTone: string;
+  componentLabels: Record<string, string>;
+  emptyStates: Record<string, string>;
+}
+
+export interface LayoutBuilderAiBrandSpec {
+  brand: {
+    displayName: string;
+    visualDirection: string;
+    contractSummary: string;
+    paletteHints: string[];
+  };
+  controls: LayoutBuilderAiGenerationControls;
+  resourceAlias: string;
+  entities: {
+    register: LayoutBuilderAiEntitySpec;
+    login: LayoutBuilderAiEntitySpec;
+    account: LayoutBuilderAiEntitySpec;
+    metrics: LayoutBuilderAiEntitySpec;
+    payments: LayoutBuilderAiEntitySpec;
+    customers: LayoutBuilderAiEntitySpec;
+    paymentMethods: LayoutBuilderAiEntitySpec;
+    balances: LayoutBuilderAiEntitySpec;
+  };
+  fields: {
+    payment: Record<string, string>;
+    customer: Record<string, string>;
+    paymentMethod: Record<string, string>;
+    balance: Record<string, string>;
+    account: Record<string, string>;
+    user: Record<string, string>;
+    metrics: Record<string, string>;
+  };
+  auth: LayoutBuilderAiAuthSpec;
+  statuses: Record<PaymentCoreStatus, string>;
+  ui: {
+    labels: {
+      register: string;
+      login: string;
+      createPayment: string;
+      history: string;
+      refund: string;
+      overview: string;
+      payments: string;
+      customers: string;
+      balances: string;
+    };
+    navigation: Record<"dashboard" | "payments" | "customers" | "balances", string>;
+    tableLabels: Record<string, string>;
+    formLabels: Record<string, string>;
+    presentation: LayoutBuilderAiUiPresentationSpec;
+  };
+}
+
+export interface LayoutBuilderBrandGenerationMessage {
+  role: "admin" | "assistant";
+  content: string;
+  createdAt: string;
+}
+
+export interface LayoutBuilderBrandGenerationDraft {
+  draftId: string;
+  brandName: string;
+  adminPrompt: string;
+  systemPrompt: string;
+  provider: LayoutBuilderAiProvider;
+  model: string;
+  controls: LayoutBuilderAiGenerationControls;
+  messages: LayoutBuilderBrandGenerationMessage[];
+  spec: LayoutBuilderAiBrandSpec | null;
+  validationIssues: string[];
+  status: LayoutBuilderBrandDraftStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LayoutBuilderCreateBrandDraftRequest {
+  brandName: string;
+  adminPrompt: string;
+  systemPrompt?: string;
+  provider?: LayoutBuilderAiProvider;
+  model?: string;
+  controls?: Partial<LayoutBuilderAiGenerationControls>;
+}
+
+export interface LayoutBuilderCreateBrandDraftFromSpecRequest {
+  brandName: string;
+  adminPrompt?: string;
+  systemPrompt?: string;
+  provider?: LayoutBuilderAiProvider;
+  model?: string;
+  controls?: Partial<LayoutBuilderAiGenerationControls>;
+  spec: unknown;
+}
+
+export interface LayoutBuilderAppendBrandDraftMessageRequest {
+  message: string;
+  controls?: Partial<LayoutBuilderAiGenerationControls>;
+}
+
+export interface LayoutBuilderBrandSpecUniquenessResult {
+  score: number;
+  threshold: number;
+  issues: string[];
+}
+
 export interface LayoutBuilderAiGenerationProfile {
-  provider: "local" | "openai" | "gemini" | "anthropic" | "codex";
+  provider: LayoutBuilderAiProvider;
+  credentialMode?: LayoutBuilderAiCredentialMode;
   model: string;
   adminPrompt: string;
   systemPrompt: string;
+  clarificationAnswers?: LayoutBuilderClarificationAnswers;
+  generatedSummary?: string;
   resourceAlias: string;
   visualDirection: string;
   contractSummary: string;
@@ -44,10 +240,13 @@ export interface LayoutBuilderGeneratedBrandArtifact {
   brandId: string;
   provider: LayoutBuilderAiGenerationProfile["provider"];
   model: string;
+  sourceType: "ai-spec" | "external-spec" | "generated-react";
+  status: "draft" | "active" | "archived";
   framework: "react-vite";
   entryFile: string;
   contractVersionId: string;
   facadeBasePath: string;
+  uiSpec: LayoutBuilderAiBrandSpec["ui"];
   routes: Array<{
     path: string;
     label: string;
@@ -67,6 +266,56 @@ export interface LayoutBuilderGeneratedBrandArtifact {
   generatedAt: string;
 }
 
+export interface LayoutBuilderAgentManifestEndpoint {
+  method: "GET" | "POST";
+  path: string;
+  authRequired: boolean;
+  contentType: "application/json" | "multipart/form-data";
+  purpose: string;
+}
+
+export interface LayoutBuilderAgentManifest {
+  manifestVersion: string;
+  purpose: string;
+  flows: Array<"managed_draft" | "external_spec_import" | "direct_create_from_spec">;
+  endpoints: LayoutBuilderAgentManifestEndpoint[];
+  schemas: {
+    aiBrandSpec: unknown;
+    createBrandDraftRequest: unknown;
+    createBrandDraftFromSpecRequest: unknown;
+  };
+  allowedEnums: {
+    providers: LayoutBuilderAiProvider[];
+    payloadStructures: LayoutBuilderPayloadStructure[];
+    fieldStyles: LayoutBuilderFieldStyle[];
+    responseEnvelopes: LayoutBuilderAiEnvelopeStyle[];
+    namingIntensities: LayoutBuilderAiNamingIntensity[];
+    uiLayouts: LayoutBuilderAiUiLayout[];
+    uiDensities: LayoutBuilderAiUiDensity[];
+    navigationPatterns: LayoutBuilderAiUiNavigationPattern[];
+    dashboardBlocks: LayoutBuilderAiDashboardBlock[];
+    paymentStatuses: PaymentCoreStatus[];
+  };
+  reservedRouteSlugs: string[];
+  validationRules: {
+    routeSlugPattern: string;
+    aliasPattern: string;
+    requiredEntities: string[];
+    uniquenessThreshold: number;
+    notes: string[];
+  };
+  safetyRules: string[];
+  examplePrompts: {
+    codex: string;
+    gemini: string;
+  };
+  examples: {
+    createDraft: LayoutBuilderCreateBrandDraftRequest;
+    importSpec: LayoutBuilderCreateBrandDraftFromSpecRequest;
+    aiBrandSpec: LayoutBuilderAiBrandSpec;
+  };
+}
+
 export interface LayoutBuilderContractVersion {
   contractVersionId: string;
   brandId: string;
@@ -78,6 +327,7 @@ export interface LayoutBuilderContractVersion {
   statusMap: Record<PaymentCoreStatus, string>;
   actionLabels: LayoutBuilderAiGenerationProfile["actionLabels"];
   endpoints: Record<string, string>;
+  aiSpec?: LayoutBuilderAiBrandSpec;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -91,6 +341,9 @@ export interface LayoutBuilderContractVersionRecord {
 export interface LayoutBuilderRegenerateContractRequest {
   aiPrompt?: string;
   systemPrompt?: string;
+  aiProvider?: LayoutBuilderAiProvider;
+  aiModel?: string;
+  clarificationAnswers?: LayoutBuilderClarificationAnswers;
 }
 
 export interface LayoutBuilderBffRequestLog {

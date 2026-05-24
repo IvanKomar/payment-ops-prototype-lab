@@ -423,89 +423,11 @@ export class PaymentsService {
   }
 
   async seedBrandDemoData(brandId: string): Promise<PaymentCoreSeedBrandDemoResponse> {
+    await this.deleteDemoMerchant(brandId);
+
     const { user, account } = await this.ensureDemoMerchant(brandId);
     const sessionToken = await this.createSession(user);
-    const demoPayments: CreatePaymentInput[] = [
-      {
-        amount: 49.99,
-        currency: account.currency,
-        methodType: "card",
-        customer: {
-          email: "ava.customer@example.com",
-          name: "Ava Customer"
-        },
-        paymentMethod: {
-          brand: "visa",
-          label: "Visa ending 4242",
-          last4: "4242",
-          type: "card"
-        },
-        scenario: "settle"
-      },
-      {
-        amount: 128.5,
-        currency: account.currency,
-        methodType: "bank_transfer",
-        customer: {
-          email: "mason.review@example.com",
-          name: "Mason Review"
-        },
-        paymentMethod: {
-          bankName: "Demo Bank",
-          label: "Demo Bank account ending 1100",
-          last4: "1100",
-          type: "bank_transfer"
-        },
-        scenario: "review"
-      },
-      {
-        amount: 24.25,
-        currency: account.currency,
-        methodType: "card",
-        customer: {
-          email: "nora.decline@example.com",
-          name: "Nora Decline"
-        },
-        paymentMethod: {
-          brand: "mastercard",
-          label: "Mastercard ending 0002",
-          last4: "0002",
-          type: "card"
-        },
-        scenario: "fail"
-      },
-      {
-        amount: 300,
-        currency: account.currency,
-        methodType: "card",
-        customer: {
-          email: "leo.reserve@example.com",
-          name: "Leo Reserve"
-        },
-        paymentMethod: {
-          brand: "visa",
-          label: "Visa ending 1881",
-          last4: "1881",
-          type: "card"
-        },
-        scenario: "reserve"
-      },
-      {
-        amount: 64,
-        currency: account.currency,
-        methodType: "wallet",
-        customer: {
-          email: "ivy.refund@example.com",
-          name: "Ivy Refund"
-        },
-        paymentMethod: {
-          label: "Wallet customer token 7788",
-          last4: "7788",
-          type: "wallet"
-        },
-        scenario: "refund"
-      }
-    ];
+    const demoPayments = demoPaymentInputs(account.currency);
     const createdPayments: PaymentCoreSeedBrandDemoResponse["createdPayments"] = [];
 
     for (const demoPayment of demoPayments) {
@@ -525,20 +447,7 @@ export class PaymentsService {
   }
 
   async resetBrandDemoData(brandId: string): Promise<PaymentCoreBrandResourcesResponse> {
-    const demoUser = await this.prisma.paymentUser.findUnique({
-      where: {
-        brandId_email: {
-          brandId,
-          email: demoMerchantEmail(brandId)
-        }
-      }
-    });
-
-    if (demoUser) {
-      await this.prisma.paymentUser.delete({
-        where: { id: demoUser.id }
-      });
-    }
+    await this.deleteDemoMerchant(brandId);
 
     return this.brandResources(brandId);
   }
@@ -787,6 +696,23 @@ export class PaymentsService {
     });
   }
 
+  private async deleteDemoMerchant(brandId: string): Promise<void> {
+    const demoUser = await this.prisma.paymentUser.findUnique({
+      where: {
+        brandId_email: {
+          brandId,
+          email: demoMerchantEmail(brandId)
+        }
+      }
+    });
+
+    if (demoUser) {
+      await this.prisma.paymentUser.delete({
+        where: { id: demoUser.id }
+      });
+    }
+  }
+
   private async authenticate(sessionToken: string): Promise<AuthenticatedPaymentUser> {
     const session = await this.prisma.paymentSession.findUnique({
       where: {
@@ -998,6 +924,152 @@ function displayNameFromEmail(email: string): string {
 
 function demoMerchantEmail(brandId: string): string {
   return `demo-merchant+${brandId}@payment-ops.local`;
+}
+
+function demoPaymentInputs(currency: string): CreatePaymentInput[] {
+  const normalizedCurrency = currency.toUpperCase();
+
+  return [
+    demoPayment({
+      amount: 18,
+      currency: normalizedCurrency,
+      customerEmail: "camila.created@example.com",
+      customerName: "Camila Created",
+      description: "Checkout opened but not submitted",
+      methodLabel: "Visa ending 1001",
+      last4: "1001",
+      scenario: "created"
+    }),
+    demoPayment({
+      amount: 42.4,
+      currency: normalizedCurrency,
+      customerEmail: "owen.method@example.com",
+      customerName: "Owen Method",
+      description: "Payment requires a new funding source",
+      methodLabel: "Expired card ending 2002",
+      last4: "2002",
+      scenario: "requires_payment_method"
+    }),
+    demoPayment({
+      amount: 88.75,
+      currency: normalizedCurrency,
+      customerEmail: "mila.confirm@example.com",
+      customerName: "Mila Confirm",
+      description: "Customer confirmation pending",
+      methodLabel: "Visa ending 3003",
+      last4: "3003",
+      scenario: "requires_confirmation"
+    }),
+    demoPayment({
+      amount: 128.5,
+      currency: normalizedCurrency,
+      customerEmail: "mason.review@example.com",
+      customerName: "Mason Review",
+      description: "Bank transfer under risk review",
+      methodLabel: "Demo Bank account ending 1100",
+      last4: "1100",
+      methodType: "bank_transfer",
+      scenario: "processing"
+    }),
+    demoPayment({
+      amount: 300,
+      currency: normalizedCurrency,
+      customerEmail: "leo.reserve@example.com",
+      customerName: "Leo Reserve",
+      description: "Authorized card hold",
+      methodLabel: "Visa ending 1881",
+      last4: "1881",
+      scenario: "authorized"
+    }),
+    demoPayment({
+      amount: 210,
+      currency: normalizedCurrency,
+      customerEmail: "sara.capture@example.com",
+      customerName: "Sara Capture",
+      description: "Captured payment awaiting settlement",
+      methodLabel: "Mastercard ending 5100",
+      last4: "5100",
+      brand: "mastercard",
+      scenario: "captured"
+    }),
+    demoPayment({
+      amount: 49.99,
+      currency: normalizedCurrency,
+      customerEmail: "ava.customer@example.com",
+      customerName: "Ava Customer",
+      description: "Settled checkout payment",
+      methodLabel: "Visa ending 4242",
+      last4: "4242",
+      scenario: "settled"
+    }),
+    demoPayment({
+      amount: 24.25,
+      currency: normalizedCurrency,
+      customerEmail: "nora.decline@example.com",
+      customerName: "Nora Decline",
+      description: "Processor declined card",
+      methodLabel: "Mastercard ending 0002",
+      last4: "0002",
+      brand: "mastercard",
+      scenario: "failed"
+    }),
+    demoPayment({
+      amount: 15,
+      currency: normalizedCurrency,
+      customerEmail: "eli.cancel@example.com",
+      customerName: "Eli Cancel",
+      description: "Customer canceled checkout",
+      methodLabel: "Manual invoice source",
+      last4: "9009",
+      methodType: "manual",
+      scenario: "canceled"
+    }),
+    demoPayment({
+      amount: 64,
+      currency: normalizedCurrency,
+      customerEmail: "ivy.refund@example.com",
+      customerName: "Ivy Refund",
+      description: "Refunded wallet payment",
+      methodLabel: "Wallet customer token 7788",
+      last4: "7788",
+      methodType: "wallet",
+      scenario: "refunded"
+    })
+  ];
+}
+
+function demoPayment(input: {
+  amount: number;
+  brand?: string;
+  currency: string;
+  customerEmail: string;
+  customerName: string;
+  description: string;
+  last4: string;
+  methodLabel: string;
+  methodType?: PaymentCoreMethodType;
+  scenario: NonNullable<CreatePaymentInput["scenario"]>;
+}): CreatePaymentInput {
+  const methodType = input.methodType ?? "card";
+
+  return {
+    amount: input.amount,
+    currency: input.currency,
+    customer: {
+      email: input.customerEmail,
+      name: input.customerName
+    },
+    description: input.description,
+    methodType,
+    paymentMethod: {
+      ...(input.brand ? { brand: input.brand } : {}),
+      ...(methodType === "bank_transfer" ? { bankName: "Demo Bank" } : {}),
+      label: input.methodLabel,
+      last4: input.last4,
+      type: methodType
+    },
+    scenario: input.scenario
+  };
 }
 
 function externalReference(brandId: string): string {

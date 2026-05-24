@@ -1,17 +1,20 @@
 import type {
   HealthResponse,
   LayoutBuilderAdminAuthResponse,
+  LayoutBuilderAiProvider,
   LayoutBuilderBrandListItem,
+  LayoutBuilderBrandGenerationDraft,
   LayoutBuilderBrandMembership,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
+  LayoutBuilderClarificationAnswers,
   LayoutBuilderContractVersionRecord,
+  LayoutBuilderCreateBrandDraftRequest,
   ReceiptRecognitionModel,
   ReceiptRecognizerReceiptResponse
 } from "@payment-ops/shared-types";
 
 import { api, type SmsRecentMessageResponse, type SmsStatusResponse } from "./api.js";
-import { createDemoLogo } from "./demo-data.js";
 import "./styles.css";
 
 interface LayoutState {
@@ -23,6 +26,7 @@ interface LayoutState {
   activeContractVersions: LayoutBuilderContractVersionRecord[];
   activeAdminSession: LayoutBuilderAdminAuthResponse | null;
   activeBrandMemberships: LayoutBuilderBrandMembership[];
+  activeBrandDraft: LayoutBuilderBrandGenerationDraft | null;
 }
 
 interface BrandRuntimeContract {
@@ -76,24 +80,12 @@ const layoutState: LayoutState = {
   activeRuntimeRequestLogs: [],
   activeContractVersions: [],
   activeAdminSession: null,
-  activeBrandMemberships: []
+  activeBrandMemberships: [],
+  activeBrandDraft: null
 };
 let recentLayoutBrands: LayoutBuilderBrandListItem[] = [];
 
 const app = document.querySelector<HTMLDivElement>("#app");
-const DEFAULT_BRAND_SYSTEM_PROMPT = [
-  "Generate a brand runtime contract for a payment platform.",
-  "The generated brand must integrate only through the public brand runtime API.",
-  "Do not expose internal payment-core DTO names, database tables, service names, or shared backend details.",
-  "Return distinct resource naming, payment status labels, action labels, and visual direction.",
-  "The user-facing interface must support registration, login, payment creation, refunds, and transaction history."
-].join("\n");
-const WORKING_DEMO_PROMPT = [
-  "Create a Stripe-like payment gateway for merchants and their operators.",
-  "The first screen must feel like a real payment processor: login, account summary, payment creation, transaction history, saved customers, and balance movements.",
-  "Use professional finance wording, clear settlement status names, and avoid any generic internal service terminology.",
-  "The interface should look ready for a merchant user, not like a developer demo."
-].join(" ");
 
 if (!app) {
   throw new Error("Missing #app root");
@@ -205,16 +197,23 @@ app.innerHTML = `
       </article>
 
       <article class="panel route-section layout-panel" data-route-section="layouts">
-        <article class="status-card inline-status" id="health-layout">
-          <span class="status-dot muted"></span>
+        <div class="layout-toolbar">
           <div>
-            <strong>Layout Builder</strong>
-            <span>Checking</span>
-          </div>
-        </article>
-        <div class="panel-header">
-          <div>
+            <p class="eyebrow">Brand runtime console</p>
             <h2>Payment gateway brands</h2>
+          </div>
+          <div class="layout-toolbar-actions">
+            <article class="status-card inline-status" id="health-layout">
+              <span class="status-dot muted"></span>
+              <div>
+                <strong>Layout Builder</strong>
+                <span>Checking</span>
+              </div>
+            </article>
+            <button class="button secondary" id="seed-brand-demo" type="button" disabled>Seed demo data</button>
+            <button class="button secondary" id="reset-brand-demo" type="button" disabled>Reset demo data</button>
+            <button class="button secondary" id="open-demo-merchant" type="button" disabled>Open as demo merchant</button>
+            <button class="button secondary" id="open-brand-app" type="button" disabled>Open user app</button>
           </div>
         </div>
         <div class="layout-workbench">
@@ -222,11 +221,14 @@ app.innerHTML = `
             <div class="sidebar-header">
               <h3>Brands</h3>
               <div class="sidebar-actions">
-                <button class="icon-button" id="open-brand-modal" type="button" title="Create brand">+</button>
+                <button class="button secondary compact-action" id="open-brand-modal" type="button">Create AI brand</button>
                 <button class="icon-button" id="layout-refresh" type="button" title="Refresh brands">↻</button>
               </div>
             </div>
-            <button class="button demo-create" id="create-working-demo" type="button">Create working gateway demo</button>
+            <div class="api-only-note">
+              <strong>Built-in AI or external API</strong>
+              <span>Create here with Gemini, or generate via Codex using the agent manifest.</span>
+            </div>
             <div class="list compact" id="brand-list"></div>
             <button class="button danger sidebar-delete" id="delete-brand" type="button" disabled>Delete selected</button>
           </aside>
@@ -234,65 +236,27 @@ app.innerHTML = `
           <section class="preview-column">
             <div class="preview-header">
               <div>
-                <h3>Live SPA preview</h3>
+                <h3>Brand runtime preview</h3>
                 <div class="selected-brand" id="selected-brand-title">No brand selected</div>
-                <div class="contract-inspector" id="contract-inspector"></div>
-              </div>
-              <div class="button-row preview-actions">
-                <button class="button secondary" id="seed-brand-demo" type="button" disabled>Seed demo data</button>
-                <button class="button secondary" id="reset-brand-demo" type="button" disabled>Reset demo data</button>
-                <button class="button secondary" id="open-demo-merchant" type="button" disabled>Open as demo merchant</button>
-                <button class="button secondary" id="open-brand-app" type="button" disabled>Open user app</button>
               </div>
             </div>
             <div class="live-preview" id="live-preview">
               <div class="empty">Select a brand to load the preview.</div>
             </div>
+
+            <aside class="inspector-sidebar">
+              <div class="inspector-header">
+                <h3>Integration</h3>
+                <span>Contract, seed state, and generated frontend versions</span>
+              </div>
+              <div class="contract-inspector" id="contract-inspector"></div>
+            </aside>
           </section>
 
         </div>
       </article>
     </section>
   </main>
-
-  <div class="modal-backdrop" id="brand-modal" hidden>
-    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="brand-modal-title">
-      <div class="modal-header">
-        <h3 id="brand-modal-title">Create brand</h3>
-        <button class="icon-button" id="close-brand-modal" type="button" aria-label="Close create brand dialog">X</button>
-      </div>
-      <form id="brand-form" class="form-grid">
-        <label>
-          Brand name
-          <input name="brandName" value="Nova Ledger" required />
-        </label>
-        <label>
-          AI brand brief
-          <textarea name="aiPrompt" rows="5" required>Create a premium treasury payment portal for enterprise merchants. Use settlement-focused wording, compact history tables, and status names that do not look like a generic payment processor.</textarea>
-        </label>
-        <details class="prompt-details" open>
-          <summary>System prompt</summary>
-          <textarea name="systemPrompt" rows="7" required>${escapeHtml(DEFAULT_BRAND_SYSTEM_PROMPT)}</textarea>
-        </details>
-        <label>
-          Provider
-          <select name="aiProvider">
-            <option value="local">local runtime generator</option>
-            <option value="openai" disabled>OpenAI adapter placeholder</option>
-            <option value="gemini" disabled>Gemini adapter placeholder</option>
-            <option value="anthropic" disabled>Claude adapter placeholder</option>
-          </select>
-        </label>
-        <label>
-          Logo
-          <input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
-        </label>
-        <button class="button" type="submit">Generate brand</button>
-        <span class="hint">No file selected uses a generated SVG mark.</span>
-        <span class="modal-status" id="brand-modal-status"></span>
-      </form>
-    </section>
-  </div>
 
   <div class="modal-backdrop" id="admin-modal" hidden>
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
@@ -318,6 +282,94 @@ app.innerHTML = `
       </form>
     </section>
   </div>
+
+  <div class="modal-backdrop" id="brand-modal" hidden>
+    <section class="modal brand-modal-shell" role="dialog" aria-modal="true" aria-labelledby="brand-modal-title">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Built-in AI brand flow</p>
+          <h3 id="brand-modal-title">Create payment brand</h3>
+        </div>
+        <button class="icon-button" id="close-brand-modal" type="button" aria-label="Close brand dialog">X</button>
+      </div>
+      <form id="brand-form" class="form-grid">
+        <label>
+          Brand name
+          <input name="brandName" value="Aster Vault" required />
+        </label>
+        <label>
+          Prompt
+          <textarea name="adminPrompt" rows="6" required>Create a Stripe-like merchant payment gateway with unique routes, fields, status names, and a visually distinct payment dashboard. Use wallet settlement language and do not expose internal service names.</textarea>
+        </label>
+        <div class="form-grid two-col">
+          <label>
+            Provider
+            <select name="provider">
+              <option value="gemini">Gemini · server key</option>
+              <option value="local">Local fallback</option>
+            </select>
+          </label>
+          <label>
+            Model
+            <input name="model" value="gemini-2.5-flash-lite" />
+          </label>
+        </div>
+        <details class="prompt-details">
+          <summary>Generation controls</summary>
+          <div class="form-grid two-col">
+            <label>
+              Payload
+              <select name="payloadStructure">
+                <option value="nested">Nested</option>
+                <option value="flat">Flat</option>
+                <option value="key-value-array">Key-value array</option>
+              </select>
+            </label>
+            <label>
+              Fields
+              <select name="fieldStyle">
+                <option value="snake_case">snake_case</option>
+                <option value="camelCase">camelCase</option>
+                <option value="kebab-case">kebab-case</option>
+              </select>
+            </label>
+            <label>
+              Auth
+              <select name="authShape">
+                <option value="workspace">Workspace</option>
+                <option value="credentials">Credentials</option>
+                <option value="access_key">Access key</option>
+              </select>
+            </label>
+            <label>
+              Envelope
+              <select name="responseEnvelope">
+                <option value="resource_key">Resource key</option>
+                <option value="data">Data</option>
+                <option value="result">Result</option>
+                <option value="plain">Plain</option>
+              </select>
+            </label>
+          </div>
+        </details>
+        <label>
+          Logo
+          <input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+        </label>
+        <div class="draft-preview" id="brand-draft-preview">
+          <div class="assistant-empty">
+            <strong>No spec generated yet.</strong>
+            <span>Click Preview spec to run the built-in Gemini flow.</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <span class="modal-status" id="brand-modal-status"></span>
+          <button class="button secondary" id="brand-preview-spec" type="button">Preview spec</button>
+          <button class="button" id="brand-create-approved" type="submit" disabled>Create brand</button>
+        </div>
+      </form>
+    </section>
+  </div>
 `;
 
 const refreshAllButton = required<HTMLButtonElement>("#refresh-all");
@@ -325,6 +377,11 @@ const adminChip = required<HTMLElement>("#admin-chip");
 const adminForm = required<HTMLFormElement>("#admin-form");
 const adminModal = required<HTMLElement>("#admin-modal");
 const adminModalStatus = required<HTMLElement>("#admin-modal-status");
+const brandModal = required<HTMLElement>("#brand-modal");
+const brandForm = required<HTMLFormElement>("#brand-form");
+const brandModalStatus = required<HTMLElement>("#brand-modal-status");
+const brandDraftPreview = required<HTMLElement>("#brand-draft-preview");
+const brandCreateButton = required<HTMLButtonElement>("#brand-create-approved");
 const smsForm = required<HTMLFormElement>("#sms-form");
 const smsResult = required<HTMLElement>("#sms-result");
 const smsRecent = required<HTMLElement>("#sms-recent");
@@ -332,11 +389,7 @@ const receiptForm = required<HTMLFormElement>("#receipt-form");
 const receiptResult = required<HTMLElement>("#receipt-result");
 const receiptRaw = required<HTMLPreElement>("#receipt-raw");
 const receiptHistory = required<HTMLElement>("#receipt-history");
-const brandForm = required<HTMLFormElement>("#brand-form");
-const brandModal = required<HTMLElement>("#brand-modal");
-const brandModalStatus = required<HTMLElement>("#brand-modal-status");
 const brandList = required<HTMLElement>("#brand-list");
-const createWorkingDemoButton = required<HTMLButtonElement>("#create-working-demo");
 const selectedBrandTitle = required<HTMLElement>("#selected-brand-title");
 const contractInspector = required<HTMLElement>("#contract-inspector");
 const openBrandAppButton = required<HTMLButtonElement>("#open-brand-app");
@@ -366,6 +419,29 @@ required<HTMLButtonElement>("#layout-refresh").addEventListener("click", () => {
   void refreshBrands();
 });
 
+required<HTMLButtonElement>("#open-brand-modal").addEventListener("click", () => {
+  openBrandModal();
+});
+
+required<HTMLButtonElement>("#close-brand-modal").addEventListener("click", () => {
+  closeBrandModal();
+});
+
+required<HTMLButtonElement>("#brand-preview-spec").addEventListener("click", () => {
+  void previewBrandSpec();
+});
+
+brandForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void createApprovedBrand();
+});
+
+brandModal.addEventListener("click", (event) => {
+  if (event.target === brandModal) {
+    closeBrandModal();
+  }
+});
+
 required<HTMLButtonElement>("#open-admin-login").addEventListener("click", () => {
   openAdminModal();
 });
@@ -382,24 +458,6 @@ required<HTMLButtonElement>("#admin-logout").addEventListener("click", () => {
   logoutAdmin();
 });
 
-required<HTMLButtonElement>("#open-brand-modal").addEventListener("click", () => {
-  openBrandModal();
-});
-
-createWorkingDemoButton.addEventListener("click", () => {
-  void createWorkingGatewayDemo();
-});
-
-required<HTMLButtonElement>("#close-brand-modal").addEventListener("click", () => {
-  closeBrandModal();
-});
-
-brandModal.addEventListener("click", (event) => {
-  if (event.target === brandModal) {
-    closeBrandModal();
-  }
-});
-
 adminModal.addEventListener("click", (event) => {
   if (event.target === adminModal) {
     closeAdminModal();
@@ -414,11 +472,6 @@ smsForm.addEventListener("submit", (event) => {
 receiptForm.addEventListener("submit", (event) => {
   event.preventDefault();
   void uploadReceipt();
-});
-
-brandForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  void createBrand();
 });
 
 adminForm.addEventListener("submit", (event) => {
@@ -482,6 +535,142 @@ function required<T extends Element>(selector: string): T {
   }
 
   return element;
+}
+
+function openBrandModal(): void {
+  brandModal.hidden = false;
+  brandModalStatus.textContent = "";
+  layoutState.activeBrandDraft = null;
+  brandCreateButton.disabled = true;
+  brandDraftPreview.innerHTML = `
+    <div class="assistant-empty">
+      <strong>No spec generated yet.</strong>
+      <span>Click Preview spec to run the built-in Gemini flow.</span>
+    </div>
+  `;
+  brandForm.querySelector<HTMLInputElement>('input[name="brandName"]')?.focus();
+}
+
+function closeBrandModal(): void {
+  brandModal.hidden = true;
+  brandModalStatus.textContent = "";
+}
+
+async function previewBrandSpec(): Promise<void> {
+  const payload = brandDraftPayload();
+
+  if (!payload.brandName || !payload.adminPrompt) {
+    brandModalStatus.textContent = "Brand name and prompt are required.";
+    return;
+  }
+
+  setBusy(brandForm, true);
+  brandModalStatus.textContent = "Generating spec...";
+
+  try {
+    const draft = await api.layout.createBrandDraft(payload);
+    layoutState.activeBrandDraft = draft;
+    renderBrandDraftPreview(draft);
+    brandCreateButton.disabled = draft.status !== "valid";
+    brandModalStatus.textContent = draft.status === "valid" ? "Spec is valid. You can create the brand." : "Spec needs changes before create.";
+  } catch (error) {
+    brandModalStatus.textContent = errorMessage(error);
+  } finally {
+    setBusy(brandForm, false);
+    brandCreateButton.disabled = layoutState.activeBrandDraft?.status !== "valid";
+  }
+}
+
+async function createApprovedBrand(): Promise<void> {
+  const draft = layoutState.activeBrandDraft;
+
+  if (!draft || draft.status !== "valid") {
+    brandModalStatus.textContent = "Generate a valid spec first.";
+    return;
+  }
+
+  setBusy(brandForm, true);
+  brandModalStatus.textContent = "Creating brand...";
+
+  try {
+    const brand = await api.layout.createBrandFromDraft(draft.draftId, brandLogoFile());
+    closeBrandModal();
+    await refreshBrands();
+    await selectBrand(brand.brandId);
+  } catch (error) {
+    brandModalStatus.textContent = errorMessage(error);
+  } finally {
+    setBusy(brandForm, false);
+  }
+}
+
+function brandDraftPayload(): LayoutBuilderCreateBrandDraftRequest {
+  return {
+    brandName: formValue("brandName"),
+    adminPrompt: formValue("adminPrompt"),
+    provider: formValue("provider") as Extract<LayoutBuilderAiProvider, "local" | "gemini">,
+    model: formValue("model"),
+    controls: {
+      payloadStructure: formValue("payloadStructure") as "flat" | "nested" | "key-value-array",
+      fieldStyle: formValue("fieldStyle") as "camelCase" | "snake_case" | "kebab-case",
+      authShape: formValue("authShape") as "credentials" | "access_key" | "workspace",
+      responseEnvelope: formValue("responseEnvelope") as "plain" | "resource_key" | "data" | "result",
+      routeNaming: "finance",
+      errorStyle: "branded",
+      namingIntensity: "maximum"
+    }
+  };
+}
+
+function renderBrandDraftPreview(draft: LayoutBuilderBrandGenerationDraft): void {
+  const routes = draft.spec ? Object.entries(draft.spec.entities).map(([name, entity]) => `${name}: /${entity.route}`) : [];
+  const presentation = draft.spec?.ui.presentation;
+
+  brandDraftPreview.innerHTML = `
+    <div class="draft-preview-header">
+      <span>${escapeHtml(draft.provider)} · ${escapeHtml(draft.model)}</span>
+      <strong>${escapeHtml(draft.brandName)} spec</strong>
+    </div>
+    ${
+      draft.validationIssues.length > 0
+        ? `<div class="status error">${draft.validationIssues.map((issue) => escapeHtml(issue)).join("<br />")}</div>`
+        : `<div class="status">Ready to create.</div>`
+    }
+    <div class="contract-grid compact">
+      ${contractMetric("routes", routes.length)}
+      ${contractMetric("issues", draft.validationIssues.length)}
+      ${contractMetric("messages", draft.messages.length)}
+    </div>
+    ${
+      presentation
+        ? `<div class="api-only-note"><strong>${escapeHtml(presentation.layout)} · ${escapeHtml(presentation.density)}</strong><span>${escapeHtml(presentation.copyTone)}</span></div>`
+        : ""
+    }
+    <details class="contract-json" open>
+      <summary>Public routes</summary>
+      <pre>${escapeHtml(routes.join("\n"))}</pre>
+    </details>
+  `;
+}
+
+function formValue(name: string): string {
+  const control = brandForm.elements.namedItem(name);
+
+  return control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement
+    ? control.value.trim()
+    : "";
+}
+
+function brandLogoFile(): File | Blob {
+  const input = brandForm.elements.namedItem("logo");
+
+  if (input instanceof HTMLInputElement && input.files?.[0]) {
+    return input.files[0];
+  }
+
+  return new Blob([`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="18" fill="#17202a"/><path d="M24 60c16-32 32-32 48 0" fill="none" stroke="#9fffd0" stroke-width="10" stroke-linecap="round"/><circle cx="66" cy="30" r="10" fill="#f5c542"/></svg>`], {
+    type: "image/svg+xml"
+  });
 }
 
 async function refreshAll(): Promise<void> {
@@ -769,17 +958,6 @@ async function loadReceipt(receiptId: string): Promise<void> {
   }
 }
 
-function openBrandModal(): void {
-  brandModal.hidden = false;
-  brandModalStatus.textContent = "";
-  brandForm.querySelector<HTMLInputElement>('input[name="brandName"]')?.focus();
-}
-
-function closeBrandModal(): void {
-  brandModal.hidden = true;
-  brandModalStatus.textContent = "";
-}
-
 function openAdminModal(): void {
   adminModal.hidden = false;
   adminModalStatus.textContent = layoutState.activeAdminSession
@@ -838,70 +1016,6 @@ function logoutAdmin(): void {
   window.localStorage.removeItem("layout-admin-session");
   renderAdminSession();
   adminModalStatus.textContent = "Signed out.";
-}
-
-async function createBrand(): Promise<void> {
-  const formData = new FormData(brandForm);
-  const brandName = String(formData.get("brandName") ?? "").trim();
-  const aiPrompt = String(formData.get("aiPrompt") ?? "").trim();
-  const systemPrompt = String(formData.get("systemPrompt") ?? "").trim();
-  const logoInput = brandForm.elements.namedItem("logo");
-  const selectedLogo =
-    logoInput instanceof HTMLInputElement && logoInput.files?.[0] ? logoInput.files[0] : null;
-  const logo = selectedLogo ?? createDemoLogo(brandName);
-
-  setBusy(brandForm, true);
-  brandModalStatus.textContent = "Generating brand runtime...";
-
-  try {
-    const brand = aiPrompt
-      ? await api.layout.createAiBrand({
-          brandName,
-          logo,
-          aiPrompt,
-          systemPrompt: systemPrompt || DEFAULT_BRAND_SYSTEM_PROMPT
-        })
-      : await api.layout.createBrand(brandName, logo);
-    await setActiveBrand(brand);
-    await refreshBrands();
-    closeBrandModal();
-  } catch (error) {
-    brandModalStatus.textContent = errorMessage(error);
-  } finally {
-    setBusy(brandForm, false);
-  }
-}
-
-async function createWorkingGatewayDemo(): Promise<void> {
-  const brandName = `Atlas Gateway ${new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit"
-  })}`;
-  const logo = createDemoLogo(brandName);
-
-  createWorkingDemoButton.disabled = true;
-  createWorkingDemoButton.textContent = "Creating demo...";
-
-  try {
-    const brand = await api.layout.createAiBrand({
-      brandName,
-      logo,
-      aiPrompt: WORKING_DEMO_PROMPT,
-      systemPrompt: DEFAULT_BRAND_SYSTEM_PROMPT
-    });
-    await setActiveBrand(brand);
-    const runtimeResources = await api.layout.seedRuntimeDemoData<BrandRuntimeResources>(brand.endpoint);
-    layoutState.activeRuntimeResources = runtimeResources;
-    openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
-    await refreshBrands();
-    await loadBrandContract(brand.brandId);
-    window.open(brandUserAppUrl(brand), "_blank", "noopener,noreferrer");
-  } catch (error) {
-    livePreview.innerHTML = `<div class="empty">${escapeHtml(errorMessage(error))}</div>`;
-  } finally {
-    createWorkingDemoButton.disabled = false;
-    createWorkingDemoButton.textContent = "Create working gateway demo";
-  }
 }
 
 async function refreshBrands(): Promise<void> {
@@ -983,18 +1097,6 @@ async function selectBrand(brandId: string): Promise<void> {
   void loadBrandContract(brandId);
 }
 
-async function setActiveBrand(brand: LayoutBuilderBrandResponse): Promise<void> {
-  layoutState.activeBrand = brand;
-  layoutState.activeSchema = brand;
-  layoutState.activeRuntimeContract = null;
-  layoutState.activeRuntimeResources = null;
-  layoutState.activeRuntimeRequestLogs = [];
-  layoutState.activeContractVersions = [];
-  applyBrandPreview(brand, brand.name);
-  renderBrandListSelection(brand.brandId);
-  void loadBrandContract(brand.brandId);
-}
-
 function applyBrandPreview(
   brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem,
   brandName?: string
@@ -1014,12 +1116,16 @@ function applyBrandPreview(
   openDemoMerchantButton.disabled = !layoutState.activeRuntimeResources?.demoSessionToken;
   resetBrandDemoButton.disabled = false;
   seedBrandDemoButton.disabled = false;
+  renderLivePreview(brand);
+}
+
+function renderLivePreview(brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem): void {
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `
     <iframe
       class="preview-frame"
       title="${escapeHtml(brand.name)} live preview"
-      src="${escapeHtml(brandUserAppUrl(brand))}"
+      src="${escapeHtml(brandUserAppUrlWithSession(brand, layoutState.activeRuntimeResources?.demoSessionToken))}"
     ></iframe>
   `;
 }
@@ -1054,6 +1160,7 @@ async function loadBrandContract(brandId: string): Promise<void> {
     layoutState.activeContractVersions = contractVersions;
     layoutState.activeBrandMemberships = brandMemberships;
     openDemoMerchantButton.disabled = !runtimeResources.demoSessionToken;
+    renderLivePreview(activeBrand);
     renderContractInspector(
       activeBrand,
       schema,
@@ -1177,6 +1284,7 @@ function renderContractInspector(
       </div>
     </div>
     ${runtimeResources ? runtimeResourcesHtml(runtimeContract, runtimeResources, runtimeRequestLogs, brandMemberships) : ""}
+    ${profile.clarificationAnswers ? clarificationAnswersHtml(profile.clarificationAnswers) : ""}
     <details class="contract-json">
       <summary>System prompt</summary>
       <pre>${escapeHtml(profile.systemPrompt)}</pre>
@@ -1184,6 +1292,29 @@ function renderContractInspector(
     <details class="contract-json">
       <summary>Runtime contract JSON</summary>
       <pre>${escapeHtml(JSON.stringify(runtimeContract, null, 2))}</pre>
+    </details>
+  `;
+}
+
+function clarificationAnswersHtml(answers: LayoutBuilderClarificationAnswers): string {
+  const rows = Object.entries(answers)
+    .map(([key, value]) => {
+      const label = key.replaceAll("_", " ");
+      const rendered = Array.isArray(value) ? value.join(", ") : value;
+
+      return `
+        <div class="contract-row">
+          <span>${escapeHtml(label)}</span>
+          <code>${escapeHtml(rendered)}</code>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <details class="contract-json">
+      <summary>Clarification answers</summary>
+      ${rows}
     </details>
   `;
 }
@@ -1202,26 +1333,6 @@ function generatedArtifactHtml(
         ${contractMetric("routes", artifact.routes.length)}
         ${contractMetric("capabilities", artifact.capabilities.length)}
       </div>
-      <div class="contract-row">
-        <span>artifact</span>
-        <code>${escapeHtml(artifact.artifactId)}</code>
-      </div>
-      <div class="contract-row">
-        <span>contract version</span>
-        <code>${escapeHtml(contractVersion?.contractVersionId ?? artifact.contractVersionId)}</code>
-      </div>
-      <div class="contract-row">
-        <span>contract status</span>
-        <code>${contractVersion?.active ? "active" : "legacy manifest"}</code>
-      </div>
-      <div class="contract-row">
-        <span>entry</span>
-        <code>${escapeHtml(artifact.entryFile)}</code>
-      </div>
-      <div class="contract-row">
-        <span>BFF base</span>
-        <code>${escapeHtml(artifact.facadeBasePath)}</code>
-      </div>
       <a class="button secondary artifact-link" href="${escapeHtml(api.layout.publicUrl(`${artifact.facadeBasePath}/generated/preview`))}" target="_blank" rel="noreferrer">Open generated preview</a>
       <details class="contract-json regeneration-panel">
         <summary>Regenerate with prompt</summary>
@@ -1235,10 +1346,33 @@ function generatedArtifactHtml(
         </label>
         <button class="button secondary artifact-link" type="button" data-regenerate-contract>Create new version</button>
       </details>
+      <details class="contract-json artifact-details">
+        <summary>Artifact details</summary>
+        <div class="contract-row">
+          <span>artifact</span>
+          <code>${escapeHtml(artifact.artifactId)}</code>
+        </div>
+        <div class="contract-row">
+          <span>contract version</span>
+          <code>${escapeHtml(contractVersion?.contractVersionId ?? artifact.contractVersionId)}</code>
+        </div>
+        <div class="contract-row">
+          <span>contract status</span>
+          <code>${contractVersion?.active ? "active" : "legacy manifest"}</code>
+        </div>
+        <div class="contract-row">
+          <span>entry</span>
+          <code>${escapeHtml(artifact.entryFile)}</code>
+        </div>
+        <div class="contract-row">
+          <span>BFF base</span>
+          <code>${escapeHtml(artifact.facadeBasePath)}</code>
+        </div>
+        <div class="artifact-files">
+          ${artifact.files.map((file) => `<code>${escapeHtml(file.path)} · ${file.kind} · ${file.bytes}b</code>`).join("")}
+        </div>
+      </details>
       ${contractVersionHistoryHtml(contractVersion?.contractVersionId ?? artifact.contractVersionId, contractVersions)}
-      <div class="artifact-files">
-        ${artifact.files.map((file) => `<code>${escapeHtml(file.path)} · ${file.kind} · ${file.bytes}b</code>`).join("")}
-      </div>
       <details class="contract-json">
         <summary>Artifact manifest</summary>
         <pre>${escapeHtml(JSON.stringify(artifact, null, 2))}</pre>
@@ -1631,8 +1765,21 @@ function openActiveBrandAsDemoMerchant(): void {
   window.open(url.toString(), "_blank", "noopener,noreferrer");
 }
 
+function brandUserAppUrlWithSession(
+  brand: Pick<LayoutBuilderBrandListItem, "appUrl" | "generatedPreviewUrl">,
+  sessionToken: string | undefined
+): string {
+  const url = new URL(brandUserAppUrl(brand), window.location.origin);
+
+  if (sessionToken) {
+    url.searchParams.set("sessionToken", sessionToken);
+  }
+
+  return url.toString();
+}
+
 function brandUserAppUrl(brand: Pick<LayoutBuilderBrandListItem, "appUrl" | "generatedPreviewUrl">): string {
-  return brand.generatedPreviewUrl ? api.layout.publicUrl(brand.generatedPreviewUrl) : api.layout.brandRuntimeUrl(brand.appUrl);
+  return api.layout.brandRuntimeUrl(brand.appUrl);
 }
 
 function fieldCard(label: string, value: string): string {

@@ -226,7 +226,8 @@ Each brand receives:
 - unique endpoint slug;
 - unique public resource names, for example `orders`, `ledgerItems`,
   `checkouts`, or `paymentCases`;
-- unique field names with hashed suffixes;
+- unique field names selected from brand/domain vocabulary, without readable
+  canonical names or hash suffixes;
 - one of several payload structures;
 - unique status labels mapped to canonical `PaymentStatus`;
 - unique table column labels and order;
@@ -310,8 +311,14 @@ Current MVP implementation:
 
 - `apps/layout-builder` exposes `POST /brands/ai`;
 - the admin UI sends a brand brief plus an editable system prompt;
-- the backend uses `AiBrandGeneratorService` with provider `local` to generate
-  a `generationProfile`;
+- the backend exposes `POST /brands/ai/clarify` so the admin can get structured
+  AI clarification questions before creating a brand;
+- the backend uses a provider registry with `local` enabled by default and
+  OpenAI, Gemini, Claude/Anthropic, and Codex registered as server-key-ready
+  providers that remain disabled until configured;
+- the backend uses the local provider to generate a `generationProfile` that
+  stores provider, model, original brief, system prompt, clarification answers,
+  and a generated summary;
 - `generationProfile` is stored in `BrandSchema.fields` metadata next to the
   field mapping and template profile;
 - the public preview uses the generated resource alias, action labels, and
@@ -375,17 +382,18 @@ Example:
     "refunded": "returned"
   },
   "fieldMap": {
-    "paymentId": "caseRef_a81d",
-    "amount": "grossTotal_20c9",
-    "currency": "moneyUnit_4ba2",
-    "status": "caseState_f19e"
+    "paymentId": "case_marker",
+    "amount": "settlement_total",
+    "currency": "ledger_currency",
+    "status": "case_stage"
   }
 }
 ```
 
-The AI-generated UI should receive this mapped contract and sample payloads, so
-the generated code naturally integrates with the public facade instead of
-learning the internal core.
+The AI generation service can inspect the mapped contract server-side, but the
+deployed user-facing runtime should not fetch or expose the full field map. It
+should receive only a minimal BFF shell plus view-model endpoints such as
+`overview`, `payments`, `customers`, and `paymentMethods`.
 
 ## Data Flow
 
@@ -493,9 +501,9 @@ MVP progress:
   with configured `LAYOUT_ADMIN_EMAIL` / `LAYOUT_ADMIN_PASSWORD`, store the
   admin session token, or intentionally create a local dev session while
   `LAYOUT_DEV_ADMIN_FALLBACK=true`.
-- admin preview and "open user app" now prefer the generated artifact preview
-  URL when a generated artifact exists. The older hand-built brand runtime
-  remains available as fallback for non-AI brands.
+- admin preview and "open user app" now prefer the user-facing React brand
+  runtime on `http://localhost:3006`. The generated artifact preview remains
+  available from the contract inspector as a diagnostic/fallback surface.
 - the admin contract inspector exposes the active contract version id alongside
   the generated artifact, while older brands can still load artifact manifests
   from legacy schema JSON.
@@ -507,32 +515,116 @@ MVP progress:
   admin inspector. Generated artifacts pass a backend validation gate before
   persistence: required routes/capabilities, one React entry file, BFF-only
   endpoints, safe file paths, and no obvious internal platform references.
+- local Prisma schemas are aligned to the full prototype data model so the
+  shared generated `@prisma/client` is not broken by whichever service runs
+  `prisma generate` last during `pnpm build` or local setup.
+- the generated artifact preview no longer exposes artifact ids, BFF base
+  paths, or manifest files in the user-facing screen; it presents a merchant
+  payments workspace and auto-prepares demo activity when opened without data.
+- brand demo seeding is now idempotent. Re-running seed deletes the prior demo
+  merchant dataset and recreates a clean set with 10 payments, 10 customers,
+  10 payment methods, balance movements, and coverage for all 10 prototype
+  payment statuses.
+- the React brand runtime no longer calls `/brands/:id/schema`,
+  `/runtime/config`, `/brands/:id/:slug/bff/*`, or an `entrypoint` endpoint.
+  Its brand shell/profile/config is injected server-side into the runtime HTML,
+  so the browser does not issue a separate `/profile` bootstrap request.
+- the user-facing React runtime now hides both `brandId` and BFF wording from
+  public network calls. The app opens under `/:brandSlug/app/:view`, while the
+  visible API uses brand-specific REST entity slugs from the generated
+  contract, for example `/:brandSlug/me`, `/:brandSlug/signals`,
+  `/:brandSlug/settlement-ledger`, `/:brandSlug/client-book`,
+  `/:brandSlug/instrument-vault`, or `/:brandSlug/treasury`.
+- brand-specific BFF endpoint aliases and runtime field aliases no longer use
+  hash postfixes. They are selected from deterministic domain vocabulary, so
+  generated contracts look like intentional product language rather than
+  canonical names with random suffixes.
+- brand generation now has an AI draft flow:
+  `POST /brands/ai/drafts`, `POST /brands/ai/drafts/:draftId/messages`,
+  `GET /brands/ai/drafts/:draftId`, and
+  `POST /brands/ai/drafts/:draftId/create`.
+- each draft stores the admin prompt, editable system prompt, chat messages,
+  generation controls, provider/model metadata, validation issues, and the full
+  AI-authored brand spec. The logo is still uploaded only at final create time.
+- `LayoutBuilderAiBrandSpec` is now the authoritative contract format for new
+  AI brands. It includes brand copy/visual direction, auth contract, public
+  entity routes, request/response keys, field aliases, UI labels, and all
+  10 canonical payment status mappings.
+- the AI draft flow now uses Gemini as the first real provider, reusing the
+  existing `GEMINI_ENABLED`, `GEMINI_API_KEY`, and `GEMINI_MODEL` environment
+  variables. Gemini is called through `generateContent` with JSON response mode,
+  and every response is validated through Zod before it can become a brand.
+  When Gemini is not configured, the local provider remains the dev/demo
+  fallback.
+- creating a brand from an approved draft persists the AI spec into the active
+  contract version and builds the runtime contract from that spec instead of
+  inventing route or field aliases algorithmically.
+- the admin create modal now works as chat + spec preview: controls influence
+  payload shape, field style, auth shape, response envelope, route naming, and
+  naming intensity; final create is disabled until the spec validates.
+- runtime bootstrap now carries the AI spec-derived labels, auth token key,
+  response keys, routes, and field aliases. The React brand runtime sends
+  brand-specific auth/payment/customer/method payloads and reads
+  brand-specific response keys.
+- validation rejects duplicate routes, reserved/internal route names, invalid
+  slugs/aliases, and incomplete payment status maps before a draft can be used
+  to create a brand.
+- AI brand creation now seeds demo merchant data as part of the create path.
+  The created runtime starts with a demo merchant, account, customers, saved
+  payment methods, payment intents, balance movements, and payment examples
+  across the prototype status set without requiring a separate manual seed
+  click.
+- the React brand runtime now maps AI presentation tokens to materially
+  different dashboard compositions instead of re-skinning one layout. Supported
+  variants include terminal signal streams, command-center boards, card
+  operations receipt tiles, split workspaces, and topbar consoles. Typography
+  also varies through Google Font stacks such as JetBrains Mono, IBM Plex Sans
+  Condensed, Space Grotesk, Source Sans 3, and Manrope.
+- the Builder Frontend Layout Builder tab now prioritizes the live runtime
+  preview. The Integration inspector remains available, but it is rendered
+  below the preview instead of as a primary right-hand column.
 
 Immediate next actions:
 
-1. Change the admin create-brand flow so the system prompt, brand brief, BFF
-   contract, and sample payloads drive artifact generation more explicitly in
-   the UI.
-2. Move generated artifacts from database manifests toward versioned static
+1. Apply the new Prisma migration in local/dev databases before using draft
+   endpoints against an existing database.
+2. Add admin request-log views for the AI draft lifecycle: draft create,
+   follow-up message, validation result, and final publish.
+3. Update generated artifact preview/static manifests to follow the same
+   BFF-only shell/view-model contract as `apps/brand-runtime`, instead of
+   embedding contract maps for diagnostics.
+4. Continue broadening runtime presentation contracts so AI specs can request
+   more domain-specific widgets beyond the current payment, customer, balance,
+   signal, and tile variants.
+5. Move generated artifacts from database manifests toward versioned static
    asset directories so each active brand interface can be deployed directly.
-3. Remove fallback access from create/seed/reset/request-log operations once
+6. Remove fallback access from create/seed/reset/request-log operations once
    the explicit admin login is the default local workflow.
-4. Decide whether merchant auth sessions remain owned by payment-core or move
+7. Decide whether merchant auth sessions remain owned by payment-core or move
    fully into the shared identity boundary.
-5. Move generated artifacts from HTML-preview rendering toward versioned,
+8. Move generated artifacts from HTML-preview rendering toward versioned,
    deployable static assets once preview validation is stable.
 
 ### Phase 6.3: AI Gateway MVP
 
 - add provider interface and local deterministic provider;
-- add optional OpenAI, Gemini, and Anthropic adapters behind env flags;
+- add Gemini as the first real external adapter behind the existing
+  `GEMINI_*` env flags; keep OpenAI and Anthropic for later;
 - add structured output schema for `GeneratedBrandArtifact`;
 - generate a React/Vite artifact with a fixed safe runtime template;
 - persist artifact files and generation metadata.
 
-The first provider should be `local` and deterministic. External model adapters
-are useful only after the artifact schema, validator, preview, and deployment
-path are reliable.
+The first provider was `local` and deterministic. The current external provider
+target is Gemini because the project already has Gemini configuration and the
+free tier is enough for local brand-spec generation experiments.
+
+MVP progress:
+
+- `layout-builder` now has a provider registry with `local` as the active
+  provider and external providers represented as disabled server-key adapters;
+- admin brand creation now supports a clarification step before generation;
+- generation and regeneration requests can carry provider, model, and
+  clarification answers while remaining backward-compatible with older payloads.
 
 ### Phase 6.4: Generated Brand Runtime
 
@@ -576,11 +668,13 @@ seed/reset controls, open-as-demo entry points, and facade request logs.
 
 ## Provider Research Notes
 
-- OpenAI has an official TypeScript/JavaScript SDK (`openai`) and supports
-  structured outputs/function calling for schema-bound responses and tool/API
-  integration.
 - Google recommends the Google GenAI SDK for Gemini; the JavaScript package is
   `@google/genai`, and Gemini supports structured outputs and function calling.
+  The prototype currently uses direct REST calls to avoid adding another SDK
+  while reusing the existing receipt-recognizer Gemini configuration.
+- OpenAI has an official TypeScript/JavaScript SDK (`openai`) and supports
+  structured outputs/function calling, but OpenAI is not the active provider for
+  the brand draft flow.
 - Anthropic provides an official TypeScript SDK and Claude tool use with strict
   tool schemas.
 - Vercel AI SDK Core provides a unified TypeScript API across supported

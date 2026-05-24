@@ -105,8 +105,9 @@ live beside the brand list. The main panel shows only the live SPA preview.
 
 ## Notes
 
-- Gemini is not used in V1. The KOI-style dashboard is rendered by deterministic
-  local logic.
+- Gemini is used by the AI brand draft flow when `BRAND_AI_PROVIDER=gemini`,
+  `GEMINI_ENABLED=true`, and `GEMINI_API_KEY` are configured. The deterministic
+  local generator remains the fallback.
 - Brands get stable generated template profiles. New brands are scored against
   recent brands so nearby creations vary layout variant, navigation style, table
   column order, column labels, density, actions, and status badge style.

@@ -1,11 +1,17 @@
 import type {
   HealthResponse,
   LayoutBuilderAdminAuthResponse,
+  LayoutBuilderAppendBrandDraftMessageRequest,
+  LayoutBuilderBrandGenerationDraft,
   LayoutBuilderAdminLoginRequest,
+  LayoutBuilderAiProvider,
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandMembership,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
+  LayoutBuilderClarificationAnswers,
+  LayoutBuilderClarifyBrandResponse,
+  LayoutBuilderCreateBrandDraftRequest,
   LayoutBuilderContractVersionRecord,
   LayoutBuilderDeleteBrandResponse,
   LayoutBuilderRegenerateContractRequest,
@@ -171,17 +177,84 @@ export const api = {
       logo: File | Blob;
       aiPrompt: string;
       systemPrompt: string;
+      aiProvider?: LayoutBuilderAiProvider;
+      aiModel?: string;
+      clarificationAnswers?: LayoutBuilderClarificationAnswers;
     }) => {
       const formData = new FormData();
       formData.set("brandName", input.brandName);
       formData.set("aiPrompt", input.aiPrompt);
       formData.set("systemPrompt", input.systemPrompt);
+      formData.set("aiProvider", input.aiProvider ?? "local");
+      if (input.aiModel) {
+        formData.set("aiModel", input.aiModel);
+      }
+      if (input.clarificationAnswers) {
+        formData.set("clarificationAnswers", JSON.stringify(input.clarificationAnswers));
+      }
       formData.set("logo", input.logo, input.logo instanceof File ? input.logo.name : "demo-mark.svg");
 
       return requestJson<LayoutBuilderBrandResponse>(apiBases.layout, "/brands/ai", withAdminAuth({
         method: "POST",
         body: formData
       }));
+    },
+    clarifyAiBrand: (input: {
+      brandName: string;
+      aiPrompt: string;
+      aiProvider?: LayoutBuilderAiProvider;
+      aiModel?: string;
+    }) =>
+      requestJson<LayoutBuilderClarifyBrandResponse>(apiBases.layout, "/brands/ai/clarify", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          brandName: input.brandName,
+          aiPrompt: input.aiPrompt,
+          aiProvider: input.aiProvider ?? "local",
+          ...(input.aiModel ? { aiModel: input.aiModel } : {})
+        })
+      }),
+    createBrandDraft: (payload: LayoutBuilderCreateBrandDraftRequest) =>
+      requestJson<LayoutBuilderBrandGenerationDraft>(apiBases.layout, "/brands/ai/drafts", withAdminAuth({
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      })),
+    appendBrandDraftMessage: (draftId: string, payload: LayoutBuilderAppendBrandDraftMessageRequest) =>
+      requestJson<LayoutBuilderBrandGenerationDraft>(
+        apiBases.layout,
+        `/brands/ai/drafts/${encodeURIComponent(draftId)}/messages`,
+        withAdminAuth({
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        })
+      ),
+    getBrandDraft: (draftId: string) =>
+      requestJson<LayoutBuilderBrandGenerationDraft>(
+        apiBases.layout,
+        `/brands/ai/drafts/${encodeURIComponent(draftId)}`,
+        withAdminAuth()
+      ),
+    createBrandFromDraft: (draftId: string, logo: File | Blob) => {
+      const formData = new FormData();
+      formData.set("logo", logo, logo instanceof File ? logo.name : "demo-mark.svg");
+
+      return requestJson<LayoutBuilderBrandResponse>(
+        apiBases.layout,
+        `/brands/ai/drafts/${encodeURIComponent(draftId)}/create`,
+        withAdminAuth({
+          method: "POST",
+          body: formData
+        })
+      );
     },
     recent: () => requestJson<LayoutBuilderBrandListItem[]>(apiBases.layout, "/brands/recent"),
     schema: (brandId: string) =>

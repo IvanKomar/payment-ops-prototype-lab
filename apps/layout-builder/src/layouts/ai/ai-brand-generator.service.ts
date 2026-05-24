@@ -1,6 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import type {
+  LayoutBuilderAiCredentialMode,
   LayoutBuilderAiGenerationProfile,
+  LayoutBuilderAiProvider,
+  LayoutBuilderClarificationAnswers,
+  LayoutBuilderClarifyBrandResponse,
+  LayoutBuilderClarificationQuestion,
+  LayoutBuilderAiBrandSpec,
   LayoutBuilderGeneratedBrandArtifact,
   PaymentCoreStatus
 } from "@payment-ops/shared-types";
@@ -16,11 +22,23 @@ export const DEFAULT_BRAND_AI_SYSTEM_PROMPT = [
   "Keep the interface credible for real payment users: registration, login, payment creation, and transaction history must be obvious."
 ].join("\n");
 
+const LOCAL_AI_PROVIDER: LayoutBuilderAiProvider = "local";
+const LOCAL_AI_MODEL = "local-brand-runtime-v1";
+const LOCAL_CREDENTIAL_MODE: LayoutBuilderAiCredentialMode = "none";
+
+export interface ClarifyAiBrandInput {
+  brandName: string;
+  aiPrompt: string;
+  aiModel?: string;
+}
+
 export interface GenerateAiBrandProfileInput {
   brandId: string;
   brandName: string;
   adminPrompt: string;
   systemPrompt?: string;
+  aiModel?: string;
+  clarificationAnswers?: LayoutBuilderClarificationAnswers;
 }
 
 export interface GenerateBrandArtifactInput {
@@ -30,25 +48,55 @@ export interface GenerateBrandArtifactInput {
   contractSlug: string;
   contract: BrandRuntimeContract;
   generationProfile: LayoutBuilderAiGenerationProfile;
+  uiSpec?: LayoutBuilderAiBrandSpec["ui"];
+  sourceType?: LayoutBuilderGeneratedBrandArtifact["sourceType"];
 }
 
 @Injectable()
 export class AiBrandGeneratorService {
+  clarify(input: ClarifyAiBrandInput): LayoutBuilderClarifyBrandResponse {
+    const questions = clarificationQuestions(input.brandName, input.aiPrompt);
+
+    return {
+      aiProvider: LOCAL_AI_PROVIDER,
+      aiModel: input.aiModel?.trim() || LOCAL_AI_MODEL,
+      credentialMode: LOCAL_CREDENTIAL_MODE,
+      questions,
+      readyToGenerate: questions.every((question) => !question.required)
+    };
+  }
+
   generate(input: GenerateAiBrandProfileInput): LayoutBuilderAiGenerationProfile {
     const prompt = input.adminPrompt.trim();
     const systemPrompt = input.systemPrompt?.trim() || DEFAULT_BRAND_AI_SYSTEM_PROMPT;
-    const seed = hashToNumber(`${input.brandId}:${input.brandName}:${prompt}:${systemPrompt}`);
-    const domain = pick(DOMAINS, seed);
+    const aiModel = input.aiModel?.trim() || LOCAL_AI_MODEL;
+    const normalizedAnswers = normalizeClarificationAnswers(input.clarificationAnswers);
+    const answersPrompt = clarificationAnswersToPrompt(normalizedAnswers);
+    const seed = hashToNumber(`${input.brandId}:${input.brandName}:${prompt}:${systemPrompt}:${answersPrompt}`);
+    const domain = selectDomain(input.brandName, prompt, normalizedAnswers, seed);
     const tone = pick(TONES, Math.floor(seed / 7));
     const statusSet = pick(STATUS_SETS, Math.floor(seed / 11));
+    const visualDirection = answerValue(normalizedAnswers, "visual_direction");
+    const audience = answerValue(normalizedAnswers, "audience");
+    const domainHint = answerValue(normalizedAnswers, "payment_domain");
+    const generatedSummary = [
+      `${input.brandName} uses ${domain.resourceAlias} as its public payment resource.`,
+      audience ? `Target audience: ${audience}.` : "",
+      domainHint ? `Payment domain: ${domainHint}.` : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return {
-      provider: "local",
-      model: "local-brand-runtime-v1",
+      provider: LOCAL_AI_PROVIDER,
+      credentialMode: LOCAL_CREDENTIAL_MODE,
+      model: aiModel,
       adminPrompt: prompt,
       systemPrompt,
+      ...(Object.keys(normalizedAnswers).length > 0 ? { clarificationAnswers: normalizedAnswers } : {}),
+      generatedSummary,
       resourceAlias: domain.resourceAlias,
-      visualDirection: `${tone.visualDirection}. ${domain.visualHint}.`,
+      visualDirection: [visualDirection || tone.visualDirection, domain.visualHint].join(". "),
       contractSummary: `${input.brandName} exposes ${domain.resourceAlias} with ${tone.contractTone} labels and brand-specific payment lifecycle terms.`,
       statusMap: statusSet,
       actionLabels: domain.actionLabels,
@@ -63,17 +111,12 @@ export class AiBrandGeneratorService {
       .digest("hex")
       .slice(0, 32)}`;
     const facadeBasePath = `/brands/${input.brandId}/${input.contractSlug}`;
+    const uiSpec = input.uiSpec ?? defaultUiSpec(input);
     const contractSource = JSON.stringify(
       {
-        brandId: input.brandId,
         brandName: input.brandName,
         resourceAlias: input.contract.resourceAlias,
-        endpoints: input.contract.endpoints,
-        fields: input.contract.fields,
-        customerFields: input.contract.customerFields,
-        paymentMethodFields: input.contract.paymentMethodFields,
-        balanceFields: input.contract.balanceFields,
-        statusMap: input.contract.statusMap,
+        publicEntities: publicArtifactEntities(input.contract),
         actionLabels: input.contract.actionLabels
       },
       null,
@@ -93,14 +136,14 @@ export class AiBrandGeneratorService {
       "      </section>",
       "      <section className=\"grid\">",
       "        <article>",
-      "          <strong>Auth</strong>",
-      "          <code>{brandContract.endpoints.login}</code>",
-      "          <code>{brandContract.endpoints.register}</code>",
+      "          <strong>Workspace access</strong>",
+      "          <code>{brandContract.publicEntities.login}</code>",
+      "          <code>{brandContract.publicEntities.register}</code>",
       "        </article>",
       "        <article>",
-      "          <strong>Payment workspace</strong>",
-      "          <code>{brandContract.endpoints.payments}</code>",
-      "          <code>{brandContract.endpoints.balanceTransactions}</code>",
+      "          <strong>Payment views</strong>",
+      "          <code>{brandContract.publicEntities.metrics}</code>",
+      "          <code>{brandContract.publicEntities.payments}</code>",
       "        </article>",
       "      </section>",
       "    </main>",
@@ -143,10 +186,13 @@ export class AiBrandGeneratorService {
       brandId: input.brandId,
       provider: input.generationProfile.provider,
       model: input.generationProfile.model,
+      sourceType: input.sourceType ?? "generated-react",
+      status: "active",
       framework: "react-vite",
       entryFile: "src/App.tsx",
       contractVersionId: input.contractVersionId,
       facadeBasePath,
+      uiSpec,
       routes: [
         { path: "/login", label: input.contract.actionLabels.login, requiresSession: false },
         { path: "/dashboard", label: "Dashboard", requiresSession: true },
@@ -180,6 +226,48 @@ function escapeTsx(value: string): string {
   return value.replace(/[&<>{}]/gu, (char) => HTML_ESCAPE[char] ?? char);
 }
 
+function defaultUiSpec(input: GenerateBrandArtifactInput): LayoutBuilderAiBrandSpec["ui"] {
+  return {
+    labels: {
+      register: input.generationProfile.actionLabels.register,
+      login: input.generationProfile.actionLabels.login,
+      createPayment: input.generationProfile.actionLabels.createPayment,
+      history: input.generationProfile.actionLabels.history,
+      refund: input.generationProfile.actionLabels.refund,
+      overview: "Overview",
+      payments: input.generationProfile.actionLabels.history,
+      customers: "Customers",
+      balances: "Balances"
+    },
+    navigation: { dashboard: "Dashboard", payments: "Payments", customers: "Customers", balances: "Balances" },
+    tableLabels: { id: "Reference", status: "Status", amount: "Amount", customer: "Customer", createdAt: "Created" },
+    formLabels: { amount: "Amount", customer: "Customer", method: "Method" },
+    presentation: {
+      layout: "sidebar-ledger",
+      density: "balanced",
+      navigationPattern: "sidebar",
+      dashboardComposition: ["metrics", "recentPayments", "balances", "customers", "createPayment"],
+      visualTokens: {
+        palette: ["white", "blue", "slate"],
+        typography: "system sans with tabular figures",
+        radius: "8px",
+        spacing: "balanced dashboard spacing",
+        surfaces: "light panels with restrained borders",
+        buttons: "solid primary and quiet secondary buttons"
+      },
+      copyTone: input.generationProfile.visualDirection,
+      componentLabels: { metricsCard: "Overview", paymentTable: "Payment history", createPanel: "Create payment" },
+      emptyStates: { payments: "No payments yet.", customers: "No customers yet.", balances: "No balance activity yet." }
+    }
+  };
+}
+
+function publicArtifactEntities(contract: BrandRuntimeContract): Record<string, string> {
+  const keys = ["register", "login", "account", "metrics", "payments", "customers", "paymentMethods", "balances"] as const;
+
+  return Object.fromEntries(keys.map((key) => [key, contract.endpoints[key].replace(/^bff\//u, "")]));
+}
+
 const HTML_ESCAPE: Record<string, string> = {
   "&": "&amp;",
   "<": "&lt;",
@@ -196,7 +284,146 @@ function hashToNumber(value: string): number {
   return Number.parseInt(createHash("sha1").update(value).digest("hex").slice(0, 8), 16);
 }
 
-const DOMAINS = [
+function clarificationQuestions(brandName: string, prompt: string): LayoutBuilderClarificationQuestion[] {
+  const source = `${brandName} ${prompt}`.toLowerCase();
+  const questions: LayoutBuilderClarificationQuestion[] = [];
+
+  if (!/\b(merchant|enterprise|operator|admin|consumer|customer|buyer|seller|crypto|web3|finance|treasury)\b/u.test(source)) {
+    questions.push({
+      id: "audience",
+      label: "Who will use this brand workspace?",
+      type: "single_select",
+      required: true,
+      options: ["Enterprise merchant operators", "Crypto payment teams", "Marketplace sellers", "Consumer checkout users"]
+    });
+  }
+
+  if (!/\b(crypto|stablecoin|wallet|settlement|checkout|treasury|risk|ledger|gateway|payments?)\b/u.test(source)) {
+    questions.push({
+      id: "payment_domain",
+      label: "Which payment domain should the public contract feel built around?",
+      type: "single_select",
+      required: true,
+      options: ["Crypto settlement rails", "Merchant checkout gateway", "Treasury movement desk", "Risk review cases"]
+    });
+  }
+
+  if (!/\b(premium|professional|operational|consumer|risk|ledger|compact|friendly|serious)\b/u.test(source)) {
+    questions.push({
+      id: "tone",
+      label: "What tone should labels and status names use?",
+      type: "single_select",
+      required: false,
+      options: ["Premium finance", "Operational ledger", "Risk review", "Customer-friendly"]
+    });
+  }
+
+  if (!/\b(login|register|payment|payments|transaction|history|customer|balance|wallet|account)\b/u.test(source)) {
+    questions.push({
+      id: "required_screens",
+      label: "Which screens must be obvious in the generated brand?",
+      type: "multi_select",
+      required: true,
+      options: ["Registration", "Login", "Payment creation", "Transaction history", "Customers", "Balances"]
+    });
+  }
+
+  if (!/\b(seed|demo|scenario|sample|test data|transactions?)\b/u.test(source)) {
+    questions.push({
+      id: "demo_data",
+      label: "What demo scenarios should be available after creation?",
+      type: "multi_select",
+      required: false,
+      options: ["Settled payments", "Failed payments", "Refunded wallet payments", "Crypto wallet activity", "Manual review queue"]
+    });
+  }
+
+  if (!/\b(design|visual|dark|light|color|compact|dashboard|brand|logo|premium)\b/u.test(source)) {
+    questions.push({
+      id: "visual_direction",
+      label: "What visual direction should the brand use?",
+      type: "text",
+      required: false,
+      placeholder: "Example: dark crypto dashboard with high-contrast balances and compact transaction tables"
+    });
+  }
+
+  return questions;
+}
+
+interface BrandDomain {
+  resourceAlias: string;
+  visualHint: string;
+  actionLabels: LayoutBuilderAiGenerationProfile["actionLabels"];
+}
+
+function selectDomain(
+  brandName: string,
+  prompt: string,
+  answers: LayoutBuilderClarificationAnswers,
+  seed: number
+): BrandDomain {
+  const source = `${brandName} ${prompt} ${clarificationAnswersToPrompt(answers)}`.toLowerCase();
+
+  if (/\b(crypto|stablecoin|wallet|web3|chain|blockchain|token)\b/u.test(source)) {
+    return pick(CRYPTO_DOMAINS, seed);
+  }
+
+  if (/\b(checkout|buyer|consumer|order)\b/u.test(source)) {
+    return pick(CHECKOUT_DOMAINS, seed);
+  }
+
+  if (/\b(treasury|ledger|settlement|finance)\b/u.test(source)) {
+    return pick(TREASURY_DOMAINS, seed);
+  }
+
+  return pick(DOMAINS, seed);
+}
+
+function normalizeClarificationAnswers(
+  answers: LayoutBuilderClarificationAnswers | undefined
+): LayoutBuilderClarificationAnswers {
+  if (!answers) {
+    return {};
+  }
+
+  const entries: Array<[string, LayoutBuilderClarificationAnswers[string]]> = [];
+
+  for (const [key, value] of Object.entries(answers)) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) {
+        entries.push([key, trimmed]);
+      }
+      continue;
+    }
+
+    const values = value.map((entry) => entry.trim()).filter(Boolean);
+    if (values.length > 0) {
+      entries.push([key, values]);
+    }
+  }
+
+  return Object.fromEntries(entries);
+}
+
+function clarificationAnswersToPrompt(answers: LayoutBuilderClarificationAnswers): string {
+  return Object.entries(answers)
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+    .join("\n");
+}
+
+function answerValue(answers: LayoutBuilderClarificationAnswers, key: string): string | undefined {
+  const value = answers[key];
+
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+
+  return value;
+}
+
+const DOMAINS: readonly BrandDomain[] = [
   {
     resourceAlias: "settlementCases",
     visualHint: "Use operational finance language with compact ledgers and settlement review flows",
@@ -242,6 +469,58 @@ const DOMAINS = [
     }
   }
 ] as const;
+
+const CRYPTO_DOMAINS: readonly BrandDomain[] = [
+  {
+    resourceAlias: "cryptoSettlements",
+    visualHint: "Use crypto payment language with wallet balances, settlement rails, and chain-aware transaction history",
+    actionLabels: {
+      register: "Create wallet desk",
+      login: "Open wallet desk",
+      createPayment: "Launch crypto payment",
+      history: "Chain settlement log",
+      refund: "Return to wallet"
+    }
+  },
+  {
+    resourceAlias: "walletFlows",
+    visualHint: "Use digital asset operations language with compact wallet activity and reserve visibility",
+    actionLabels: {
+      register: "Activate wallet access",
+      login: "Resume wallet session",
+      createPayment: "Route wallet payment",
+      history: "Wallet activity",
+      refund: "Reverse wallet flow"
+    }
+  },
+  {
+    resourceAlias: "stablecoinOrders",
+    visualHint: "Use stablecoin checkout language with balance confidence and settlement confirmation cues",
+    actionLabels: {
+      register: "Create stablecoin profile",
+      login: "Enter stablecoin portal",
+      createPayment: "Create stablecoin order",
+      history: "Stablecoin ledger",
+      refund: "Return stablecoins"
+    }
+  },
+  {
+    resourceAlias: "tokenTransfers",
+    visualHint: "Use token transfer language with wallet counterparties, review states, and ledger movements",
+    actionLabels: {
+      register: "Create token desk",
+      login: "Open token desk",
+      createPayment: "Send token transfer",
+      history: "Token transfer log",
+      refund: "Recall transfer"
+    }
+  }
+] as const;
+
+const CHECKOUT_DOMAINS = DOMAINS.filter((domain) => domain.resourceAlias === "checkoutOrders");
+const TREASURY_DOMAINS = DOMAINS.filter(
+  (domain) => domain.resourceAlias === "treasuryMoves" || domain.resourceAlias === "settlementCases"
+);
 
 const TONES = [
   {

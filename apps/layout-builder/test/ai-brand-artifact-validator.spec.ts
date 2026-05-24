@@ -70,10 +70,45 @@ function artifactFixture(
     brandId,
     provider: "local",
     model: "local-brand-runtime-v1",
+    sourceType: "ai-spec",
+    status: "active",
     framework: "react-vite",
     entryFile: "src/App.tsx",
     contractVersionId,
     facadeBasePath: `/brands/${brandId}/${slug}`,
+    uiSpec: {
+      labels: {
+        register: "Register",
+        login: "Login",
+        createPayment: "Create payment",
+        history: "History",
+        refund: "Refund",
+        overview: "Overview",
+        payments: "Payments",
+        customers: "Customers",
+        balances: "Balances"
+      },
+      navigation: { dashboard: "Dashboard", payments: "Payments", customers: "Customers", balances: "Balances" },
+      tableLabels: { id: "ID", status: "Status", amount: "Amount", customer: "Customer", createdAt: "Created" },
+      formLabels: { amount: "Amount", customer: "Customer", method: "Method" },
+      presentation: {
+        layout: "sidebar-ledger",
+        density: "balanced",
+        navigationPattern: "sidebar",
+        dashboardComposition: ["metrics", "recentPayments", "balances"],
+        visualTokens: {
+          palette: ["white", "blue", "slate"],
+          typography: "system sans",
+          radius: "8px",
+          spacing: "balanced",
+          surfaces: "white panels",
+          buttons: "solid primary"
+        },
+        copyTone: "merchant operations",
+        componentLabels: { metricsCard: "Overview", paymentTable: "Payments", createPanel: "Create" },
+        emptyStates: { payments: "No payments.", customers: "No customers.", balances: "No balances." }
+      }
+    },
     routes: [
       { path: "/login", label: "Login", requiresSession: false },
       { path: "/dashboard", label: "Dashboard", requiresSession: true },
@@ -179,9 +214,24 @@ function contractFixture(endpoints: Partial<BrandRuntimeContract["endpoints"]> =
       email: "email",
       password: "password",
       displayName: "displayName",
-      currency: "currency"
+      currency: "currency",
+      sessionToken: "sessionToken"
+    },
+    responseKeys: {
+      account: "account",
+      metrics: "metrics",
+      payments: "payments",
+      customers: "customers",
+      paymentMethods: "paymentMethods",
+      balances: "balances",
+      error: "error"
     },
     endpoints: {
+      account: "bff/workspace",
+      appShell: "bff/workspace-entry",
+      balances: "bff/treasury",
+      metrics: "bff/signals",
+      overview: "bff/workspace-summary",
       register: "bff/access-open",
       login: "bff/access-resume",
       payments: "bff/settlement-cases",

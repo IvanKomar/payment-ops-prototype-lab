@@ -41,6 +41,31 @@ describe("payment state machine", () => {
     ).toBe("settled");
   });
 
+  it("supports explicit seed scenarios for every prototype status", () => {
+    const scenarios = [
+      "created",
+      "requires_payment_method",
+      "requires_confirmation",
+      "processing",
+      "authorized",
+      "captured",
+      "settled",
+      "failed",
+      "canceled",
+      "refunded"
+    ] as const;
+
+    for (const scenario of scenarios) {
+      expect(
+        initialStatusForScenario({
+          paymentId: "pay_seed",
+          destinationLabel: "seeded payment",
+          scenario
+        })
+      ).toBe(scenario);
+    }
+  });
+
   it("accepts structured customer and payment method input", () => {
     const result = createPaymentSchema.parse({
       amount: "49.99",

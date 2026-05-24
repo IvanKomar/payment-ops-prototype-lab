@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, UnauthorizedException, type PipeTransform } from "@nestjs/common";
 import { ApiProperty } from "@nestjs/swagger";
 import type {
+  LayoutBuilderAiProvider,
+  LayoutBuilderClarificationAnswerValue,
   LayoutBuilderFieldStyle,
   LayoutBuilderPayloadStructure
 } from "@payment-ops/shared-types";
@@ -16,6 +18,11 @@ export const slugSchema = z
   .trim()
   .regex(/^[a-z0-9][a-z0-9_-]{6,80}$/, "slug must be lowercase URL-safe text");
 
+export const entitySlugSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9][a-z0-9_-]{1,80}$/, "entity slug must be lowercase URL-safe text");
+
 export const contractVersionIdSchema = z
   .string()
   .trim()
@@ -27,15 +34,94 @@ export const authHeaderSchema = z
   .regex(/^Bearer\s+\S+$/u, "Authorization must use Bearer token")
   .transform((value) => value.replace(/^Bearer\s+/iu, ""));
 
+const clarificationAnswerValueSchema = z.union([
+  z.string().trim().min(1).max(1000),
+  z.array(z.string().trim().min(1).max(200)).min(1).max(12)
+]) satisfies z.ZodType<LayoutBuilderClarificationAnswerValue>;
+
+const clarificationAnswersObjectSchema = z.record(
+  z.string().trim().min(1).max(80),
+  clarificationAnswerValueSchema
+);
+
+const clarificationAnswersSchema = z
+  .union([
+    clarificationAnswersObjectSchema,
+    z.string().trim().min(1).max(6000).transform((value, context) => {
+      try {
+        return clarificationAnswersObjectSchema.parse(JSON.parse(value));
+      } catch {
+        context.addIssue({
+          code: "custom",
+          message: "clarificationAnswers must be a JSON object of strings or string arrays"
+        });
+        return z.NEVER;
+      }
+    })
+  ])
+  .optional();
+
+export const aiProviderSchema = z.enum(["local", "openai", "gemini", "anthropic", "codex"]) satisfies z.ZodType<LayoutBuilderAiProvider>;
+const aiBrandSpecProviderSchema = z.enum(["local", "gemini"]);
+
+export const clarifyBrandSchema = z.object({
+  brandName: z.string().trim().min(1).max(80),
+  aiPrompt: z.string().trim().min(1).max(4000),
+  aiProvider: aiProviderSchema.default("local"),
+  aiModel: z.string().trim().min(1).max(120).optional()
+});
+
 export const createBrandSchema = z.object({
   brandName: z.string().trim().min(1).max(80),
   aiPrompt: z.string().trim().min(1).max(4000).optional(),
-  systemPrompt: z.string().trim().min(1).max(6000).optional()
+  systemPrompt: z.string().trim().min(1).max(6000).optional(),
+  aiProvider: aiProviderSchema.optional(),
+  aiModel: z.string().trim().min(1).max(120).optional(),
+  clarificationAnswers: clarificationAnswersSchema
+});
+
+const aiGenerationControlsSchema = z
+  .object({
+    payloadStructure: z.enum(["flat", "nested", "key-value-array"]).optional(),
+    fieldStyle: z.enum(["camelCase", "snake_case", "kebab-case"]).optional(),
+    authShape: z.enum(["credentials", "access_key", "workspace"]).optional(),
+    responseEnvelope: z.enum(["plain", "resource_key", "data", "result"]).optional(),
+    routeNaming: z.enum(["product", "finance", "abstract"]).optional(),
+    errorStyle: z.enum(["standard", "branded"]).optional(),
+    namingIntensity: z.enum(["moderate", "high", "maximum"]).optional()
+  })
+  .optional();
+
+export const createBrandDraftSchema = z.object({
+  brandName: z.string().trim().min(1).max(80),
+  adminPrompt: z.string().trim().min(1).max(6000),
+  systemPrompt: z.string().trim().min(1).max(8000).optional(),
+  provider: aiBrandSpecProviderSchema.optional(),
+  model: z.string().trim().min(1).max(120).optional(),
+  controls: aiGenerationControlsSchema
+});
+
+export const createBrandDraftFromSpecSchema = z.object({
+  brandName: z.string().trim().min(1).max(80),
+  adminPrompt: z.string().trim().min(1).max(6000).optional(),
+  systemPrompt: z.string().trim().min(1).max(8000).optional(),
+  provider: aiProviderSchema.default("codex"),
+  model: z.string().trim().min(1).max(120).optional(),
+  controls: aiGenerationControlsSchema,
+  spec: z.unknown()
+});
+
+export const appendBrandDraftMessageSchema = z.object({
+  message: z.string().trim().min(1).max(6000),
+  controls: aiGenerationControlsSchema
 });
 
 export const regenerateContractSchema = z.object({
   aiPrompt: z.string().trim().min(1).max(4000).optional(),
-  systemPrompt: z.string().trim().min(1).max(6000).optional()
+  systemPrompt: z.string().trim().min(1).max(6000).optional(),
+  aiProvider: aiProviderSchema.optional(),
+  aiModel: z.string().trim().min(1).max(120).optional(),
+  clarificationAnswers: clarificationAnswersSchema
 });
 
 export const adminLoginSchema = z.object({

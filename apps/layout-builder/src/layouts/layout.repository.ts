@@ -1,7 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { BrandBffRequestLog, BrandRequest, ContractVersion, GeneratedArtifact, Prisma } from "@prisma/client";
+import type { BrandBffRequestLog, BrandGenerationDraft, BrandRequest, ContractVersion, GeneratedArtifact, Prisma } from "@prisma/client";
 import type {
+  LayoutBuilderBrandGenerationDraft,
   LayoutBuilderAiGenerationProfile,
+  LayoutBuilderAiBrandSpec,
   LayoutBuilderContractVersion,
   LayoutBuilderContractVersionRecord,
   LayoutBuilderDashboardConfig,
@@ -24,6 +26,20 @@ interface SaveGeneratedContractVersionInput {
   brandId: string;
   contractVersion: LayoutBuilderContractVersion;
   generatedArtifact: LayoutBuilderGeneratedBrandArtifact;
+}
+
+interface SaveBrandGenerationDraftInput {
+  id: string;
+  brandName: string;
+  adminPrompt: string;
+  systemPrompt: string;
+  provider: string;
+  model: string;
+  controls: unknown;
+  messages: unknown;
+  spec: unknown;
+  validationIssues: string[];
+  status: string;
 }
 
 const BRAND_WITH_SCHEMA_INCLUDE = {
@@ -58,6 +74,37 @@ const BRAND_WITH_SCHEMA_INCLUDE = {
 } satisfies Prisma.BrandInclude;
 
 type BrandWithRelations = Prisma.BrandGetPayload<{ include: typeof BRAND_WITH_SCHEMA_INCLUDE }>;
+
+function brandWithSchemaIncludeForSlug(slug: string): Prisma.BrandInclude {
+  return {
+    schemas: {
+      where: { slug },
+      take: 1,
+      include: {
+        contractVersions: {
+          where: {
+            active: true
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 1,
+          include: {
+            artifacts: {
+              where: {
+                active: true
+              },
+              orderBy: {
+                createdAt: "desc"
+              },
+              take: 1
+            }
+          }
+        }
+      }
+    }
+  };
+}
 
 @Injectable()
 export class LayoutRepository {
@@ -100,10 +147,11 @@ export class LayoutRepository {
             resourceAlias: input.schema.contractVersion.resourceAlias,
             payloadStructure: input.schema.contractVersion.payloadStructure,
             fieldMap: input.schema.contractVersion.fieldMap as Prisma.InputJsonValue,
-            statusMap: input.schema.contractVersion.statusMap as unknown as Prisma.InputJsonValue,
-            actionLabels: input.schema.contractVersion.actionLabels as unknown as Prisma.InputJsonValue,
-            endpoints: input.schema.contractVersion.endpoints as Prisma.InputJsonValue,
-            active: input.schema.contractVersion.active
+          statusMap: input.schema.contractVersion.statusMap as unknown as Prisma.InputJsonValue,
+          actionLabels: input.schema.contractVersion.actionLabels as unknown as Prisma.InputJsonValue,
+          endpoints: input.schema.contractVersion.endpoints as Prisma.InputJsonValue,
+          aiSpec: input.schema.contractVersion.aiSpec as unknown as Prisma.InputJsonValue,
+          active: input.schema.contractVersion.active
           }
         });
 
@@ -138,6 +186,19 @@ export class LayoutRepository {
     });
 
     return brand ? toBrandWithSchema(brand) : null;
+  }
+
+  async findBrandBySlug(slug: string): Promise<BrandWithSchema | null> {
+    const brand = await this.prisma.brand.findFirst({
+      where: {
+        schemas: {
+          some: { slug }
+        }
+      },
+      include: brandWithSchemaIncludeForSlug(slug)
+    });
+
+    return brand ? toBrandWithSchema(brand as unknown as BrandWithRelations) : null;
   }
 
   async findLatestBrands(limit: number): Promise<BrandWithSchema[]> {
@@ -193,6 +254,7 @@ export class LayoutRepository {
           statusMap: input.contractVersion.statusMap as unknown as Prisma.InputJsonValue,
           actionLabels: input.contractVersion.actionLabels as unknown as Prisma.InputJsonValue,
           endpoints: input.contractVersion.endpoints as Prisma.InputJsonValue,
+          aiSpec: input.contractVersion.aiSpec as unknown as Prisma.InputJsonValue,
           active: true
         }
       });
@@ -296,6 +358,54 @@ export class LayoutRepository {
         createdAt: "desc"
       },
       take: limit
+    });
+  }
+
+  async saveBrandGenerationDraft(input: SaveBrandGenerationDraftInput): Promise<LayoutBuilderBrandGenerationDraft> {
+    const draft = await this.prisma.brandGenerationDraft.upsert({
+      where: { id: input.id },
+      create: {
+        id: input.id,
+        brandName: input.brandName,
+        adminPrompt: input.adminPrompt,
+        systemPrompt: input.systemPrompt,
+        provider: input.provider,
+        model: input.model,
+        controls: input.controls as Prisma.InputJsonValue,
+        messages: input.messages as Prisma.InputJsonValue,
+        spec: input.spec as Prisma.InputJsonValue,
+        validationIssues: input.validationIssues as Prisma.InputJsonValue,
+        status: input.status
+      },
+      update: {
+        adminPrompt: input.adminPrompt,
+        systemPrompt: input.systemPrompt,
+        provider: input.provider,
+        model: input.model,
+        controls: input.controls as Prisma.InputJsonValue,
+        messages: input.messages as Prisma.InputJsonValue,
+        spec: input.spec as Prisma.InputJsonValue,
+        validationIssues: input.validationIssues as Prisma.InputJsonValue,
+        status: input.status
+      }
+    });
+
+    return brandGenerationDraftToResponse(draft);
+  }
+
+  async findBrandGenerationDraft(id: string): Promise<LayoutBuilderBrandGenerationDraft | null> {
+    const draft = await this.prisma.brandGenerationDraft.findUnique({ where: { id } });
+
+    return draft ? brandGenerationDraftToResponse(draft) : null;
+  }
+
+  async markBrandGenerationDraftCreated(id: string, brandId: string): Promise<void> {
+    await this.prisma.brandGenerationDraft.update({
+      where: { id },
+      data: {
+        brandId,
+        status: "created"
+      }
     });
   }
 
@@ -412,6 +522,7 @@ function contractVersionToResponse(
     statusMap: value.statusMap as unknown as LayoutBuilderContractVersion["statusMap"],
     actionLabels: value.actionLabels as unknown as LayoutBuilderContractVersion["actionLabels"],
     endpoints: stringRecord(value.endpoints),
+    ...(isObject(value.aiSpec) ? { aiSpec: value.aiSpec as unknown as LayoutBuilderAiBrandSpec } : {}),
     active: value.active,
     createdAt: value.createdAt.toISOString(),
     updatedAt: value.updatedAt.toISOString()
@@ -439,6 +550,28 @@ function generatedArtifactToResponse(value: GeneratedArtifact | undefined): Layo
   }
 
   return normalizeGeneratedArtifact(value.manifest);
+}
+
+function brandGenerationDraftToResponse(value: BrandGenerationDraft): LayoutBuilderBrandGenerationDraft {
+  const validationIssues = Array.isArray(value.validationIssues)
+    ? value.validationIssues.filter((entry): entry is string => typeof entry === "string")
+    : [];
+
+  return {
+    draftId: value.id,
+    brandName: value.brandName,
+    adminPrompt: value.adminPrompt,
+    systemPrompt: value.systemPrompt,
+    provider: value.provider as LayoutBuilderBrandGenerationDraft["provider"],
+    model: value.model,
+    controls: value.controls as unknown as LayoutBuilderBrandGenerationDraft["controls"],
+    messages: Array.isArray(value.messages) ? (value.messages as unknown as LayoutBuilderBrandGenerationDraft["messages"]) : [],
+    spec: isObject(value.spec) ? (value.spec as unknown as LayoutBuilderBrandGenerationDraft["spec"]) : null,
+    validationIssues,
+    status: value.status as LayoutBuilderBrandGenerationDraft["status"],
+    createdAt: value.createdAt.toISOString(),
+    updatedAt: value.updatedAt.toISOString()
+  };
 }
 
 function normalizeLayoutProfile(value: unknown, brandId: string): LayoutProfile {

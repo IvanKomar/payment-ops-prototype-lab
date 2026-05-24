@@ -35,6 +35,11 @@ export function initialStatusForScenario(input: {
   scenario?: string;
 }): PaymentCoreStatus {
   const scenario = input.scenario ?? scenarioFromDestination(input.destinationLabel);
+  const explicitStatus = paymentStatusValue(scenario);
+
+  if (explicitStatus) {
+    return explicitStatus;
+  }
 
   if (scenario === "fail") {
     return "failed";
@@ -57,6 +62,23 @@ export function initialStatusForScenario(input: {
   }
 
   return stableDemoStatus(input.paymentId);
+}
+
+function paymentStatusValue(value: string): PaymentCoreStatus | null {
+  const statuses: PaymentCoreStatus[] = [
+    "created",
+    "requires_payment_method",
+    "requires_confirmation",
+    "processing",
+    "authorized",
+    "captured",
+    "settled",
+    "failed",
+    "canceled",
+    "refunded"
+  ];
+
+  return statuses.includes(value as PaymentCoreStatus) ? (value as PaymentCoreStatus) : null;
 }
 
 function scenarioFromDestination(destinationLabel: string): string {

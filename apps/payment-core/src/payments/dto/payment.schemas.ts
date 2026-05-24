@@ -53,7 +53,25 @@ export const createPaymentSchema = z.object({
     .optional(),
   description: z.string().trim().min(1).max(240).optional(),
   scenario: z
-    .enum(["demo", "requires_action", "fail", "review", "reserve", "settle", "refund"])
+    .enum([
+      "demo",
+      "created",
+      "requires_payment_method",
+      "requires_confirmation",
+      "requires_action",
+      "processing",
+      "authorized",
+      "captured",
+      "settled",
+      "failed",
+      "canceled",
+      "refunded",
+      "fail",
+      "review",
+      "reserve",
+      "settle",
+      "refund"
+    ])
     .optional()
 }).refine((value) => value.destinationLabel || value.customer, {
   message: "Either destinationLabel or customer is required",

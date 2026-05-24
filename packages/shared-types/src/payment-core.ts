@@ -205,7 +205,24 @@ export interface PaymentCoreCreatePaymentRequest {
     bankName?: string;
   };
   description?: string;
-  scenario?: "demo" | "requires_action" | "fail" | "review" | "reserve" | "settle" | "refund";
+  scenario?:
+    | "demo"
+    | "created"
+    | "requires_payment_method"
+    | "requires_confirmation"
+    | "requires_action"
+    | "processing"
+    | "authorized"
+    | "captured"
+    | "settled"
+    | "failed"
+    | "canceled"
+    | "refunded"
+    | "fail"
+    | "review"
+    | "reserve"
+    | "settle"
+    | "refund";
 }
 
 export interface PaymentCoreCreatePaymentResponse {
