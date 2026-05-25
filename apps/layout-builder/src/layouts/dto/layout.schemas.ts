@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException, type PipeTransf
 import { ApiProperty } from "@nestjs/swagger";
 import type {
   LayoutBuilderAiProvider,
+  LayoutBuilderBrandGenerationIntent,
   LayoutBuilderClarificationAnswerValue,
   LayoutBuilderFieldStyle,
   LayoutBuilderPayloadStructure
@@ -92,6 +93,58 @@ const aiGenerationControlsSchema = z
   })
   .optional();
 
+const paymentStatusVocabularySchema = z
+  .object({
+    created: z.string().trim().min(1).max(80).optional(),
+    requires_payment_method: z.string().trim().min(1).max(80).optional(),
+    requires_confirmation: z.string().trim().min(1).max(80).optional(),
+    processing: z.string().trim().min(1).max(80).optional(),
+    authorized: z.string().trim().min(1).max(80).optional(),
+    captured: z.string().trim().min(1).max(80).optional(),
+    settled: z.string().trim().min(1).max(80).optional(),
+    failed: z.string().trim().min(1).max(80).optional(),
+    canceled: z.string().trim().min(1).max(80).optional(),
+    refunded: z.string().trim().min(1).max(80).optional()
+  })
+  .optional();
+
+const textListSchema = z.array(z.string().trim().min(1).max(120)).max(24);
+
+export const brandGenerationIntentSchema = z.object({
+  brandName: z.string().trim().min(1).max(80),
+  concept: z.object({
+    domain: z.string().trim().min(1).max(160),
+    audience: z.string().trim().min(1).max(160),
+    productMetaphor: z.string().trim().min(1).max(120),
+    authMetaphor: z.string().trim().min(1).max(120),
+    paymentMetaphor: z.string().trim().min(1).max(120),
+    tone: z.string().trim().min(1).max(180),
+    avoidWords: textListSchema.default([]),
+    preferredTerms: textListSchema.default([])
+  }),
+  namingRules: z.object({
+    routeStyle: z.string().trim().min(1).max(160),
+    fieldStyle: z.enum(["camelCase", "snake_case", "kebab-case"]).optional(),
+    forbiddenCanonicalNames: textListSchema.default([]),
+    examples: textListSchema.default([])
+  }),
+  uiDirection: z.object({
+    layout: z.string().trim().min(1).max(120),
+    density: z.string().trim().min(1).max(80),
+    navigation: z.string().trim().min(1).max(80),
+    visualStyle: z.string().trim().min(1).max(300),
+    palette: z.array(z.string().trim().min(1).max(80)).min(3).max(8),
+    dashboardBlocks: z.array(z.string().trim().min(1).max(80)).min(3).max(8)
+  }),
+  copy: z.object({
+    loginTitle: z.string().trim().min(1).max(100),
+    registerTitle: z.string().trim().min(1).max(100),
+    emptyStates: z.record(z.string().trim().min(1).max(80), z.string().trim().min(1).max(180)),
+    actionLabels: z.record(z.string().trim().min(1).max(80), z.string().trim().min(1).max(100))
+  }),
+  statusVocabulary: paymentStatusVocabularySchema
+}) satisfies z.ZodType<LayoutBuilderBrandGenerationIntent>;
+
 export const createBrandDraftSchema = z.object({
   brandName: z.string().trim().min(1).max(80),
   adminPrompt: z.string().trim().min(1).max(6000),
@@ -109,6 +162,14 @@ export const createBrandDraftFromSpecSchema = z.object({
   model: z.string().trim().min(1).max(120).optional(),
   controls: aiGenerationControlsSchema,
   spec: z.unknown()
+});
+
+export const createBrandIntentDraftSchema = z.object({
+  intent: brandGenerationIntentSchema,
+  adminPrompt: z.string().trim().min(1).max(6000).optional(),
+  source: z.enum(["external-chat", "codex", "gemini", "claude", "manual"]).default("external-chat"),
+  model: z.string().trim().min(1).max(120).optional(),
+  controls: aiGenerationControlsSchema
 });
 
 export const appendBrandDraftMessageSchema = z.object({

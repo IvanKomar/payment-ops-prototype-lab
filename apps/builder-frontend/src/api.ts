@@ -12,6 +12,7 @@ import type {
   LayoutBuilderClarificationAnswers,
   LayoutBuilderClarifyBrandResponse,
   LayoutBuilderCreateBrandDraftRequest,
+  LayoutBuilderCreateBrandIntentDraftRequest,
   LayoutBuilderContractVersionRecord,
   LayoutBuilderDeleteBrandResponse,
   LayoutBuilderRegenerateContractRequest,
@@ -52,6 +53,11 @@ const apiBases = {
   sms: import.meta.env.VITE_SMS_API_BASE ?? "/sms-api",
   receipt: import.meta.env.VITE_RECEIPT_API_BASE ?? "/receipt-api",
   layout: import.meta.env.VITE_LAYOUT_API_BASE ?? "/layout-api"
+};
+
+export const infraUrls = {
+  postgresViewer: import.meta.env.VITE_POSTGRES_VIEWER_URL ?? "http://localhost:8080",
+  redisViewer: import.meta.env.VITE_REDIS_VIEWER_URL ?? "http://localhost:5540"
 };
 
 async function requestJson<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
@@ -225,6 +231,14 @@ export const api = {
         },
         body: JSON.stringify(payload)
       })),
+    createBrandIntentDraft: (payload: LayoutBuilderCreateBrandIntentDraftRequest) =>
+      requestJson<LayoutBuilderBrandGenerationDraft>(apiBases.layout, "/brands/intent-drafts", withAdminAuth({
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      })),
     appendBrandDraftMessage: (draftId: string, payload: LayoutBuilderAppendBrandDraftMessageRequest) =>
       requestJson<LayoutBuilderBrandGenerationDraft>(
         apiBases.layout,
@@ -250,6 +264,19 @@ export const api = {
       return requestJson<LayoutBuilderBrandResponse>(
         apiBases.layout,
         `/brands/ai/drafts/${encodeURIComponent(draftId)}/create`,
+        withAdminAuth({
+          method: "POST",
+          body: formData
+        })
+      );
+    },
+    createBrandFromIntentDraft: (draftId: string, logo: File | Blob) => {
+      const formData = new FormData();
+      formData.set("logo", logo, logo instanceof File ? logo.name : "demo-mark.svg");
+
+      return requestJson<LayoutBuilderBrandResponse>(
+        apiBases.layout,
+        `/brands/intent-drafts/${encodeURIComponent(draftId)}/create`,
         withAdminAuth({
           method: "POST",
           body: formData

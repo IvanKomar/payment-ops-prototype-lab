@@ -31,6 +31,27 @@ services:
       retries: 5
       start_period: 5s
 
+  postgres-adminer:
+    image: adminer:4
+    container_name: payment-ops-postgres-adminer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: payment-ops-redis-insight
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "5540:5540"
+    volumes:
+      - redis-insight-data:/data
+
 volumes:
   postgres-data:
   redis-data:
+  redis-insight-data:

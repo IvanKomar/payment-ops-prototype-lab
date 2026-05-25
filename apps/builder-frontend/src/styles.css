@@ -244,6 +244,11 @@ textarea:disabled {
   color: #17202a;
 }
 
+.infra-link {
+  min-height: 42px;
+  text-decoration: none;
+}
+
 .button.danger {
   background: #b42318;
 }

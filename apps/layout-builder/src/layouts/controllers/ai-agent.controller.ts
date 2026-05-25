@@ -1,6 +1,6 @@
 import { Controller, Get, Inject } from "@nestjs/common";
 import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
-import type { LayoutBuilderAgentManifest } from "@payment-ops/shared-types";
+import type { LayoutBuilderAgentManifest, LayoutBuilderBrandIntentManifest } from "@payment-ops/shared-types";
 
 import { AiAgentManifestService } from "../ai/ai-agent-manifest.service.js";
 
@@ -13,5 +13,11 @@ export class AiAgentController {
   @ApiOkResponse({ description: "Machine-readable AI agent integration manifest for brand generation" })
   getBrandGenerationManifest(): LayoutBuilderAgentManifest {
     return this.manifestService.getManifest();
+  }
+
+  @Get("brand-intent-manifest")
+  @ApiOkResponse({ description: "Minimal machine-readable manifest for external chat brand intent generation" })
+  getBrandIntentManifest(): LayoutBuilderBrandIntentManifest {
+    return this.manifestService.getIntentManifest();
   }
 }

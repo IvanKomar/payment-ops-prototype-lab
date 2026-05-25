@@ -13,7 +13,7 @@ Phase 5 Builder Frontend are in place:
 
 - pnpm workspace and Turborepo task wiring;
 - shared TypeScript, ESLint, config, logger, and type packages;
-- Docker Compose for PostgreSQL and Redis;
+- Docker Compose for PostgreSQL, Redis, Adminer, and RedisInsight;
 - local environment example;
 - `apps/sms-gateway` NestJS service with PostgreSQL persistence, Redis/BullMQ
   queueing, mock SMS providers, fallback, server-side duplicate-send protection,
@@ -67,6 +67,8 @@ This starts the full local stack:
 - Builder Frontend: `http://localhost:3004`
 - Payment Core: `http://localhost:3005`
 - Brand Runtime: `http://localhost:3006`
+- Postgres Adminer: `http://localhost:8080`
+- RedisInsight: `http://localhost:5540`
 
 The explicit full-stack command is:
 
@@ -96,8 +98,9 @@ pnpm run dev
 ```
 
 This starts the Docker infrastructure containers and applies Prisma migrations.
-Docker Compose runs only PostgreSQL on `localhost:5432` and Redis on
-`localhost:6379`; the NestJS services run on your host through pnpm/Turborepo.
+Docker Compose runs PostgreSQL on `localhost:5432`, Redis on `localhost:6379`,
+Adminer on `localhost:8080`, and RedisInsight on `localhost:5540`; the NestJS
+services run on your host through pnpm/Turborepo.
 
 ### 4. Smoke test the SMS Gateway
 
@@ -240,23 +243,23 @@ curl -X POST http://localhost:3003/brands \
   -F logo=@/path/to/logo.svg
 ```
 
-Create a brand through the current AI draft flow:
+Create a brand through the current external-chat intent flow:
 
 1. Open `http://localhost:3004/#layouts`.
 2. Click `Create AI brand` in the `Brands` sidebar.
-3. Generate and preview the spec.
-4. Create the brand once validation passes.
+3. Paste `BrandGenerationIntent` JSON from ChatGPT/Codex/Gemini/Claude.
+4. Compile the preview.
+5. Create the brand once validation passes.
 
 External AI agents such as Codex, Gemini, or Claude Code should start from the
-machine-readable manifest:
+minimal intent manifest:
 
 ```bash
-curl http://localhost:3003/ai-agent/brand-generation-manifest
+curl http://localhost:3003/ai-agent/brand-intent-manifest
 ```
 
 See [AI Brand Generation](./docs/ai-brand-generation.md) for the complete
-built-in UI flow, external-agent flow, Gemini env setup, and validation
-checklist.
+external-chat flow, HTTP flow, intent schema, and validation checklist.
 
 Open the returned `appUrl` to use the generated brand as a user. The app is a
 React/Vite payments dashboard with routes for login, overview, payments,
@@ -264,9 +267,9 @@ customers, and balances. Browser-visible calls use the generated brand slug and
 brand-specific entity routes; internal BFF/runtime/payment-core details are
 mapped server-side.
 
-The service accepts JPEG, PNG, WebP, and SVG logos. Gemini is used only when
-`BRAND_AI_PROVIDER=gemini`, `GEMINI_ENABLED=true`, and `GEMINI_API_KEY` are
-configured. Otherwise, the deterministic local generator remains the fallback.
+The service accepts JPEG, PNG, WebP, and SVG logos. Gemini/OpenAI-style
+provider-backed generation is not the main flow right now; external chats
+produce intent JSON, and the backend compiler creates the working integration.
 
 ## Workspace
 
@@ -330,7 +333,9 @@ pnpm run docker:logs
   AI-created brands now serve a user-facing runtime app that can register/login
   users and create/list payments through brand-specific facade endpoints backed
   by `payment-core`. AI-created brands are seeded during creation with demo
-  merchant data so the runtime opens with realistic payment activity.
+  merchant data so the runtime opens with realistic payment activity. In local
+  demo mode, the seeded user matches the runtime defaults:
+  `client@example.com` / `local-demo-password`.
 - `brand-runtime`: React/Vite client app for generated brands. It owns the
   merchant-facing routes for login, dashboard, payment ledger, customers, and
   balances. Runtime UI presentation now varies by AI spec: terminal, command

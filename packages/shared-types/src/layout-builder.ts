@@ -22,6 +22,7 @@ export type LayoutBuilderAiUiLayout =
 export type LayoutBuilderAiUiDensity = "compact" | "balanced" | "spacious";
 export type LayoutBuilderAiUiNavigationPattern = "sidebar" | "top-tabs" | "command-rail";
 export type LayoutBuilderAiDashboardBlock = "metrics" | "recentPayments" | "balances" | "customers" | "createPayment";
+export type LayoutBuilderBrandIntentSource = "external-chat" | "codex" | "gemini" | "claude" | "manual";
 export type LayoutBuilderLayoutVariant =
   | "classic"
   | "summary-left"
@@ -152,6 +153,41 @@ export interface LayoutBuilderAiBrandSpec {
   };
 }
 
+export interface LayoutBuilderBrandGenerationIntent {
+  brandName: string;
+  concept: {
+    domain: string;
+    audience: string;
+    productMetaphor: string;
+    authMetaphor: string;
+    paymentMetaphor: string;
+    tone: string;
+    avoidWords: string[];
+    preferredTerms: string[];
+  };
+  namingRules: {
+    routeStyle: string;
+    fieldStyle?: LayoutBuilderFieldStyle | undefined;
+    forbiddenCanonicalNames: string[];
+    examples: string[];
+  };
+  uiDirection: {
+    layout: string;
+    density: string;
+    navigation: string;
+    visualStyle: string;
+    palette: string[];
+    dashboardBlocks: string[];
+  };
+  copy: {
+    loginTitle: string;
+    registerTitle: string;
+    emptyStates: Record<string, string>;
+    actionLabels: Record<string, string>;
+  };
+  statusVocabulary?: Partial<Record<PaymentCoreStatus, string | undefined>> | undefined;
+}
+
 export interface LayoutBuilderBrandGenerationMessage {
   role: "admin" | "assistant";
   content: string;
@@ -193,6 +229,14 @@ export interface LayoutBuilderCreateBrandDraftFromSpecRequest {
   spec: unknown;
 }
 
+export interface LayoutBuilderCreateBrandIntentDraftRequest {
+  intent: LayoutBuilderBrandGenerationIntent;
+  adminPrompt?: string;
+  source?: LayoutBuilderBrandIntentSource;
+  model?: string;
+  controls?: Partial<LayoutBuilderAiGenerationControls>;
+}
+
 export interface LayoutBuilderAppendBrandDraftMessageRequest {
   message: string;
   controls?: Partial<LayoutBuilderAiGenerationControls>;
@@ -202,6 +246,28 @@ export interface LayoutBuilderBrandSpecUniquenessResult {
   score: number;
   threshold: number;
   issues: string[];
+}
+
+export interface LayoutBuilderBrandRuntimeDictionary {
+  visibility: "bff_private";
+  source: "intent_compiler" | "managed_ai_spec" | "external_ai_spec" | "generated_profile";
+  controls: LayoutBuilderAiGenerationControls;
+  forbiddenPublicTerms: string[];
+  publicRoutes: Record<
+    "register" | "login" | "account" | "metrics" | "payments" | "customers" | "paymentMethods" | "balances",
+    string
+  >;
+  requestKeys: Record<string, string>;
+  responseKeys: Record<string, string>;
+  fieldAliases: Record<string, string>;
+  statusAliases: Record<PaymentCoreStatus, string>;
+  actionLabels: Record<string, string>;
+  visualTokens: LayoutBuilderAiUiPresentationSpec["visualTokens"] & {
+    layout: LayoutBuilderAiUiLayout;
+    density: LayoutBuilderAiUiDensity;
+    navigationPattern: LayoutBuilderAiUiNavigationPattern;
+    dashboardComposition: LayoutBuilderAiDashboardBlock[];
+  };
 }
 
 export interface LayoutBuilderAiGenerationProfile {
@@ -215,6 +281,7 @@ export interface LayoutBuilderAiGenerationProfile {
   resourceAlias: string;
   visualDirection: string;
   contractSummary: string;
+  dictionary?: LayoutBuilderBrandRuntimeDictionary;
   statusMap: Record<PaymentCoreStatus, string>;
   actionLabels: {
     register: string;
@@ -240,7 +307,7 @@ export interface LayoutBuilderGeneratedBrandArtifact {
   brandId: string;
   provider: LayoutBuilderAiGenerationProfile["provider"];
   model: string;
-  sourceType: "ai-spec" | "external-spec" | "generated-react";
+  sourceType: "ai-intent" | "ai-spec" | "external-spec" | "generated-react";
   status: "draft" | "active" | "archived";
   framework: "react-vite";
   entryFile: string;
@@ -313,6 +380,42 @@ export interface LayoutBuilderAgentManifest {
     createDraft: LayoutBuilderCreateBrandDraftRequest;
     importSpec: LayoutBuilderCreateBrandDraftFromSpecRequest;
     aiBrandSpec: LayoutBuilderAiBrandSpec;
+  };
+}
+
+export interface LayoutBuilderBrandIntentManifest {
+  manifestVersion: string;
+  purpose: string;
+  recommendedFlow: "external_chat_intent";
+  endpoints: LayoutBuilderAgentManifestEndpoint[];
+  codexPrompt: {
+    system: string;
+    userQuestions: Array<{
+      id: string;
+      label: string;
+      prompt: string;
+      required: boolean;
+      reason: string;
+    }>;
+    outputContract: string[];
+  };
+  requiredCapabilities: Array<"auth" | "account" | "balances" | "payments" | "customers" | "paymentMethods" | "paymentCreation">;
+  schema: unknown;
+  hiddenBffConfig: {
+    generatedBy: "layout-builder";
+    storedAs: "generationProfile.dictionary";
+    clientVisibility: "brand runtime receives only public aliases, labels, UI tokens, and brand routes";
+    includes: Array<keyof LayoutBuilderBrandRuntimeDictionary>;
+  };
+  rules: {
+    doNotMention: string[];
+    routeGuidance: string[];
+    uniquenessGuidance: string[];
+    requiredVariation: string[];
+  };
+  examples: {
+    promptForChat: string;
+    intent: LayoutBuilderBrandGenerationIntent;
   };
 }
 

@@ -31,6 +31,7 @@ import type {
   LayoutBuilderClarifyBrandResponse,
   LayoutBuilderContractVersionRecord,
   LayoutBuilderConfigureResponse,
+  LayoutBuilderCreateBrandIntentDraftRequest,
   LayoutBuilderCreateBrandDraftFromSpecRequest,
   LayoutBuilderCreateBrandDraftRequest,
   LayoutBuilderDeleteBrandResponse,
@@ -49,6 +50,7 @@ import {
   ConfigureBrandResponseDto,
   contractVersionIdSchema,
   createBrandDraftSchema,
+  createBrandIntentDraftSchema,
   createBrandDraftFromSpecSchema,
   createBrandSchema,
   CreateBrandResponseDto,
@@ -131,6 +133,69 @@ export class BrandsController {
   @ApiOkResponse({ description: "Machine-readable AI agent integration manifest for brand generation" })
   getAgentManifest(): LayoutBuilderAgentManifest {
     return this.layoutService.getAgentManifest();
+  }
+
+  @Get("intent-manifest")
+  @ApiOkResponse({ description: "Minimal manifest for external chat brand intent generation" })
+  getBrandIntentManifest() {
+    return this.layoutService.getBrandIntentManifest();
+  }
+
+  @Post("intent-drafts")
+  @ApiOkResponse({ description: "Create a brand draft by compiling an external chat brand intent" })
+  createBrandIntentDraft(
+    @Body(new ZodValidationPipe(createBrandIntentDraftSchema)) body: LayoutBuilderCreateBrandIntentDraftRequest,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandGenerationDraft> {
+    return this.layoutService.createBrandIntentDraft(body, parseOptionalBearerToken(authorization));
+  }
+
+  @Get("intent-drafts/:draftId")
+  @ApiOkResponse({ description: "Read a compiled brand intent draft" })
+  getBrandIntentDraft(
+    @Param("draftId") draftId: string,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandGenerationDraft> {
+    return this.layoutService.getBrandGenerationDraft(draftId, parseOptionalBearerToken(authorization));
+  }
+
+  @Post("intent-drafts/:draftId/create")
+  @UseInterceptors(
+    FileInterceptor("logo", {
+      limits: {
+        fileSize: config.LAYOUT_MAX_UPLOAD_BYTES
+      }
+    })
+  )
+  @ApiConsumes("multipart/form-data")
+  @ApiOkResponse({ type: BrandResponseDto })
+  createBrandFromIntentDraft(
+    @Param("draftId") draftId: string,
+    @UploadedFile() file: UploadedLogoFile | undefined,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandResponse> {
+    return this.layoutService.createBrandFromDraft(draftId, file, parseOptionalBearerToken(authorization));
+  }
+
+  @Post("from-intent/create")
+  @UseInterceptors(
+    FileInterceptor("logo", {
+      limits: {
+        fileSize: config.LAYOUT_MAX_UPLOAD_BYTES
+      }
+    })
+  )
+  @ApiConsumes("multipart/form-data")
+  @ApiOkResponse({ type: BrandResponseDto })
+  async createBrandFromIntent(
+    @UploadedFile() file: UploadedLogoFile | undefined,
+    @Body("payload") payload: string | undefined,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandResponse> {
+    const token = parseOptionalBearerToken(authorization);
+    const draft = await this.layoutService.createBrandIntentDraft(parseIntentPayload(payload), token);
+
+    return this.layoutService.createBrandFromDraft(draft.draftId, file, token);
   }
 
   @Post("ai/drafts/from-spec")
@@ -396,6 +461,16 @@ function parseFromSpecPayload(payload: string | undefined): LayoutBuilderCreateB
   return cleanFromSpecRequest(parsed.data);
 }
 
+function parseIntentPayload(payload: string | undefined): LayoutBuilderCreateBrandIntentDraftRequest {
+  const parsed = createBrandIntentDraftSchema.safeParse(parseJsonPayload(payload));
+
+  if (!parsed.success) {
+    throw new BadRequestException(parsed.error.issues.map((issue) => `${issue.path.join(".") || "payload"}: ${issue.message}`).join("; "));
+  }
+
+  return cleanIntentRequest(parsed.data);
+}
+
 function cleanFromSpecRequest(input: z.infer<typeof createBrandDraftFromSpecSchema>): LayoutBuilderCreateBrandDraftFromSpecRequest {
   return {
     brandName: input.brandName,
@@ -403,6 +478,16 @@ function cleanFromSpecRequest(input: z.infer<typeof createBrandDraftFromSpecSche
     spec: input.spec,
     ...(input.adminPrompt ? { adminPrompt: input.adminPrompt } : {}),
     ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.controls ? { controls: cleanControls(input.controls) } : {})
+  };
+}
+
+function cleanIntentRequest(input: z.infer<typeof createBrandIntentDraftSchema>): LayoutBuilderCreateBrandIntentDraftRequest {
+  return {
+    intent: input.intent,
+    source: input.source,
+    ...(input.adminPrompt ? { adminPrompt: input.adminPrompt } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.controls ? { controls: cleanControls(input.controls) } : {})
   };

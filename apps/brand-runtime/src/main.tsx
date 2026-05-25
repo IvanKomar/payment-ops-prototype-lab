@@ -164,12 +164,10 @@ createRoot(root).render(
 function BrandRuntimeApp() {
   const [locationState, setLocationState] = useState(() => parseRuntimeLocation());
   const [shell] = useState<RuntimeShell | null>(() => window.__BRAND_RUNTIME_SHELL__ ?? null);
-  const [sessionToken, setSessionToken] = useState(() => localStorage.getItem(sessionKey(locationState)));
   const [overview, setOverview] = useState<RuntimeOverview | null>(null);
   const [status, setStatus] = useState(
-    window.__BRAND_RUNTIME_SHELL__ ? "Sign in to open this payments workspace." : "Runtime bootstrap was not injected."
+    window.__BRAND_RUNTIME_SHELL__ ? "Loading seeded payment activity." : "Runtime bootstrap was not injected."
   );
-  const [isNavigationOpen, setNavigationOpen] = useState(false);
 
   useEffect(() => {
     const onPopState = () => setLocationState(parseRuntimeLocation());
@@ -179,231 +177,66 @@ function BrandRuntimeApp() {
   }, []);
 
   useEffect(() => {
-    setSessionToken(localStorage.getItem(sessionKey(locationState)));
-  }, [locationState.slug]);
-
-  useEffect(() => {
-    setNavigationOpen(false);
-  }, [locationState.view]);
-
-  useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get("sessionToken");
-
-    if (!token) {
+    if (!shell) {
       return;
     }
 
-    localStorage.setItem(sessionKey(locationState), token);
-    setSessionToken(token);
-    window.history.replaceState(null, "", window.location.pathname);
-  }, [locationState.slug]);
-
-  useEffect(() => {
-    if (!shell || !sessionToken) {
-      return;
-    }
-
-    refreshOverview(sessionToken).catch((error: unknown) => setStatus(errorMessage(error)));
-  }, [shell, sessionToken]);
+    refreshPayments().catch((error: unknown) => setStatus(errorMessage(error)));
+  }, [shell, locationState.slug]);
 
   const payments = overview?.payments ?? [];
   const account = overview?.account ?? null;
-  const metrics = overview?.metrics ?? emptyMetrics();
+  const metrics = overview?.metrics ?? metricsFromPayments(payments);
 
   if (!locationState.slug) {
-    return <ErrorScreen message="Open a brand route like /:brandSlug/app/dashboard." />;
+    return <ErrorScreen message="Open a brand route like /:brandSlug/app/payments." />;
   }
 
   if (!shell) {
     return <ErrorScreen message={status === "" ? "Loading brand runtime." : status} />;
   }
 
-  const view = sessionToken ? locationState.view : "login";
   const shellStyle = runtimeThemeStyle(shell);
   const presentation = shell.ui?.presentation;
   const runtimeClass = `layout-${presentation?.layout ?? "sidebar-ledger"} density-${presentation?.density ?? "balanced"} nav-${presentation?.navigationPattern ?? "sidebar"}`;
 
-  async function authenticate(mode: "login" | "register", form: HTMLFormElement) {
-    if (!shell) {
-      return;
-    }
-
-    const formData = new FormData(form);
-    const response = await requestJson<RuntimeAuthResponse>(entityUrl(locationState, shell.routes[mode]), {
-      body: JSON.stringify(aliasPayload(shell.auth.fields, {
-        currency: String(formData.get("currency") ?? "USD"),
-        displayName: String(formData.get("displayName") ?? ""),
-        email: String(formData.get("email") ?? ""),
-        password: String(formData.get("password") ?? "")
-      })),
-      headers: { "content-type": "application/json" },
-      method: "POST"
-    });
-
-    const token = String(response[shell.auth.tokenResponseKey] ?? response.sessionToken ?? "");
-    localStorage.setItem(sessionKey(locationState), token);
-    setSessionToken(token);
-    setStatus(mode === "register" ? "Account created." : "Signed in.");
-    await refreshOverview(token);
-    navigateTo(locationState, "dashboard", setLocationState);
-  }
-
-  async function refreshOverview(token = sessionToken) {
+  async function refreshPayments() {
     if (!shell) {
       setStatus("Runtime bootstrap was not injected.");
       return;
     }
 
-    if (!token) {
-      setStatus("Sign in first.");
-      return;
-    }
-
-    const headers = { authorization: `Bearer ${token}` };
-    const [account, metrics, payments, customers, paymentMethods] = await Promise.all([
-      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.account), { headers }),
-      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.metrics), { headers }),
-      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.payments), { headers }),
-      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.customers), { headers }),
-      requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.paymentMethods), { headers })
-    ]);
+    const paymentsResponse = await requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.payments));
+    const decodedPayments = arrayValue(paymentsResponse[responseKey(shell, "payments")] ?? paymentsResponse.payments).map((payment) =>
+      decodePayment(shell, payment)
+    );
 
     setOverview({
-      account: decodeAccount(shell, account[responseKey(shell, "account")] ?? account.account),
-      customers: arrayValue(customers[responseKey(shell, "customers")] ?? customers.customers).map((customer) => decodeCustomer(shell, customer)),
-      metrics: decodeMetrics(shell, metrics[responseKey(shell, "metrics")] ?? metrics.metrics),
-      paymentMethods: arrayValue(paymentMethods[responseKey(shell, "paymentMethods")] ?? paymentMethods.paymentMethods).map((method) =>
-        decodePaymentMethod(shell, method)
-      ),
-      payments: arrayValue(payments[responseKey(shell, "payments")] ?? payments.payments).map((payment) => decodePayment(shell, payment))
+      account: null,
+      customers: [],
+      metrics: metricsFromPayments(decodedPayments),
+      paymentMethods: [],
+      payments: decodedPayments
     });
-    setStatus("Workspace refreshed.");
-  }
-
-  async function createPayment(form: HTMLFormElement) {
-    if (!shell || !sessionToken) {
-      setStatus("Sign in first.");
-      navigateTo(locationState, "login", setLocationState);
-      return;
-    }
-
-    const formData = new FormData(form);
-    const methodType = String(formData.get("methodType") ?? "card");
-    const instrumentReference = String(formData.get("instrumentReference") ?? "").trim();
-
-    await requestJson<unknown>(entityUrl(locationState, shell.routes.payments), {
-      body: JSON.stringify(aliasPayload(shell.fields.payment, {
-        amount: Number(formData.get("amount")),
-        currency: String(formData.get("currency") ?? "USD"),
-        customer: {
-          email: String(formData.get("customerEmail") ?? "customer@example.com"),
-          name: String(formData.get("customerName") ?? "Customer")
-        },
-        methodType,
-        paymentMethod: paymentMethodPayload(methodType, instrumentReference),
-        scenario: String(formData.get("scenario") ?? "settle")
-      })),
-      headers: {
-        authorization: `Bearer ${sessionToken}`,
-        "content-type": "application/json"
-      },
-      method: "POST"
-    });
-    setStatus("Payment created.");
-    await refreshOverview();
-    navigateTo(locationState, "payments", setLocationState);
-  }
-
-  function logout() {
-    localStorage.removeItem(sessionKey(locationState));
-    setSessionToken("");
-    setOverview(null);
-    setStatus("Session closed.");
-    navigateTo(locationState, "login", setLocationState);
-  }
-
-  if (view === "login") {
-    return (
-      <main className={`login-shell ${runtimeClass}`} style={shellStyle}>
-        <section className="login-panel">
-          <BrandLockup shell={shell} />
-          <div>
-            <span className="kicker">{shell.copy.contractSummary}</span>
-            <h1>Sign in to your account</h1>
-            <p className="subtle">Register or sign in as a merchant to process customer card and account payments.</p>
-          </div>
-          <AuthForm
-            labels={shell.labels}
-            onSubmit={(mode, form) => {
-              void authenticate(mode, form);
-            }}
-          />
-          <div className="status">{status}</div>
-        </section>
-      </main>
-    );
+    setStatus("Seeded payments loaded.");
   }
 
   return (
-    <main className={`app-shell ${runtimeClass}`} style={shellStyle}>
-      <aside className="sidebar">
+    <main className={`payments-shell ${runtimeClass}`} style={shellStyle}>
+      <aside className="payments-brand-rail">
         <BrandLockup shell={shell} />
-        <button
-          aria-controls="runtime-navigation"
-          aria-expanded={isNavigationOpen}
-          className="nav-toggle"
-          type="button"
-          onClick={() => setNavigationOpen((open) => !open)}
-        >
-          Menu
-        </button>
-        <Navigation
-          current={view}
-          isOpen={isNavigationOpen}
-          labels={shell.labels}
-          locationState={locationState}
-          navigationPattern={presentation?.navigationPattern ?? "sidebar"}
-          setLocationState={setLocationState}
-        />
-        <div className="sidebar-footer">{presentation?.copyTone ?? "Process customer card and account payments for this merchant."}</div>
+        <div className="sidebar-footer">{presentation?.copyTone ?? shell.copy.contractSummary}</div>
       </aside>
-      <section className="main">
+      <section className="payments-main">
         <header className="topline">
           <div>
             <span className="kicker">{shell.copy.contractSummary}</span>
-            <h1>{viewTitle(view, shell)}</h1>
+            <h1>{shell.labels.payments}</h1>
             <p className="subtle">{shell.copy.visualDirection}</p>
           </div>
-          <div className="top-actions">
-            <button className="secondary" type="button" onClick={logout}>
-              Sign out
-            </button>
-          </div>
+          <span className="status">{status}</span>
         </header>
-
-        {view === "dashboard" ? (
-          <DashboardView
-            account={account}
-            labels={shell.labels}
-            metrics={metrics}
-            onCreatePayment={(form) => {
-              void createPayment(form);
-            }}
-            payments={payments}
-            presentation={presentation}
-            status={status}
-          />
-        ) : null}
-        {view === "payments" ? <PaymentsView labels={shell.labels} payments={payments} /> : null}
-        {view === "customers" ? (
-          <CustomersView
-            customers={overview?.customers ?? []}
-            labels={shell.labels}
-            methods={overview?.paymentMethods ?? []}
-            payments={payments}
-          />
-        ) : null}
-        {view === "balances" ? <BalancesView account={account} metrics={metrics} /> : null}
+        <PaymentsExperience account={account} labels={shell.labels} metrics={metrics} payments={payments} presentation={presentation} />
       </section>
     </main>
   );
@@ -471,6 +304,94 @@ function Navigation({
       <span className="nav-label">Merchant tools</span>
       {navItems}
     </nav>
+  );
+}
+
+function PaymentsExperience({
+  account,
+  labels,
+  metrics,
+  payments,
+  presentation
+}: {
+  account: RuntimeAccount | null;
+  labels: RuntimeShell["labels"];
+  metrics: RuntimeMetrics;
+  payments: RuntimePayment[];
+  presentation: RuntimePresentation | undefined;
+}) {
+  const variant = presentation?.layout ?? "sidebar-ledger";
+
+  if (variant === "compact-terminal") {
+    return (
+      <div className="payments-page payments-terminal">
+        <section className="terminal-command">
+          <MetricDeck account={account} metrics={metrics} />
+        </section>
+        <section className="terminal-stream panel">
+          <div className="section-title">
+            <h2>{labels.history}</h2>
+          </div>
+          <PaymentSignalList payments={payments} />
+        </section>
+      </div>
+    );
+  }
+
+  if (variant === "command-center") {
+    return (
+      <div className="payments-page payments-command">
+        <MetricSummary account={account} metrics={metrics} />
+        <section className="command-board panel">
+          <div className="section-title">
+            <h2>{labels.history}</h2>
+          </div>
+          <PaymentSignalList payments={payments} />
+        </section>
+      </div>
+    );
+  }
+
+  if (variant === "card-operations") {
+    return (
+      <div className="payments-page payments-card-wall">
+        <MetricDeck account={account} metrics={metrics} />
+        <section className="receipt-wall panel">
+          <div className="section-title">
+            <h2>{labels.payments}</h2>
+          </div>
+          <PaymentTiles payments={payments} />
+        </section>
+      </div>
+    );
+  }
+
+  if (variant === "split-workspace") {
+    return (
+      <div className="payments-page payments-split">
+        <aside className="split-rail">
+          <MetricDeck account={account} metrics={metrics} />
+        </aside>
+        <section className="split-ledger panel">
+          <div className="section-title">
+            <h2>{labels.history}</h2>
+          </div>
+          <PaymentsTable payments={payments} />
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="payments-page payments-ledger">
+      <MetricSummary account={account} metrics={metrics} />
+      <section className="panel">
+        <div className="section-title">
+          <h2>{labels.history}</h2>
+        </div>
+        <PaymentsTable payments={payments} />
+      </section>
+    </div>
   );
 }
 
@@ -1123,6 +1044,19 @@ function emptyMetrics(): RuntimeMetrics {
   };
 }
 
+function metricsFromPayments(payments: RuntimePayment[]): RuntimeMetrics {
+  const currency = payments[0]?.currency ?? "USD";
+  const customers = new Set(payments.map((payment) => payment.customer?.id ?? payment.destination ?? payment.reference));
+
+  return {
+    count: payments.length,
+    currency,
+    customers: customers.size,
+    review: payments.filter((payment) => /failed|requires|pending|review|blocked|held/iu.test(payment.status)).length,
+    volume: payments.reduce((sum, payment) => sum + payment.amount, 0)
+  };
+}
+
 interface RuntimeCustomerSummary {
   count: number;
   currency: string;
@@ -1369,10 +1303,12 @@ const COLOR_TOKENS: Record<string, string> = {
   black: "#020617",
   blue: "#2563eb",
   charcoal: "#111827",
+  copper: "#b45309",
   cream: "#fff7ed",
   cyan: "#0891b2",
   emerald: "#059669",
   forest: "#176f52",
+  graphite: "#171b1f",
   green: "#16a34a",
   ink: "#111827",
   magenta: "#be185d",
@@ -1384,15 +1320,19 @@ const COLOR_TOKENS: Record<string, string> = {
   "glass violet": "#8b5cf6",
   "liquidity gold": "#f5c542",
   "matrix green": "#00ff9c",
+  "cool white": "#f8fafc",
+  "quartz green": "#16a34a",
   "signal green": "#22c55e",
   slate: "#334155",
+  steel: "#475569",
   teal: "#0f766e",
+  "tide blue": "#0e7490",
   violet: "#7c3aed",
   white: "#ffffff"
 };
 
-const DARK_COLORS = new Set(["#020617", "#101820", "#111827", "#172554", "#334155"]);
-const NEUTRAL_COLORS = new Set(["#ffffff", "#f8fafc", "#020617", "#101820", "#111827", "#334155"]);
+const DARK_COLORS = new Set(["#020617", "#101820", "#111827", "#171b1f", "#172554", "#334155", "#475569"]);
+const NEUTRAL_COLORS = new Set(["#ffffff", "#f8fafc", "#020617", "#101820", "#111827", "#171b1f", "#334155", "#475569"]);
 
 function parseRuntimeLocation(): RuntimeLocation {
   const parts = window.location.pathname.split("/").filter(Boolean);
@@ -1405,17 +1345,17 @@ function parseRuntimeLocation(): RuntimeLocation {
     return {
       routeBase: `/${parts.slice(0, brandIndex + 3).join("/")}`,
       slug,
-      view: isRuntimeView(rawView) ? rawView : "dashboard"
+      view: isRuntimeView(rawView) ? rawView : "payments"
     };
   }
 
   const slug = parts[0] ?? "";
-  const rawView = parts[1] === "app" ? parts[2] ?? "dashboard" : parts[1] ?? "dashboard";
+  const rawView = parts[1] === "app" ? parts[2] ?? "payments" : parts[1] ?? "payments";
 
   return {
     routeBase: slug ? `/${slug}/app` : "",
     slug,
-    view: isRuntimeView(rawView) ? rawView : "dashboard"
+    view: isRuntimeView(rawView) ? rawView : "payments"
   };
 }
 

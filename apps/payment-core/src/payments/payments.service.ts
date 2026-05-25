@@ -923,7 +923,9 @@ function displayNameFromEmail(email: string): string {
 }
 
 function demoMerchantEmail(brandId: string): string {
-  return `demo-merchant+${brandId}@payment-ops.local`;
+  void brandId;
+
+  return "client@example.com";
 }
 
 function demoPaymentInputs(currency: string): CreatePaymentInput[] {

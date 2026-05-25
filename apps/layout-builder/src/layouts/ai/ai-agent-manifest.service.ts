@@ -1,7 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import type {
   LayoutBuilderAgentManifest,
-  LayoutBuilderAiBrandSpec
+  LayoutBuilderAiBrandSpec,
+  LayoutBuilderBrandIntentManifest
 } from "@payment-ops/shared-types";
 
 import {
@@ -16,6 +17,164 @@ import { BRAND_SPEC_UNIQUENESS_THRESHOLD } from "./brand-spec-uniqueness.service
 
 @Injectable()
 export class AiAgentManifestService {
+  getIntentManifest(): LayoutBuilderBrandIntentManifest {
+    const intent = exampleIntent();
+
+    return {
+      manifestVersion: "2026-05-24.brand-intent-agent.v1",
+      purpose: "Minimal contract for external chats that create unique payment gateway brand intents. The chat should not generate internal API specs.",
+      recommendedFlow: "external_chat_intent",
+      endpoints: [
+        {
+          method: "GET",
+          path: "/ai-agent/brand-intent-manifest",
+          authRequired: false,
+          contentType: "application/json",
+          purpose: "Read the minimal intent schema, examples, and naming restrictions."
+        },
+        {
+          method: "POST",
+          path: "/brands/intent-drafts",
+          authRequired: true,
+          contentType: "application/json",
+          purpose: "Submit a chat-authored brand intent. Backend validates and compiles it into a runtime contract draft."
+        },
+        {
+          method: "GET",
+          path: "/brands/intent-drafts/:draftId",
+          authRequired: true,
+          contentType: "application/json",
+          purpose: "Read compiled draft status, validation issues, and generated integration preview."
+        },
+        {
+          method: "POST",
+          path: "/brands/intent-drafts/:draftId/create",
+          authRequired: true,
+          contentType: "multipart/form-data",
+          purpose: "Create a working brand from a valid compiled intent draft. Requires logo file."
+        }
+      ],
+      codexPrompt: {
+        system: [
+          "You are a Codex brand-generation agent working from a repository-local manifest.",
+          "Before creating a brand, fetch this manifest from Layout Builder and ask the user for the missing inputs listed in userQuestions.",
+          "Generate only BrandGenerationIntent JSON and submit it to Layout Builder; do not invent internal contracts or expose private BFF configuration.",
+          "The current runtime target is a single seeded payments page, so optimize the visual system for payment review, status scanning, and transaction comprehension."
+        ].join(" "),
+        userQuestions: [
+          {
+            id: "audience",
+            label: "Audience",
+            prompt: "Who is this payment brand for, and how young, playful, premium, or operational should it feel?",
+            required: true,
+            reason: "Audience drives density, copy tone, typography, and control language."
+          },
+          {
+            id: "visual_direction",
+            label: "Visual Direction",
+            prompt: "Which colors, logo style, references, and visual patterns should the interface use or avoid?",
+            required: true,
+            reason: "The compiler needs concrete visual constraints to avoid repeating prior brands."
+          },
+          {
+            id: "payment_metaphor",
+            label: "Metaphor",
+            prompt: "What metaphor should describe payment activity: stream, drops, cargo, pulses, trades, orders, tickets, or something else?",
+            required: true,
+            reason: "Metaphor becomes route vocabulary, labels, statuses, and copy."
+          },
+          {
+            id: "layout_direction",
+            label: "Layout",
+            prompt: "Should the payments page feel like a terminal, split workspace, card wall, command board, or dense ledger?",
+            required: false,
+            reason: "Layout choice must materially change the generated interface."
+          },
+          {
+            id: "restricted_words",
+            label: "Forbidden Words",
+            prompt: "Which public words should never appear in routes, labels, or field aliases?",
+            required: false,
+            reason: "Forbidden words are stored in the private dictionary and protect brand-specific contracts."
+          }
+        ],
+        outputContract: [
+          "Ask concise clarification questions before generating when required inputs are missing.",
+          "Return or submit one JSON object matching LayoutBuilderBrandGenerationIntent.",
+          "Target one brand-facing page: /:brandSlug/app/payments with seeded payment activity.",
+          "Use unique route language and field aliases; avoid canonical words in visible routes.",
+          "Vary layout architecture, payment row or tile pattern, metrics, status treatment, typography, and color tokens compared with recent brands.",
+          "Let Layout Builder compile and store generationProfile.dictionary for BFF-only decoding and encoding."
+        ]
+      },
+      requiredCapabilities: ["auth", "account", "balances", "payments", "customers", "paymentMethods", "paymentCreation"],
+      schema: brandIntentJsonSchema(),
+      hiddenBffConfig: {
+        generatedBy: "layout-builder",
+        storedAs: "generationProfile.dictionary",
+        clientVisibility: "brand runtime receives only public aliases, labels, UI tokens, and brand routes",
+        includes: [
+          "visibility",
+          "source",
+          "controls",
+          "forbiddenPublicTerms",
+          "publicRoutes",
+          "requestKeys",
+          "responseKeys",
+          "fieldAliases",
+          "statusAliases",
+          "actionLabels",
+          "visualTokens"
+        ]
+      },
+      rules: {
+        doNotMention: [
+          "brandId",
+          "payment-core",
+          "BFF",
+          "runtime",
+          "DTO",
+          "database",
+          "canonical entity names",
+          "internal service names"
+        ],
+        routeGuidance: [
+          "Describe route naming style and forbidden words; do not emit final endpoint paths.",
+          "Prefer product-language nouns, metaphors, and verbs.",
+          "Avoid generic names such as payments, customers, balances, account, profile, runtime, bff, and rest-api."
+        ],
+        uniquenessGuidance: [
+          "Pick a distinct payment metaphor, auth metaphor, visual model, and vocabulary family.",
+          "Do not reuse settlement ledger console language unless explicitly requested.",
+          "Include preferredTerms that can drive route and field naming without hashes.",
+          "Vary payload structure, field style, response envelope, dashboard composition, and navigation pattern where the brief allows.",
+          "For the brand-facing app, treat payments as the only required page and make the payment activity pattern visibly different from recent brands.",
+          "Do not rely on palette and copy changes alone; change layout architecture, density, status treatment, metric grouping, row or tile geometry, and typography."
+        ],
+        requiredVariation: [
+          "domain",
+          "audience",
+          "productMetaphor",
+          "authMetaphor",
+          "paymentMetaphor",
+          "visualStyle",
+          "palette",
+          "copy tone"
+        ]
+      },
+      examples: {
+        promptForChat: [
+          "Return only JSON matching the BrandGenerationIntent schema.",
+          "Create a unique payment gateway brand concept for merchants.",
+          "Do not generate API endpoints or internal contracts.",
+          "Ask the user for missing audience, visual, metaphor, layout, and forbidden-word inputs before generating.",
+          "Focus on a single seeded payments page, naming restrictions, product metaphor, UI direction, copy, and status vocabulary."
+        ].join(" "),
+        intent
+      }
+    };
+  }
+
   getManifest(): LayoutBuilderAgentManifest {
     const spec = exampleSpec();
 
@@ -259,6 +418,103 @@ function exampleSpec(): LayoutBuilderAiBrandSpec {
 
 function entity(route: string, method: "GET" | "POST", requiresSession: boolean, requestKey: string, responseKey: string) {
   return { route, method, requiresSession, requestKey, responseKey, emptyState: "No records are available yet." };
+}
+
+function exampleIntent() {
+  return {
+    brandName: "Copper Harbor",
+    concept: {
+      domain: "merchant acquiring for regional commerce teams",
+      audience: "market operators",
+      productMetaphor: "harbor control",
+      authMetaphor: "dock pass",
+      paymentMetaphor: "cargo clearing",
+      tone: "practical port-operations finance language",
+      avoidWords: ["stripe", "payment-core", "bff", "runtime", "profile"],
+      preferredTerms: ["harbor", "dock", "cargo", "operator", "berth", "tide"]
+    },
+    namingRules: {
+      routeStyle: "short operational harbor terms without generic payment words",
+      fieldStyle: "snake_case" as const,
+      forbiddenCanonicalNames: ["payments", "customers", "balances", "account", "metrics", "profile"],
+      examples: ["cargo-ledger", "dock-pass", "tide-stream", "operator-book"]
+    },
+    uiDirection: {
+      layout: "split-workspace",
+      density: "balanced",
+      navigation: "command-rail",
+      visualStyle: "split harbor operations workspace with muted copper surfaces, steel borders, and tide-blue action states",
+      palette: ["copper", "steel", "tide blue", "white"],
+      dashboardBlocks: ["metrics", "recentPayments", "balances", "createPayment"]
+    },
+    copy: {
+      loginTitle: "Enter dock",
+      registerTitle: "Issue dock pass",
+      emptyStates: {
+        payments: "No cargo clearings have been logged.",
+        customers: "No operators are in the harbor book.",
+        balances: "No tide stream movements are posted."
+      },
+      actionLabels: {
+        createPayment: "Clear cargo",
+        history: "Cargo ledger",
+        refund: "Reverse cargo",
+        overview: "Harbor board",
+        payments: "Cargo clearings",
+        customers: "Operator book",
+        balances: "Tide stream"
+      }
+    },
+    statusVocabulary: {
+      created: "cargoLogged",
+      requires_payment_method: "berthMissing",
+      requires_confirmation: "dockReview",
+      processing: "tideMoving",
+      authorized: "harborHold",
+      captured: "cargoSecured",
+      settled: "cargoCleared",
+      failed: "dockRejected",
+      canceled: "cargoVoided",
+      refunded: "cargoReturned"
+    }
+  };
+}
+
+function brandIntentJsonSchema(): unknown {
+  return objectSchema({
+    brandName: stringSchema(),
+    concept: objectSchema({
+      domain: stringSchema(),
+      audience: stringSchema(),
+      productMetaphor: stringSchema(),
+      authMetaphor: stringSchema(),
+      paymentMetaphor: stringSchema(),
+      tone: stringSchema(),
+      avoidWords: arraySchema(stringSchema()),
+      preferredTerms: arraySchema(stringSchema())
+    }),
+    namingRules: objectSchema({
+      routeStyle: stringSchema(),
+      fieldStyle: enumSchema(["camelCase", "snake_case", "kebab-case"]),
+      forbiddenCanonicalNames: arraySchema(stringSchema()),
+      examples: arraySchema(stringSchema())
+    }),
+    uiDirection: objectSchema({
+      layout: stringSchema(),
+      density: stringSchema(),
+      navigation: stringSchema(),
+      visualStyle: stringSchema(),
+      palette: arraySchema(stringSchema()),
+      dashboardBlocks: arraySchema(stringSchema())
+    }),
+    copy: objectSchema({
+      loginTitle: stringSchema(),
+      registerTitle: stringSchema(),
+      emptyStates: recordStringSchema(),
+      actionLabels: recordStringSchema()
+    }),
+    statusVocabulary: recordStringSchema()
+  });
 }
 
 function createBrandDraftJsonSchema(): Record<string, unknown> {

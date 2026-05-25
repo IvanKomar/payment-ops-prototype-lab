@@ -31,7 +31,7 @@ export class PublicBrandApiController {
     @Param("entity", new ZodValidationPipe<string>(entitySlugSchema)) entity: string,
     @Headers("authorization") authorization: string | undefined
   ): Promise<unknown> {
-    return this.layoutService.getPublicRuntimeEntity(slug, entity, parseBearerToken(authorization));
+    return this.layoutService.getPublicRuntimeEntity(slug, entity, authorization);
   }
 
   @Post(":entity")

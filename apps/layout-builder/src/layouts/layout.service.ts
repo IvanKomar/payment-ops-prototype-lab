@@ -10,10 +10,13 @@ import type {
   LayoutBuilderAppendBrandDraftMessageRequest,
   LayoutBuilderBrandGenerationDraft,
   LayoutBuilderCreateBrandDraftFromSpecRequest,
+  LayoutBuilderCreateBrandIntentDraftRequest,
   LayoutBuilderCreateBrandDraftRequest,
   LayoutBuilderAiBrandSpec,
   LayoutBuilderAgentManifest,
+  LayoutBuilderBrandIntentManifest,
   LayoutBuilderAiGenerationProfile,
+  LayoutBuilderBrandRuntimeDictionary,
   LayoutBuilderClarifyBrandRequest,
   LayoutBuilderClarifyBrandResponse,
   LayoutBuilderContractVersion,
@@ -37,8 +40,9 @@ import { PayloadMapperService } from "./schema/payload-mapper.service.js";
 import { SvgRendererService } from "./render/svg-renderer.service.js";
 import { AiBrandArtifactValidatorService } from "./ai/ai-brand-artifact-validator.service.js";
 import { AiBrandProviderRegistryService } from "./ai/ai-brand-provider-registry.service.js";
-import { AiBrandSpecService } from "./ai/ai-brand-spec.service.js";
+import { AiBrandSpecService, RESERVED_PUBLIC_ROUTES } from "./ai/ai-brand-spec.service.js";
 import { AiAgentManifestService } from "./ai/ai-agent-manifest.service.js";
+import { BrandIntentCompilerService } from "./ai/brand-intent-compiler.service.js";
 import { BrandSpecUniquenessService } from "./ai/brand-spec-uniqueness.service.js";
 import { parseBearerToken } from "./dto/layout.schemas.js";
 import { PaymentCoreClientService } from "./runtime/payment-core-client.service.js";
@@ -79,6 +83,7 @@ export class LayoutService {
     @Inject(AiBrandProviderRegistryService) private readonly aiProviderRegistry: AiBrandProviderRegistryService,
     @Inject(AiBrandSpecService) private readonly aiBrandSpecService: AiBrandSpecService,
     @Inject(AiAgentManifestService) private readonly aiAgentManifestService: AiAgentManifestService,
+    @Inject(BrandIntentCompilerService) private readonly brandIntentCompiler: BrandIntentCompilerService,
     @Inject(BrandSpecUniquenessService) private readonly brandSpecUniquenessService: BrandSpecUniquenessService,
     @Inject(PaymentCoreClientService) private readonly paymentCoreClient: PaymentCoreClientService,
     @Inject(AuthBoundaryService) private readonly authBoundary: AuthBoundaryService
@@ -90,6 +95,50 @@ export class LayoutService {
 
   getAgentManifest(): LayoutBuilderAgentManifest {
     return this.aiAgentManifestService.getManifest();
+  }
+
+  getBrandIntentManifest(): LayoutBuilderBrandIntentManifest {
+    return this.aiAgentManifestService.getIntentManifest();
+  }
+
+  async createBrandIntentDraft(
+    input: LayoutBuilderCreateBrandIntentDraftRequest,
+    adminSessionToken?: string
+  ): Promise<LayoutBuilderBrandGenerationDraft> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
+    const now = new Date().toISOString();
+    const draftId = `draft_${randomUUID().replaceAll("-", "")}`;
+    const controls = this.aiBrandSpecService.normalizeControls({
+      ...(input.intent.namingRules.fieldStyle ? { fieldStyle: input.intent.namingRules.fieldStyle } : {}),
+      ...(input.controls ?? {})
+    });
+    const compiledSpec = this.brandIntentCompiler.compile(input.intent, controls);
+    const validation = this.aiBrandSpecService.validateSpec(compiledSpec);
+    const uniqueness = validation.spec ? await this.validateSpecUniqueness(validation.spec) : { issues: [] };
+    const validationIssues = [...validation.issues, ...uniqueness.issues];
+    const adminPrompt = input.adminPrompt?.trim() || `External chat intent for ${input.intent.brandName}`;
+    const source = input.source ?? "external-chat";
+
+    return this.repository.saveBrandGenerationDraft({
+      id: draftId,
+      brandName: input.intent.brandName,
+      adminPrompt,
+      systemPrompt: this.defaultBrandIntentSystemPrompt(),
+      provider: source === "claude" ? "anthropic" : source === "external-chat" || source === "manual" ? "codex" : source,
+      model: input.model?.trim() || `${source}-brand-intent-v1`,
+      controls,
+      messages: [
+        { role: "admin" as const, content: JSON.stringify(input.intent, null, 2), createdAt: now },
+        {
+          role: "assistant" as const,
+          content: validationIssues.length > 0 ? "Compiled the brand intent with validation issues." : "Compiled the brand intent into a valid runtime spec.",
+          createdAt: now
+        }
+      ],
+      spec: validation.spec,
+      validationIssues,
+      status: validationIssues.length > 0 ? "invalid" : "valid"
+    });
   }
 
   async createBrandGenerationDraft(
@@ -698,7 +747,7 @@ export class LayoutService {
     return { balances: Array.isArray(overview.balanceTransactions) ? overview.balanceTransactions : [] };
   }
 
-  async getPublicRuntimeEntity(slug: string, entity: string, sessionToken: string): Promise<unknown> {
+  async getPublicRuntimeEntity(slug: string, entity: string, authorization: string | undefined): Promise<unknown> {
     const brand = await this.getExistingBrandBySlug(slug);
     const contract = createBrandRuntimeContract(brand);
     const operation = resolvePublicBrandEntityOperation(contract, "GET", entity);
@@ -707,6 +756,27 @@ export class LayoutService {
       throw new NotFoundException(`Brand entity endpoint was not found: ${slug}/${entity}`);
     }
 
+    if (operation === "payments") {
+      const response = await this.paymentCoreClient.brandResources(brand.id);
+      const account = response.accounts[0] ?? null;
+      if (!account) {
+        return { [contract.responseKeys.payments]: [] };
+      }
+      const history = {
+        account,
+        balanceTransactions: response.balanceTransactions,
+        customers: response.customers,
+        paymentMethods: response.paymentMethods,
+        payments: response.payments
+      };
+      const mappedOverview = toRuntimeHistoryResponse(contract, history) as Record<string, unknown>;
+
+      return {
+        [contract.responseKeys.payments]: Array.isArray(mappedOverview[contract.resourceAlias]) ? mappedOverview[contract.resourceAlias] : []
+      };
+    }
+
+    const sessionToken = parseBearerToken(authorization);
     const response = await this.paymentCoreClient.history(sessionToken);
     const canonicalOverview = toRuntimeOverviewResponse(contract, response) as Record<string, unknown>;
     const mappedOverview = toRuntimeHistoryResponse(contract, response) as Record<string, unknown>;
@@ -716,8 +786,6 @@ export class LayoutService {
         return { [contract.responseKeys.account]: mappedOverview.account ?? null };
       case "metrics":
         return { [contract.responseKeys.metrics]: canonicalOverview.metrics ?? null };
-      case "payments":
-        return { [contract.responseKeys.payments]: Array.isArray(mappedOverview[contract.resourceAlias]) ? mappedOverview[contract.resourceAlias] : [] };
       case "customers":
         return { [contract.responseKeys.customers]: Array.isArray(mappedOverview.customers) ? mappedOverview.customers : [] };
       case "paymentMethods":
@@ -1079,7 +1147,7 @@ export class LayoutService {
       generationProfile,
       contract,
       uiSpec: spec.ui,
-      sourceType: draft.provider === "codex" || draft.provider === "anthropic" || draft.provider === "openai" ? "external-spec" : "ai-spec"
+      sourceType: draft.model.includes("brand-intent") ? "ai-intent" : draft.provider === "codex" || draft.provider === "anthropic" || draft.provider === "openai" ? "external-spec" : "ai-spec"
     });
 
     schema.contractVersion = contractVersion;
@@ -1122,6 +1190,7 @@ export class LayoutService {
       resourceAlias: spec.resourceAlias,
       visualDirection: spec.brand.visualDirection,
       contractSummary: spec.brand.contractSummary,
+      dictionary: brandRuntimeDictionaryFromSpec(spec, draft),
       statusMap: spec.statuses,
       actionLabels: {
         register: spec.ui.labels.register,
@@ -1191,6 +1260,14 @@ export class LayoutService {
       "Generate a strict JSON brand runtime spec for a payment gateway.",
       "The spec is the source of truth for public routes, field names, auth shape, response keys, status names, and UI labels.",
       "Never expose internal platform names, canonical payment-core DTOs, database names, brand ids, bff, runtime, rest-api, or profile routes."
+    ].join("\n");
+  }
+
+  private defaultBrandIntentSystemPrompt(): string {
+    return [
+      "External chat generates only a brand intent: concept, naming rules, UI direction, copy, and status vocabulary.",
+      "The backend compiles that intent into the hidden runtime contract and public brand routes.",
+      "The intent must not include internal service names, payment-core DTOs, brand ids, bff, runtime, rest-api, or profile routes."
     ].join("\n");
   }
 
@@ -1432,6 +1509,67 @@ function createContractVersion(input: CreateContractVersionInput): LayoutBuilder
     createdAt: timestamp,
     updatedAt: timestamp
   };
+}
+
+function brandRuntimeDictionaryFromSpec(
+  spec: LayoutBuilderAiBrandSpec,
+  draft: LayoutBuilderBrandGenerationDraft
+): LayoutBuilderBrandRuntimeDictionary {
+  const source =
+    draft.model.includes("brand-intent")
+      ? "intent_compiler"
+      : draft.provider === "codex" || draft.provider === "anthropic" || draft.provider === "openai"
+        ? "external_ai_spec"
+        : draft.provider === "local" || draft.provider === "gemini"
+          ? "managed_ai_spec"
+          : "generated_profile";
+
+  return {
+    visibility: "bff_private",
+    source,
+    controls: spec.controls,
+    forbiddenPublicTerms: [...RESERVED_PUBLIC_ROUTES],
+    publicRoutes: {
+      register: spec.entities.register.route,
+      login: spec.entities.login.route,
+      account: spec.entities.account.route,
+      metrics: spec.entities.metrics.route,
+      payments: spec.entities.payments.route,
+      customers: spec.entities.customers.route,
+      paymentMethods: spec.entities.paymentMethods.route,
+      balances: spec.entities.balances.route
+    },
+    requestKeys: Object.fromEntries(
+      Object.entries(spec.entities).map(([entityName, entity]) => [entityName, entity.requestKey])
+    ),
+    responseKeys: {
+      account: spec.entities.account.responseKey,
+      metrics: spec.entities.metrics.responseKey,
+      payments: spec.entities.payments.responseKey,
+      customers: spec.entities.customers.responseKey,
+      paymentMethods: spec.entities.paymentMethods.responseKey,
+      balances: spec.entities.balances.responseKey,
+      error: spec.auth.errorKey
+    },
+    fieldAliases: flattenFieldAliases(spec.fields),
+    statusAliases: spec.statuses,
+    actionLabels: spec.ui.labels,
+    visualTokens: {
+      ...spec.ui.presentation.visualTokens,
+      layout: spec.ui.presentation.layout,
+      density: spec.ui.presentation.density,
+      navigationPattern: spec.ui.presentation.navigationPattern,
+      dashboardComposition: spec.ui.presentation.dashboardComposition
+    }
+  };
+}
+
+function flattenFieldAliases(fieldGroups: LayoutBuilderAiBrandSpec["fields"]): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(fieldGroups).flatMap(([groupName, fields]) =>
+      Object.entries(fields).map(([fieldName, alias]) => [`${groupName}.${fieldName}`, alias])
+    )
+  );
 }
 
 function prefixFields(prefix: string, fields: Record<string, string>): Record<string, string> {
@@ -2353,10 +2491,12 @@ const PREVIEW_COLOR_TOKENS: Record<string, string> = {
   black: "#020617",
   blue: "#2563eb",
   charcoal: "#111827",
+  copper: "#b45309",
   cream: "#fff7ed",
   cyan: "#0891b2",
   emerald: "#059669",
   forest: "#176f52",
+  graphite: "#171b1f",
   green: "#16a34a",
   ink: "#111827",
   magenta: "#be185d",
@@ -2368,15 +2508,19 @@ const PREVIEW_COLOR_TOKENS: Record<string, string> = {
   "glass violet": "#8b5cf6",
   "liquidity gold": "#f5c542",
   "matrix green": "#00ff9c",
+  "cool white": "#f8fafc",
+  "quartz green": "#16a34a",
   "signal green": "#22c55e",
   slate: "#334155",
+  steel: "#475569",
   teal: "#0f766e",
+  "tide blue": "#0e7490",
   violet: "#7c3aed",
   white: "#ffffff"
 };
 
-const PREVIEW_DARK_COLORS = new Set(["#020617", "#101820", "#111827", "#172554", "#334155"]);
-const PREVIEW_NEUTRAL_COLORS = new Set(["#ffffff", "#f8fafc", "#020617", "#101820", "#111827", "#334155"]);
+const PREVIEW_DARK_COLORS = new Set(["#020617", "#101820", "#111827", "#171b1f", "#172554", "#334155", "#475569"]);
+const PREVIEW_NEUTRAL_COLORS = new Set(["#ffffff", "#f8fafc", "#020617", "#101820", "#111827", "#171b1f", "#334155", "#475569"]);
 
 function humanizeRuntimeLabel(value: string): string {
   return value

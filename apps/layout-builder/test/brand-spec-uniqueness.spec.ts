@@ -35,8 +35,14 @@ describe("BrandSpecUniquenessService", () => {
       },
       []
     );
-    const right = {
+    const right: typeof left = {
       ...left,
+      controls: {
+        ...left.controls,
+        payloadStructure: "flat",
+        fieldStyle: "kebab-case",
+        responseEnvelope: "plain"
+      },
       resourceAlias: "orbital_clearing",
       entities: Object.fromEntries(
         Object.entries(left.entities).map(([key, entity], index) => [
@@ -81,7 +87,7 @@ describe("BrandSpecUniquenessService", () => {
         presentation: {
           layout: "compact-terminal",
           density: "spacious",
-          navigationPattern: "command-rail",
+          navigationPattern: "top-tabs",
           dashboardComposition: ["metrics", "balances", "customers", "createPayment"],
           visualTokens: {
             palette: ["black", "cyan", "silver", "lime"],

@@ -1,20 +1,20 @@
 import type {
   HealthResponse,
   LayoutBuilderAdminAuthResponse,
-  LayoutBuilderAiProvider,
   LayoutBuilderBrandListItem,
   LayoutBuilderBrandGenerationDraft,
+  LayoutBuilderBrandGenerationIntent,
   LayoutBuilderBrandMembership,
   LayoutBuilderBrandResponse,
   LayoutBuilderBrandSchemaResponse,
   LayoutBuilderClarificationAnswers,
   LayoutBuilderContractVersionRecord,
-  LayoutBuilderCreateBrandDraftRequest,
+  LayoutBuilderCreateBrandIntentDraftRequest,
   ReceiptRecognitionModel,
   ReceiptRecognizerReceiptResponse
 } from "@payment-ops/shared-types";
 
-import { api, type SmsRecentMessageResponse, type SmsStatusResponse } from "./api.js";
+import { api, infraUrls, type SmsRecentMessageResponse, type SmsStatusResponse } from "./api.js";
 import "./styles.css";
 
 interface LayoutState {
@@ -98,6 +98,8 @@ app.innerHTML = `
       <h1>Local demo console</h1>
     </div>
     <div class="topbar-actions">
+      <a class="button secondary infra-link" href="${infraUrls.postgresViewer}" target="_blank" rel="noreferrer">Postgres</a>
+      <a class="button secondary infra-link" href="${infraUrls.redisViewer}" target="_blank" rel="noreferrer">Redis</a>
       <div class="admin-chip" id="admin-chip">
         <span>Admin</span>
         <strong>Not signed in</strong>
@@ -226,8 +228,8 @@ app.innerHTML = `
               </div>
             </div>
             <div class="api-only-note">
-              <strong>Built-in AI or external API</strong>
-              <span>Create here with Gemini, or generate via Codex using the agent manifest.</span>
+              <strong>External chat intent</strong>
+              <span>Generate intent in ChatGPT/Codex/Gemini, paste JSON here, and let the backend compile integration.</span>
             </div>
             <div class="list compact" id="brand-list"></div>
             <button class="button danger sidebar-delete" id="delete-brand" type="button" disabled>Delete selected</button>
@@ -287,42 +289,31 @@ app.innerHTML = `
     <section class="modal brand-modal-shell" role="dialog" aria-modal="true" aria-labelledby="brand-modal-title">
       <div class="modal-header">
         <div>
-          <p class="eyebrow">Built-in AI brand flow</p>
-          <h3 id="brand-modal-title">Create payment brand</h3>
+          <p class="eyebrow">External chat brand flow</p>
+          <h3 id="brand-modal-title">Create brand from intent</h3>
         </div>
         <button class="icon-button" id="close-brand-modal" type="button" aria-label="Close brand dialog">X</button>
       </div>
       <form id="brand-form" class="form-grid">
         <label>
-          Brand name
-          <input name="brandName" value="Aster Vault" required />
+          Brand intent JSON
+          <textarea name="intentJson" rows="18" spellcheck="false" required>${escapeHtml(defaultBrandIntentJson())}</textarea>
         </label>
         <label>
-          Prompt
-          <textarea name="adminPrompt" rows="6" required>Create a Stripe-like merchant payment gateway with unique routes, fields, status names, and a visually distinct payment dashboard. Use wallet settlement language and do not expose internal service names.</textarea>
+          Admin note
+          <textarea name="adminPrompt" rows="3">External chat generated this brand intent. Backend compiles it into the hidden payment gateway contract.</textarea>
         </label>
-        <div class="form-grid two-col">
-          <label>
-            Provider
-            <select name="provider">
-              <option value="gemini">Gemini · server key</option>
-              <option value="local">Local fallback</option>
-            </select>
-          </label>
-          <label>
-            Model
-            <input name="model" value="gemini-2.5-flash-lite" />
-          </label>
-        </div>
         <details class="prompt-details">
-          <summary>Generation controls</summary>
+          <summary>Compiler controls</summary>
           <div class="form-grid two-col">
             <label>
-              Payload
-              <select name="payloadStructure">
-                <option value="nested">Nested</option>
-                <option value="flat">Flat</option>
-                <option value="key-value-array">Key-value array</option>
+              Source
+              <select name="source">
+                <option value="external-chat">External chat</option>
+                <option value="codex">Codex</option>
+                <option value="gemini">Gemini chat</option>
+                <option value="claude">Claude chat</option>
+                <option value="manual">Manual JSON</option>
               </select>
             </label>
             <label>
@@ -334,11 +325,11 @@ app.innerHTML = `
               </select>
             </label>
             <label>
-              Auth
-              <select name="authShape">
-                <option value="workspace">Workspace</option>
-                <option value="credentials">Credentials</option>
-                <option value="access_key">Access key</option>
+              Payload
+              <select name="payloadStructure">
+                <option value="nested">Nested</option>
+                <option value="flat">Flat</option>
+                <option value="key-value-array">Key-value array</option>
               </select>
             </label>
             <label>
@@ -358,13 +349,13 @@ app.innerHTML = `
         </label>
         <div class="draft-preview" id="brand-draft-preview">
           <div class="assistant-empty">
-            <strong>No spec generated yet.</strong>
-            <span>Click Preview spec to run the built-in Gemini flow.</span>
+            <strong>No intent compiled yet.</strong>
+            <span>Paste JSON from ChatGPT/Codex/Gemini, then click Compile preview.</span>
           </div>
         </div>
         <div class="modal-footer">
           <span class="modal-status" id="brand-modal-status"></span>
-          <button class="button secondary" id="brand-preview-spec" type="button">Preview spec</button>
+          <button class="button secondary" id="brand-preview-spec" type="button">Compile preview</button>
           <button class="button" id="brand-create-approved" type="submit" disabled>Create brand</button>
         </div>
       </form>
@@ -544,11 +535,11 @@ function openBrandModal(): void {
   brandCreateButton.disabled = true;
   brandDraftPreview.innerHTML = `
     <div class="assistant-empty">
-      <strong>No spec generated yet.</strong>
-      <span>Click Preview spec to run the built-in Gemini flow.</span>
+      <strong>No intent compiled yet.</strong>
+      <span>Paste JSON from ChatGPT/Codex/Gemini, then click Compile preview.</span>
     </div>
   `;
-  brandForm.querySelector<HTMLInputElement>('input[name="brandName"]')?.focus();
+  brandForm.querySelector<HTMLTextAreaElement>('textarea[name="intentJson"]')?.focus();
 }
 
 function closeBrandModal(): void {
@@ -557,22 +548,24 @@ function closeBrandModal(): void {
 }
 
 async function previewBrandSpec(): Promise<void> {
-  const payload = brandDraftPayload();
+  let payload: LayoutBuilderCreateBrandIntentDraftRequest;
 
-  if (!payload.brandName || !payload.adminPrompt) {
-    brandModalStatus.textContent = "Brand name and prompt are required.";
+  try {
+    payload = brandDraftPayload();
+  } catch (error) {
+    brandModalStatus.textContent = errorMessage(error);
     return;
   }
 
   setBusy(brandForm, true);
-  brandModalStatus.textContent = "Generating spec...";
+  brandModalStatus.textContent = "Compiling intent...";
 
   try {
-    const draft = await api.layout.createBrandDraft(payload);
+    const draft = await api.layout.createBrandIntentDraft(payload);
     layoutState.activeBrandDraft = draft;
     renderBrandDraftPreview(draft);
     brandCreateButton.disabled = draft.status !== "valid";
-    brandModalStatus.textContent = draft.status === "valid" ? "Spec is valid. You can create the brand." : "Spec needs changes before create.";
+    brandModalStatus.textContent = draft.status === "valid" ? "Intent compiled. You can create the brand." : "Intent needs changes before create.";
   } catch (error) {
     brandModalStatus.textContent = errorMessage(error);
   } finally {
@@ -593,7 +586,7 @@ async function createApprovedBrand(): Promise<void> {
   brandModalStatus.textContent = "Creating brand...";
 
   try {
-    const brand = await api.layout.createBrandFromDraft(draft.draftId, brandLogoFile());
+    const brand = await api.layout.createBrandFromIntentDraft(draft.draftId, brandLogoFile());
     closeBrandModal();
     await refreshBrands();
     await selectBrand(brand.brandId);
@@ -604,22 +597,104 @@ async function createApprovedBrand(): Promise<void> {
   }
 }
 
-function brandDraftPayload(): LayoutBuilderCreateBrandDraftRequest {
+function brandDraftPayload(): LayoutBuilderCreateBrandIntentDraftRequest {
+  const intent = parseBrandIntent(formValue("intentJson"));
+  const fieldStyle = formValue("fieldStyle") as "camelCase" | "snake_case" | "kebab-case";
+
   return {
-    brandName: formValue("brandName"),
+    intent: {
+      ...intent,
+      namingRules: {
+        ...intent.namingRules,
+        fieldStyle
+      }
+    },
     adminPrompt: formValue("adminPrompt"),
-    provider: formValue("provider") as Extract<LayoutBuilderAiProvider, "local" | "gemini">,
-    model: formValue("model"),
+    source: formValue("source") as "external-chat" | "codex" | "gemini" | "claude" | "manual",
     controls: {
       payloadStructure: formValue("payloadStructure") as "flat" | "nested" | "key-value-array",
-      fieldStyle: formValue("fieldStyle") as "camelCase" | "snake_case" | "kebab-case",
-      authShape: formValue("authShape") as "credentials" | "access_key" | "workspace",
+      fieldStyle,
+      authShape: "workspace",
       responseEnvelope: formValue("responseEnvelope") as "plain" | "resource_key" | "data" | "result",
       routeNaming: "finance",
       errorStyle: "branded",
       namingIntensity: "maximum"
     }
   };
+}
+
+function parseBrandIntent(value: string): LayoutBuilderBrandGenerationIntent {
+  const parsed = JSON.parse(value) as unknown;
+
+  if (!parsed || typeof parsed !== "object" || !("brandName" in parsed)) {
+    throw new Error("Intent JSON must include brandName, concept, namingRules, uiDirection, and copy.");
+  }
+
+  return parsed as LayoutBuilderBrandGenerationIntent;
+}
+
+function defaultBrandIntentJson(): string {
+  return JSON.stringify(
+    {
+      brandName: "Copper Harbor",
+      concept: {
+        domain: "merchant acquiring for regional commerce teams",
+        audience: "market operators",
+        productMetaphor: "harbor control",
+        authMetaphor: "dock pass",
+        paymentMetaphor: "cargo clearing",
+        tone: "practical port-operations finance language",
+        avoidWords: ["stripe", "payment-core", "bff", "runtime", "profile"],
+        preferredTerms: ["harbor", "dock", "cargo", "operator", "berth", "tide"]
+      },
+      namingRules: {
+        routeStyle: "short operational harbor terms without generic payment words",
+        fieldStyle: "snake_case",
+        forbiddenCanonicalNames: ["payments", "customers", "balances", "account", "metrics", "profile"],
+        examples: ["cargo-ledger", "dock-pass", "tide-stream", "operator-book"]
+      },
+      uiDirection: {
+        layout: "split-workspace",
+        density: "balanced",
+        navigation: "command-rail",
+        visualStyle: "split harbor operations workspace with muted copper surfaces, steel borders, and tide-blue action states",
+        palette: ["copper", "steel", "tide blue", "white"],
+        dashboardBlocks: ["metrics", "recentPayments", "balances", "createPayment"]
+      },
+      copy: {
+        loginTitle: "Enter dock",
+        registerTitle: "Issue dock pass",
+        emptyStates: {
+          payments: "No cargo clearings have been logged.",
+          customers: "No operators are in the harbor book.",
+          balances: "No tide stream movements are posted."
+        },
+        actionLabels: {
+          createPayment: "Clear cargo",
+          history: "Cargo ledger",
+          refund: "Reverse cargo",
+          overview: "Harbor board",
+          payments: "Cargo clearings",
+          customers: "Operator book",
+          balances: "Tide stream"
+        }
+      },
+      statusVocabulary: {
+        created: "cargoLogged",
+        requires_payment_method: "berthMissing",
+        requires_confirmation: "dockReview",
+        processing: "tideMoving",
+        authorized: "harborHold",
+        captured: "cargoSecured",
+        settled: "cargoCleared",
+        failed: "dockRejected",
+        canceled: "cargoVoided",
+        refunded: "cargoReturned"
+      }
+    },
+    null,
+    2
+  );
 }
 
 function renderBrandDraftPreview(draft: LayoutBuilderBrandGenerationDraft): void {

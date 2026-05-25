@@ -31,17 +31,25 @@ function similarityAgainstExisting(spec: LayoutBuilderAiBrandSpec, existing: Lay
   const paletteOverlap = overlap(spec.ui.presentation.visualTokens.palette, existing.ui.presentation.visualTokens.palette);
   const sameLayout = spec.ui.presentation.layout === existing.ui.presentation.layout ? 1 : 0;
   const sameNavigation = spec.ui.presentation.navigationPattern === existing.ui.presentation.navigationPattern ? 1 : 0;
+  const samePayloadStructure = spec.controls.payloadStructure === existing.controls.payloadStructure ? 1 : 0;
+  const sameFieldStyle = spec.controls.fieldStyle === existing.controls.fieldStyle ? 1 : 0;
+  const sameEnvelope = spec.controls.responseEnvelope === existing.controls.responseEnvelope ? 1 : 0;
+  const dashboardOverlap = overlap(spec.ui.presentation.dashboardComposition, existing.ui.presentation.dashboardComposition);
   const copyOverlap = tokenOverlap(spec.ui.presentation.copyTone, existing.ui.presentation.copyTone);
 
   const similarity = Math.min(
     100,
     routeOverlap * 24 +
-      aliasOverlap * 20 +
+      aliasOverlap * 18 +
       statusOverlap * 16 +
       labelOverlap * 12 +
       paletteOverlap * 8 +
-      sameLayout * 8 +
+      sameLayout * 6 +
       sameNavigation * 4 +
+      samePayloadStructure * 4 +
+      sameFieldStyle * 3 +
+      sameEnvelope * 3 +
+      dashboardOverlap * 4 +
       copyOverlap * 8
   );
   const issues = [
@@ -51,6 +59,10 @@ function similarityAgainstExisting(spec: LayoutBuilderAiBrandSpec, existing: Lay
     labelOverlap > 0.3 ? `UI label overlap is too high (${percent(labelOverlap)}).` : "",
     sameLayout ? `UI layout repeats an existing brand (${spec.ui.presentation.layout}).` : "",
     sameNavigation ? `Navigation pattern repeats an existing brand (${spec.ui.presentation.navigationPattern}).` : "",
+    samePayloadStructure ? `Payload structure repeats an existing brand (${spec.controls.payloadStructure}).` : "",
+    sameFieldStyle ? `Field style repeats an existing brand (${spec.controls.fieldStyle}).` : "",
+    sameEnvelope ? `Response envelope repeats an existing brand (${spec.controls.responseEnvelope}).` : "",
+    dashboardOverlap > 0.6 ? `Dashboard composition is too similar (${percent(dashboardOverlap)}).` : "",
     copyOverlap > 0.35 ? `Copy tone is too similar (${percent(copyOverlap)} token overlap).` : ""
   ].filter(Boolean);
 

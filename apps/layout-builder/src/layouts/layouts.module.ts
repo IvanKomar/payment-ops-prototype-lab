@@ -22,12 +22,13 @@ import { AiBrandGeneratorService } from "./ai/ai-brand-generator.service.js";
 import { AiBrandProviderRegistryService } from "./ai/ai-brand-provider-registry.service.js";
 import { AiBrandSpecService } from "./ai/ai-brand-spec.service.js";
 import { AiAgentManifestService } from "./ai/ai-agent-manifest.service.js";
+import { BrandIntentCompilerService } from "./ai/brand-intent-compiler.service.js";
 import { BrandSpecUniquenessService } from "./ai/brand-spec-uniqueness.service.js";
 import { PaymentCoreClientService } from "./runtime/payment-core-client.service.js";
 
 @Module({
   imports: [PrismaModule],
-  controllers: [BrandsController, BrandRuntimeController, BrandBffController, AdminAuthController, PublicBrandApiController, AiAgentController],
+  controllers: [AiAgentController, BrandsController, BrandRuntimeController, BrandBffController, AdminAuthController, PublicBrandApiController],
   providers: [
     {
       provide: LAYOUT_BUILDER_CONFIG,
@@ -41,6 +42,7 @@ import { PaymentCoreClientService } from "./runtime/payment-core-client.service.
     AiBrandProviderRegistryService,
     AiBrandSpecService,
     AiAgentManifestService,
+    BrandIntentCompilerService,
     BrandSpecUniquenessService,
     PaymentCoreClientService,
     LogoStorageService,

@@ -764,7 +764,7 @@ function mapBalanceTransaction(
 ): Record<string, unknown> {
   return {
     [contract.balanceFields.balanceTransactionId]: transaction.balanceTransactionId,
-    [contract.balanceFields.paymentId]: transaction.paymentId,
+    [contract.balanceFields.paymentId]: publicRuntimeReference(transaction.paymentId, "PM"),
     [contract.balanceFields.type]: transaction.type,
     [contract.balanceFields.amount]: transaction.amount,
     [contract.balanceFields.currency]: transaction.currency,
@@ -775,8 +775,8 @@ function mapBalanceTransaction(
 
 function mapPayment(contract: BrandRuntimeContract, payment: PaymentCorePayment): Record<string, unknown> {
   return {
-    [contract.fields.paymentId]: payment.paymentId,
-    [contract.fields.externalReference]: payment.externalReference,
+    [contract.fields.paymentId]: publicRuntimeReference(payment.paymentId, "PM"),
+    [contract.fields.externalReference]: publicRuntimeReference(payment.paymentId, "TX"),
     [contract.fields.paymentIntentId]: payment.paymentIntentId,
     [contract.fields.customerId]: payment.customerId,
     [contract.fields.paymentMethodId]: payment.paymentMethodId,
@@ -826,7 +826,7 @@ function mapPublicBalanceTransaction(
 ): Record<string, unknown> {
   return {
     id: transaction.balanceTransactionId,
-    paymentId: transaction.paymentId,
+    paymentId: publicRuntimeReference(transaction.paymentId, "PM"),
     type: transaction.type,
     amount: transaction.amount,
     currency: transaction.currency,
@@ -837,8 +837,8 @@ function mapPublicBalanceTransaction(
 
 function mapPublicPayment(contract: BrandRuntimeContract, payment: PaymentCorePayment): Record<string, unknown> {
   return {
-    id: payment.paymentId,
-    reference: payment.externalReference,
+    id: publicRuntimeReference(payment.paymentId, "PM"),
+    reference: publicRuntimeReference(payment.paymentId, "TX"),
     intentId: payment.paymentIntentId,
     customerId: payment.customerId,
     paymentMethodId: payment.paymentMethodId,
@@ -851,6 +851,16 @@ function mapPublicPayment(contract: BrandRuntimeContract, payment: PaymentCorePa
     customer: payment.customer ? mapPublicCustomer(payment.customer) : null,
     paymentMethod: payment.paymentMethod ? mapPublicPaymentMethod(payment.paymentMethod) : null
   };
+}
+
+function publicRuntimeReference(value: string | null | undefined, prefix: string): string {
+  const token = (value ?? "")
+    .replace(/[^a-z0-9]/giu, "")
+    .toUpperCase()
+    .slice(-10)
+    .padStart(10, "0");
+
+  return `${prefix}-${token.slice(0, 4)}-${token.slice(4, 8)}`;
 }
 
 function publicMetrics(

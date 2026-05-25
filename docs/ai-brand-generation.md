@@ -1,15 +1,18 @@
 # AI Brand Generation
 
-This guide covers the two supported ways to create a payment gateway brand:
+The main prototype flow now assumes the AI work happens in an external chat:
+ChatGPT, Codex, Gemini, Claude Code, or a similar tool. The chat should not
+generate the full backend contract. It should generate a compact
+`BrandGenerationIntent`; Layout Builder compiles that intent into the hidden
+runtime contract, BFF mapping, public brand routes, field aliases, status names,
+and UI presentation.
 
-- the built-in admin UI flow, where Layout Builder calls Gemini or the local
-  fallback provider;
-- the external agent flow, where Codex, Gemini, Claude Code, or another agent
-  reads the machine manifest and submits a complete brand spec through HTTP.
+The older full-spec and provider-backed endpoints still exist as technical
+fallbacks, but they are not the primary product flow.
 
-Both flows create the same canonical `LayoutBuilderAiBrandSpec`. That spec is
-the source of truth for public routes, auth payloads, response shapes, labels,
-payment status names, and runtime UI presentation.
+When Codex is the external agent, use
+[`docs/codex-brand-agent.md`](./codex-brand-agent.md) as the repository-local
+playbook. Codex should fetch the live manifest before generating JSON.
 
 ## Prerequisites
 
@@ -26,98 +29,72 @@ This starts:
 - Payment Core: `http://localhost:3005`
 - Brand Runtime: `http://localhost:3006`
 
-For real Gemini generation, configure the server-side environment:
+No OpenAI or Gemini key is required for the main flow because the external chat
+produces JSON outside the app.
 
-```bash
-BRAND_AI_PROVIDER=gemini
-GEMINI_ENABLED=true
-GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.5-flash-lite
-```
+## Flow 1: External Chat + Admin UI
 
-If Gemini is not configured, use the `local` provider. The local provider keeps
-the prototype working offline and is suitable for demos, but it does not call an
-external LLM.
+1. Ask the external chat to create a brand intent. Use the manifest endpoint for
+   the exact schema and rules:
 
-## Flow 1: Built-In Admin UI
+   ```bash
+   curl http://localhost:3003/ai-agent/brand-intent-manifest
+   ```
 
-1. Open Builder Frontend:
+2. Open Builder Frontend:
 
    `http://localhost:3004/#layouts`
 
-2. Go to the `Layout Builder` tab.
+3. Go to `Layout Builder`.
 
-3. In the `Brands` sidebar, click `Create AI brand`.
+4. Click `Create AI brand`.
 
-4. Fill in:
+5. Paste the JSON intent from the chat into `Brand intent JSON`.
 
-   - `Brand name`
-   - `Prompt`
-   - `Provider`: `Gemini` or `Local fallback`
-   - optional `Generation controls`
+6. Click `Compile preview`.
 
-5. Click `Preview spec`.
-
-6. Review the validation preview. The final `Create brand` button stays
-   disabled until the generated spec is valid.
-
-7. Click `Create brand`.
+7. If validation passes, click `Create brand`.
 
 After creation, the brand appears in the brand list. The admin preview renders
 the generated brand runtime, and `Open user app` opens the standalone
-brand-facing application on the Brand Runtime service. AI brand creation also
-seeds a demo merchant account automatically, so new brands should already have
-payments, customers, methods, intents, and balance activity when selected.
+brand-facing application on the Brand Runtime service. New AI-created brands
+seed demo merchant data automatically. The current runtime target is intentionally
+simple: one `payments` page that opens seeded payment activity directly. Login,
+dashboard, customer, and balance screens are no longer required for the local
+prototype path.
 
-## Flow 2: External Agent
+The compiler normalizes free-form visual wishes into readable payment-platform
+UI tokens: light working surfaces, accessible contrast, restrained accent
+colors, tabular financial typography, predictable navigation, and clear form
+states. It also builds a private BFF dictionary from the compiled spec. That
+dictionary is stored as `generationProfile.dictionary` and includes public
+routes, request keys, response keys, field aliases, status aliases, action
+labels, visual tokens, and contract controls. Brand Runtime clients receive only
+the public aliases and UI data needed to render the app; canonical payment
+operations remain server-side.
 
-External agents should not read the repository to guess the contract. They can
-discover the system through the manifest endpoint:
+## Flow 2: External Chat + HTTP
+
+Agents can use only HTTP endpoints:
 
 ```bash
-curl http://localhost:3003/ai-agent/brand-generation-manifest
+curl http://localhost:3003/ai-agent/brand-intent-manifest
 ```
 
-The same manifest is also available under the Layout Builder route:
+Create a compiled draft:
 
 ```bash
-curl http://localhost:3003/brands/ai/agent-manifest
-```
-
-The manifest includes:
-
-- supported flows and endpoints;
-- JSON schemas for draft creation and spec import;
-- allowed enum values for generation controls and UI presentation;
-- reserved route slugs;
-- validation rules;
-- example prompts;
-- a full valid `LayoutBuilderAiBrandSpec` example;
-- safety rules for generated UI, including no `brandId`, no `/bff`, no
-  `/runtime`, no `/profile`, and no canonical endpoint names in browser-visible
-  requests.
-
-### Create a Draft From an Agent Spec
-
-1. Ask the agent to generate a complete `LayoutBuilderAiBrandSpec` using the
-   manifest rules.
-
-2. Submit the generated spec:
-
-```bash
-curl -X POST http://localhost:3003/brands/ai/drafts/from-spec \
+curl -X POST http://localhost:3003/brands/intent-drafts \
   -H "content-type: application/json" \
-  -d @brand-draft.json
+  -d @brand-intent-request.json
 ```
 
-`brand-draft.json` shape:
+`brand-intent-request.json` shape:
 
 ```json
 {
-  "brandName": "Aster Vault",
-  "adminPrompt": "External agent generated a merchant payment gateway brand.",
-  "provider": "codex",
-  "model": "external-agent",
+  "source": "codex",
+  "adminPrompt": "External chat generated this brand intent.",
   "controls": {
     "payloadStructure": "nested",
     "fieldStyle": "snake_case",
@@ -127,69 +104,102 @@ curl -X POST http://localhost:3003/brands/ai/drafts/from-spec \
     "errorStyle": "branded",
     "namingIntensity": "maximum"
   },
-  "spec": {}
+  "intent": {
+    "brandName": "Copper Harbor",
+    "concept": {
+      "domain": "merchant acquiring for regional commerce teams",
+      "audience": "market operators",
+      "productMetaphor": "harbor control",
+      "authMetaphor": "dock pass",
+      "paymentMetaphor": "cargo clearing",
+      "tone": "practical port-operations finance language",
+      "avoidWords": ["stripe", "payment-core", "bff", "runtime", "profile"],
+      "preferredTerms": ["harbor", "dock", "cargo", "operator", "berth", "tide"]
+    },
+    "namingRules": {
+      "routeStyle": "short operational harbor terms without generic payment words",
+      "fieldStyle": "snake_case",
+      "forbiddenCanonicalNames": ["payments", "customers", "balances", "account", "metrics", "profile"],
+      "examples": ["cargo-ledger", "dock-pass", "tide-stream", "operator-book"]
+    },
+    "uiDirection": {
+      "layout": "split-workspace",
+      "density": "balanced",
+      "navigation": "command-rail",
+      "visualStyle": "split harbor operations workspace with muted copper surfaces, steel borders, and tide-blue action states",
+      "palette": ["copper", "steel", "tide blue", "white"],
+      "dashboardBlocks": ["metrics", "recentPayments", "balances", "createPayment"]
+    },
+    "copy": {
+      "loginTitle": "Enter dock",
+      "registerTitle": "Issue dock pass",
+      "emptyStates": {
+        "payments": "No cargo clearings have been logged.",
+        "customers": "No operators are in the harbor book.",
+        "balances": "No tide stream movements are posted."
+      },
+      "actionLabels": {
+        "createPayment": "Clear cargo",
+        "history": "Cargo ledger",
+        "refund": "Reverse cargo",
+        "overview": "Harbor board",
+        "payments": "Cargo clearings",
+        "customers": "Operator book",
+        "balances": "Tide stream"
+      }
+    }
+  }
 }
 ```
 
-Replace `spec` with the full `LayoutBuilderAiBrandSpec` produced by the agent.
-
-3. If the draft response has `"status": "valid"`, create the brand:
+If the draft response has `"status": "valid"`, create the brand:
 
 ```bash
-curl -X POST http://localhost:3003/brands/ai/drafts/YOUR_DRAFT_ID/create \
+curl -X POST http://localhost:3003/brands/intent-drafts/YOUR_DRAFT_ID/create \
   -F logo=@/path/to/logo.svg
 ```
 
-### Direct Create From an Agent Spec
-
-Use this when the agent should import and create in one call:
+Direct create is also available:
 
 ```bash
-curl -X POST http://localhost:3003/brands/ai/drafts/from-spec/create \
-  -F 'payload=<brand-draft.json;type=application/json' \
+curl -X POST http://localhost:3003/brands/from-intent/create \
+  -F 'payload=<brand-intent-request.json;type=application/json' \
   -F logo=@/path/to/logo.svg
 ```
 
-The backend validates the spec first. It rejects duplicate routes,
-reserved/internal slugs, missing required entities, incomplete 10-status maps,
-invalid aliases, unsupported UI presentation values, and specs that are too
-similar to recent active AI brands.
+## What the Chat Should Know
 
-## Runtime Presentation Variety
+The external chat should know only the intent schema and high-level product
+goal:
 
-The runtime uses `ui.presentation` from the brand spec for more than colors:
+- create a unique merchant payment gateway brand;
+- render a single seeded payments page for the brand-facing app;
+- still describe auth, account, balances, customers, payment methods, payment
+  history, and payment creation vocabulary so the private dictionary can map
+  BFF data consistently;
+- avoid internal names such as `brandId`, `payment-core`, `bff`, `runtime`,
+  `profile`, DTO names, database names, and canonical entity names;
+- focus on product metaphor, route naming restrictions, field naming style,
+  visual direction, copy, and payment status vocabulary.
 
-- `layout` selects a materially different dashboard composition, such as
-  terminal signal streams, command-center boards, card-operation receipt tiles,
-  split workspaces, or topbar consoles.
-- `navigationPattern` controls sidebar, top-tab, or collapsible command-rail
-  navigation.
-- `visualTokens.typography` maps to distinct Google Font stacks, including
-  JetBrains Mono, IBM Plex Sans Condensed, Space Grotesk, Source Sans 3, and
-  Manrope.
-- `visualTokens.palette`, density, radius, surface, button, and copy-tone
-  tokens affect runtime CSS variables and generated preview styling.
-
-When authoring external specs, prefer explicit, domain-specific presentation
-language. Avoid requesting only color changes; describe the workflow shape,
-primary widget type, and desired information hierarchy.
+The chat should not generate final endpoint paths or internal integration
+contracts. The backend compiler owns those details.
 
 ## Runtime Expectations
 
 Generated brands open as:
 
 ```text
-http://localhost:3006/:brandSlug/app/:view
+http://localhost:3006/:brandSlug/app/payments
 ```
 
-Browser-visible API calls should use only AI-generated brand routes, for
-example:
+Browser-visible API calls should use only generated brand routes, for example:
 
 ```text
-/:brandSlug/me
-/:brandSlug/pulse
-/:brandSlug/ledger
-/:brandSlug/client-book
+/:brandSlug/dock-pass
+/:brandSlug/harbor-pulse
+/:brandSlug/cargo-ledger
+/:brandSlug/operator-book
 ```
 
 The browser should not show:
@@ -199,10 +209,15 @@ The browser should not show:
 - `/runtime`
 - `/profile`
 - `/rest-api`
-- canonical entity names when the spec uses different route slugs
+- canonical entity names when the intent compiles to different route slugs
 
 The BFF layer maps brand-specific request and response keys to canonical
 Payment Core operations on the server side.
+
+For uniqueness, Layout Builder validates more than names. It compares public
+routes, field aliases, status vocabulary, UI labels, palette, layout,
+navigation, payload structure, field style, response envelope, dashboard
+composition, and copy tone against recent generated brands.
 
 ## Quick Validation Checklist
 
@@ -210,10 +225,10 @@ After creating a brand:
 
 1. Open `http://localhost:3004/#layouts`.
 2. Select the new brand.
-3. Confirm the preview already has seeded activity.
+3. Confirm the preview has seeded activity.
 4. Click `Open user app`.
-5. Register or log in.
-6. Create a payment and inspect the history table.
-7. Check the browser network tab: requests should use the generated brand slug
+5. Confirm `/:brandSlug/app/payments` loads seeded payment activity without a
+   login step.
+6. Check the browser network tab: requests should use the generated brand slug
    and generated entity routes, not internal Layout Builder or Payment Core
    route names.
