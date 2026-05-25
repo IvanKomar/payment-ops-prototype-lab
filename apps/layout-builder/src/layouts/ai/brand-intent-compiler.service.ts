@@ -140,6 +140,8 @@ export class BrandIntentCompilerService {
           customer: title(human(terms.audience)),
           method: title(human(terms.rail))
         },
+        authExperience: authExperience(intent, presentation),
+        paymentsExperience: paymentsExperience(intent, presentation, terms, resourceAlias),
         presentation: {
           layout: presentation.layout,
           density: presentation.density,
@@ -365,6 +367,110 @@ function visualSystem(
     typography: typographyForLayout(layout, intent.concept.tone),
     visualDirection: `${intent.uiDirection.visualStyle}. Normalize into a production payment dashboard with readable contrast, restrained accents, clear hierarchy, and accessible controls.`
   };
+}
+
+function authExperience(
+  intent: LayoutBuilderBrandGenerationIntent,
+  presentation: ReturnType<typeof visualSystem>
+): LayoutBuilderAiBrandSpec["ui"]["authExperience"] {
+  const input = intent.authExperience;
+  const isCompact = presentation.density === "compact";
+  const isDark = presentation.layout === "command-center" || presentation.layout === "compact-terminal";
+
+  return {
+    content: {
+      headline: input?.content?.headline ?? intent.brandName,
+      description:
+        input?.content?.description ??
+        `${intent.brandName} access for ${intent.concept.audience}, shaped around ${intent.concept.authMetaphor} and ${intent.concept.paymentMetaphor}.`
+    },
+    layout: {
+      brandColumn: clampNumber(input?.layout?.brandColumn, 30, 70, presentation.layout === "split-workspace" ? 44 : 50),
+      formMaxWidth: clampNumber(input?.layout?.formMaxWidth, 320, 620, isCompact ? 380 : 440),
+      logoSize: clampNumber(input?.layout?.logoSize, 48, 128, isCompact ? 64 : 84),
+      panelPadding: clampNumber(input?.layout?.panelPadding, 12, 40, isCompact ? 16 : 22),
+      gap: clampNumber(input?.layout?.gap, 16, 72, isCompact ? 22 : 32),
+      brandAlignment: pickAllowed(input?.layout?.brandAlignment ?? "", ["start", "center", "end"] as const, presentation.layout === "command-center" ? "center" : "start"),
+      formAlignment: pickAllowed(input?.layout?.formAlignment ?? "", ["start", "center", "end"] as const, "center"),
+      textAlign: pickAllowed(input?.layout?.textAlign ?? "", ["left", "center", "right"] as const, presentation.layout === "command-center" ? "center" : "left"),
+      mobileOrder: pickAllowed(input?.layout?.mobileOrder ?? "", ["brand-first", "form-first"] as const, "brand-first")
+    },
+    form: {
+      modeControl: pickAllowed(input?.form?.modeControl ?? "", ["segmented", "tabs", "toggle"] as const, presentation.navigationPattern === "top-tabs" ? "tabs" : "segmented"),
+      fieldTreatment: pickAllowed(input?.form?.fieldTreatment ?? "", ["boxed", "filled", "underlined"] as const, isCompact ? "underlined" : isDark ? "filled" : "boxed"),
+      surface: pickAllowed(input?.form?.surface ?? "", ["flat", "raised", "outlined"] as const, isDark ? "outlined" : "raised"),
+      showDisplayNameOnLogin: input?.form?.showDisplayNameOnLogin ?? false,
+      fields: {
+        email: {
+          label: input?.form?.fields?.email?.label ?? "Email",
+          placeholder: input?.form?.fields?.email?.placeholder ?? "client@example.com"
+        },
+        password: {
+          label: input?.form?.fields?.password?.label ?? "Password",
+          placeholder: input?.form?.fields?.password?.placeholder ?? "local-demo-password"
+        },
+        displayName: {
+          label: input?.form?.fields?.displayName?.label ?? "Display name",
+          placeholder: input?.form?.fields?.displayName?.placeholder ?? `${intent.brandName} operator`
+        }
+      }
+    },
+    visual: {
+      background: input?.visual?.background ?? presentation.surfaces,
+      panel: input?.visual?.panel ?? presentation.buttons,
+      accent: input?.visual?.accent ?? intent.concept.tone
+    }
+  };
+}
+
+function paymentsExperience(
+  intent: LayoutBuilderBrandGenerationIntent,
+  presentation: ReturnType<typeof visualSystem>,
+  terms: Record<"product" | "auth" | "payment" | "audience" | "rail" | "reserve", string>,
+  resourceAlias: string
+): LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"] {
+  const input = intent.paymentsExperience;
+  const isCompact = presentation.density === "compact";
+  const isCardLike = presentation.layout === "card-operations";
+
+  return {
+    content: {
+      headline: input?.content?.headline ?? label(intent, "payments", title(human(resourceAlias))),
+      description:
+        input?.content?.description ??
+        `${intent.brandName} shows ${human(terms.payment)} activity for ${intent.concept.audience} with ${intent.concept.paymentMetaphor} language.`,
+      emptyState: input?.content?.emptyState ?? empty(intent, "payments")
+    },
+    composition: {
+      metricsPlacement: pickAllowed(input?.composition?.metricsPlacement ?? "", ["top", "left", "right", "hidden"] as const, presentation.layout === "split-workspace" ? "left" : "top"),
+      activityPattern: pickAllowed(input?.composition?.activityPattern ?? "", ["table", "cards", "timeline"] as const, isCardLike ? "cards" : "table"),
+      statusTreatment: pickAllowed(input?.composition?.statusTreatment ?? "", ["badge", "rail", "dot"] as const, isCardLike ? "rail" : "badge"),
+      amountEmphasis: pickAllowed(input?.composition?.amountEmphasis ?? "", ["primary", "secondary", "balanced"] as const, isCompact ? "secondary" : "balanced"),
+      showCustomer: input?.composition?.showCustomer ?? true,
+      showMethod: input?.composition?.showMethod ?? !isCompact,
+      showTimestamp: input?.composition?.showTimestamp ?? true,
+      maxItems: clampNumber(input?.composition?.maxItems, 4, 30, isCompact ? 12 : 10)
+    },
+    layout: {
+      metricsColumns: clampNumber(input?.layout?.metricsColumns, 1, 5, presentation.layout === "topbar-console" ? 4 : 3),
+      sidebarWidth: clampNumber(input?.layout?.sidebarWidth, 180, 420, isCompact ? 220 : 280),
+      cardMinWidth: clampNumber(input?.layout?.cardMinWidth, 180, 420, isCardLike ? 260 : 220),
+      gap: clampNumber(input?.layout?.gap, 8, 48, isCompact ? 12 : 18),
+      panelPadding: clampNumber(input?.layout?.panelPadding, 10, 36, isCompact ? 12 : 16),
+      rowMinHeight: clampNumber(input?.layout?.rowMinHeight, 44, 112, isCompact ? 54 : 68)
+    },
+    visual: {
+      surface: input?.visual?.surface ?? presentation.surfaces,
+      status: input?.visual?.status ?? presentation.buttons,
+      dataDensity: input?.visual?.dataDensity ?? presentation.spacing
+    }
+  };
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, Math.round(value)))
+    : fallback;
 }
 
 function professionalPalette(intent: LayoutBuilderBrandGenerationIntent, layout: LayoutBuilderAiBrandSpec["ui"]["presentation"]["layout"]): string[] {

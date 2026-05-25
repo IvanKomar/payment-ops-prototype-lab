@@ -49,6 +49,16 @@ export const AI_UI_LAYOUTS = [
 export const AI_UI_DENSITIES = ["compact", "balanced", "spacious"] as const;
 export const AI_UI_NAVIGATION_PATTERNS = ["sidebar", "top-tabs", "command-rail"] as const;
 export const AI_DASHBOARD_BLOCKS = ["metrics", "recentPayments", "balances", "customers", "createPayment"] as const;
+const AI_AUTH_ALIGNMENTS = ["start", "center", "end"] as const;
+const AI_AUTH_TEXT_ALIGNMENTS = ["left", "center", "right"] as const;
+const AI_AUTH_MOBILE_ORDERS = ["brand-first", "form-first"] as const;
+const AI_AUTH_MODE_CONTROLS = ["segmented", "tabs", "toggle"] as const;
+const AI_AUTH_FIELD_TREATMENTS = ["boxed", "filled", "underlined"] as const;
+const AI_AUTH_SURFACES = ["flat", "raised", "outlined"] as const;
+const AI_PAYMENTS_METRICS_PLACEMENTS = ["top", "left", "right", "hidden"] as const;
+const AI_PAYMENTS_ACTIVITY_PATTERNS = ["table", "cards", "timeline"] as const;
+const AI_PAYMENTS_STATUS_TREATMENTS = ["badge", "rail", "dot"] as const;
+const AI_PAYMENTS_AMOUNT_EMPHASIS = ["primary", "secondary", "balanced"] as const;
 
 const slugSchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{1,80}$/u);
 const aliasSchema = z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_-]{1,60}$/u);
@@ -104,6 +114,73 @@ const uiPresentationSchema = z.object({
   copyTone: z.string().trim().min(1).max(240),
   componentLabels: z.record(z.string().min(1), z.string().trim().min(1).max(100)),
   emptyStates: z.record(z.string().min(1), z.string().trim().min(1).max(180))
+});
+const authExperienceFieldSchema = z.object({
+  label: z.string().trim().min(1).max(80),
+  placeholder: z.string().trim().min(1).max(120)
+});
+const authExperienceSchema = z.object({
+  content: z.object({
+    headline: z.string().trim().min(1).max(100),
+    description: z.string().trim().min(1).max(260)
+  }),
+  layout: z.object({
+    brandColumn: z.number().int().min(30).max(70),
+    formMaxWidth: z.number().int().min(320).max(620),
+    logoSize: z.number().int().min(48).max(128),
+    panelPadding: z.number().int().min(12).max(40),
+    gap: z.number().int().min(16).max(72),
+    brandAlignment: z.enum(AI_AUTH_ALIGNMENTS),
+    formAlignment: z.enum(AI_AUTH_ALIGNMENTS),
+    textAlign: z.enum(AI_AUTH_TEXT_ALIGNMENTS),
+    mobileOrder: z.enum(AI_AUTH_MOBILE_ORDERS)
+  }),
+  form: z.object({
+    modeControl: z.enum(AI_AUTH_MODE_CONTROLS),
+    fieldTreatment: z.enum(AI_AUTH_FIELD_TREATMENTS),
+    surface: z.enum(AI_AUTH_SURFACES),
+    showDisplayNameOnLogin: z.boolean(),
+    fields: z.object({
+      email: authExperienceFieldSchema,
+      password: authExperienceFieldSchema,
+      displayName: authExperienceFieldSchema
+    })
+  }),
+  visual: z.object({
+    background: z.string().trim().min(1).max(180),
+    panel: z.string().trim().min(1).max(180),
+    accent: z.string().trim().min(1).max(160)
+  })
+});
+const paymentsExperienceSchema = z.object({
+  content: z.object({
+    headline: z.string().trim().min(1).max(100),
+    description: z.string().trim().min(1).max(260),
+    emptyState: z.string().trim().min(1).max(180)
+  }),
+  composition: z.object({
+    metricsPlacement: z.enum(AI_PAYMENTS_METRICS_PLACEMENTS),
+    activityPattern: z.enum(AI_PAYMENTS_ACTIVITY_PATTERNS),
+    statusTreatment: z.enum(AI_PAYMENTS_STATUS_TREATMENTS),
+    amountEmphasis: z.enum(AI_PAYMENTS_AMOUNT_EMPHASIS),
+    showCustomer: z.boolean(),
+    showMethod: z.boolean(),
+    showTimestamp: z.boolean(),
+    maxItems: z.number().int().min(4).max(30)
+  }),
+  layout: z.object({
+    metricsColumns: z.number().int().min(1).max(5),
+    sidebarWidth: z.number().int().min(180).max(420),
+    cardMinWidth: z.number().int().min(180).max(420),
+    gap: z.number().int().min(8).max(48),
+    panelPadding: z.number().int().min(10).max(36),
+    rowMinHeight: z.number().int().min(44).max(112)
+  }),
+  visual: z.object({
+    surface: z.string().trim().min(1).max(180),
+    status: z.string().trim().min(1).max(160),
+    dataDensity: z.string().trim().min(1).max(160)
+  })
 });
 
 export const aiBrandSpecSchema = z
@@ -167,7 +244,9 @@ export const aiBrandSpecSchema = z
       }),
       tableLabels: z.record(z.string().min(1), z.string().trim().min(1).max(80)),
       formLabels: z.record(z.string().min(1), z.string().trim().min(1).max(80)),
-      presentation: uiPresentationSchema
+      presentation: uiPresentationSchema,
+      authExperience: authExperienceSchema,
+      paymentsExperience: paymentsExperienceSchema
     })
   })
   .superRefine((spec, context) => {
@@ -355,6 +434,8 @@ export class AiBrandSpecService {
         navigation: vocabulary.navigation,
         tableLabels: vocabulary.tableLabels,
         formLabels: vocabulary.formLabels,
+        authExperience: localAuthExperience(input.brandName, vocabulary),
+        paymentsExperience: localPaymentsExperience(input.brandName, vocabulary),
         presentation: {
           layout: vocabulary.layout,
           density: vocabulary.density,
@@ -406,9 +487,13 @@ function specPrompt(
     "register and login must have requiresSession false. account, metrics, payments, customers, paymentMethods, and balances must have requiresSession true.",
     "Auth must include tokenResponseKey, tokenStorageKey, errorKey, and fields for email/password/displayName/currency.",
     "ui must include labels, navigation, tableLabels, formLabels, and presentation.",
+    "ui must include authExperience. This is the main source of truth for the login/register screen, not a template name.",
+    "ui must include paymentsExperience. This is the main source of truth for the seeded payments page, not a template name.",
     `ui.presentation.layout must be one of: ${AI_UI_LAYOUTS.join(", ")}.`,
     `ui.presentation.dashboardComposition must use only: ${AI_DASHBOARD_BLOCKS.join(", ")}.`,
     "ui.presentation must make visual layout, density, navigation, palette, typography, surfaces, buttons, copy tone, component labels, and empty states unique for this brand.",
+    "ui.authExperience must define content, numeric layout values, form field copy, mode control, field treatment, surface treatment, and short visual direction strings. Do not expose route slugs, field aliases, token keys, internal service names, or implementation details in authExperience.",
+    "ui.paymentsExperience must define content, metrics placement, activity pattern, status treatment, amount emphasis, visibility toggles, numeric layout values, and visual notes. Do not expose internal route slugs, field aliases, token keys, service names, or implementation details in paymentsExperience.",
     "Conversation:",
     ...messages.map((message) => `${message.role}: ${message.content}`)
   ].join("\n");
@@ -449,6 +534,86 @@ function toCamel(value: string): string {
     .split("_")
     .map((part, index) => (index === 0 ? part : `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`))
     .join("");
+}
+
+function localAuthExperience(brandName: string, vocabulary: (typeof LOCAL_VOCABULARIES)[number]): LayoutBuilderAiBrandSpec["ui"]["authExperience"] {
+  const layout = vocabulary.layout as LayoutBuilderAiBrandSpec["ui"]["presentation"]["layout"];
+  const density = vocabulary.density as LayoutBuilderAiBrandSpec["ui"]["presentation"]["density"];
+  const navigationPattern = vocabulary.navigationPattern as LayoutBuilderAiBrandSpec["ui"]["presentation"]["navigationPattern"];
+  const isCompact = density === "compact";
+  const isDark = layout === "command-center" || layout === "compact-terminal";
+
+  return {
+    content: {
+      headline: brandName,
+      description: vocabulary.visual
+    },
+    layout: {
+      brandColumn: layout === "split-workspace" ? 44 : layout === "card-operations" ? 52 : 48,
+      formMaxWidth: isCompact ? 380 : 440,
+      logoSize: isCompact ? 64 : 84,
+      panelPadding: isCompact ? 16 : 22,
+      gap: isCompact ? 22 : 32,
+      brandAlignment: layout === "command-center" ? "center" : "start",
+      formAlignment: layout === "compact-terminal" ? "start" : "center",
+      textAlign: layout === "command-center" ? "center" : "left",
+      mobileOrder: layout === "compact-terminal" ? "form-first" : "brand-first"
+    },
+    form: {
+      modeControl: navigationPattern === "top-tabs" ? "tabs" : layout === "compact-terminal" ? "toggle" : "segmented",
+      fieldTreatment: isCompact ? "underlined" : isDark ? "filled" : "boxed",
+      surface: isDark ? "outlined" : "raised",
+      showDisplayNameOnLogin: false,
+      fields: {
+        email: { label: "Email", placeholder: "client@example.com" },
+        password: { label: "Password", placeholder: "local-demo-password" },
+        displayName: { label: "Display name", placeholder: `${brandName} operator` }
+      }
+    },
+    visual: {
+      background: vocabulary.surfaces,
+      panel: vocabulary.buttons,
+      accent: vocabulary.copyTone
+    }
+  };
+}
+
+function localPaymentsExperience(brandName: string, vocabulary: (typeof LOCAL_VOCABULARIES)[number]): LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"] {
+  const layout = vocabulary.layout as LayoutBuilderAiBrandSpec["ui"]["presentation"]["layout"];
+  const density = vocabulary.density as LayoutBuilderAiBrandSpec["ui"]["presentation"]["density"];
+  const isCompact = density === "compact";
+  const cardLike = layout === "card-operations";
+
+  return {
+    content: {
+      headline: vocabulary.labels.payments,
+      description: `${brandName} presents ${vocabulary.resourceAlias.replaceAll("_", " ")} as ${vocabulary.copyTone}.`,
+      emptyState: vocabulary.emptyStates.payments
+    },
+    composition: {
+      metricsPlacement: layout === "split-workspace" ? "left" : layout === "card-operations" ? "right" : "top",
+      activityPattern: cardLike ? "cards" : layout === "compact-terminal" || layout === "command-center" ? "timeline" : "table",
+      statusTreatment: layout === "compact-terminal" ? "dot" : cardLike ? "rail" : "badge",
+      amountEmphasis: isCompact ? "secondary" : cardLike ? "primary" : "balanced",
+      showCustomer: true,
+      showMethod: !isCompact,
+      showTimestamp: true,
+      maxItems: isCompact ? 12 : 10
+    },
+    layout: {
+      metricsColumns: layout === "topbar-console" ? 4 : cardLike ? 2 : 3,
+      sidebarWidth: isCompact ? 220 : 280,
+      cardMinWidth: cardLike ? 260 : 220,
+      gap: isCompact ? 12 : 18,
+      panelPadding: isCompact ? 12 : 16,
+      rowMinHeight: isCompact ? 54 : 68
+    },
+    visual: {
+      surface: vocabulary.surfaces,
+      status: vocabulary.buttons,
+      dataDensity: vocabulary.spacing
+    }
+  };
 }
 
 const LOCAL_VOCABULARIES = [
@@ -818,6 +983,69 @@ const GEMINI_BRAND_SPEC_RESPONSE_SCHEMA = objectSchema({
     }),
     tableLabels: fieldGroupSchemaFor(["id", "status", "amount", "customer", "createdAt"]),
     formLabels: fieldGroupSchemaFor(["amount", "customer", "method"]),
+    authExperience: objectSchema({
+      content: objectSchema({
+        headline: stringSchema(),
+        description: stringSchema()
+      }),
+      layout: objectSchema({
+        brandColumn: { type: "integer" },
+        formMaxWidth: { type: "integer" },
+        logoSize: { type: "integer" },
+        panelPadding: { type: "integer" },
+        gap: { type: "integer" },
+        brandAlignment: enumSchema(AI_AUTH_ALIGNMENTS),
+        formAlignment: enumSchema(AI_AUTH_ALIGNMENTS),
+        textAlign: enumSchema(AI_AUTH_TEXT_ALIGNMENTS),
+        mobileOrder: enumSchema(AI_AUTH_MOBILE_ORDERS)
+      }),
+      form: objectSchema({
+        modeControl: enumSchema(AI_AUTH_MODE_CONTROLS),
+        fieldTreatment: enumSchema(AI_AUTH_FIELD_TREATMENTS),
+        surface: enumSchema(AI_AUTH_SURFACES),
+        showDisplayNameOnLogin: { type: "boolean" },
+        fields: objectSchema({
+          email: objectSchema({ label: stringSchema(), placeholder: stringSchema() }),
+          password: objectSchema({ label: stringSchema(), placeholder: stringSchema() }),
+          displayName: objectSchema({ label: stringSchema(), placeholder: stringSchema() })
+        })
+      }),
+      visual: objectSchema({
+        background: stringSchema(),
+        panel: stringSchema(),
+        accent: stringSchema()
+      })
+    }),
+    paymentsExperience: objectSchema({
+      content: objectSchema({
+        headline: stringSchema(),
+        description: stringSchema(),
+        emptyState: stringSchema()
+      }),
+      composition: objectSchema({
+        metricsPlacement: enumSchema(AI_PAYMENTS_METRICS_PLACEMENTS),
+        activityPattern: enumSchema(AI_PAYMENTS_ACTIVITY_PATTERNS),
+        statusTreatment: enumSchema(AI_PAYMENTS_STATUS_TREATMENTS),
+        amountEmphasis: enumSchema(AI_PAYMENTS_AMOUNT_EMPHASIS),
+        showCustomer: { type: "boolean" },
+        showMethod: { type: "boolean" },
+        showTimestamp: { type: "boolean" },
+        maxItems: { type: "integer" }
+      }),
+      layout: objectSchema({
+        metricsColumns: { type: "integer" },
+        sidebarWidth: { type: "integer" },
+        cardMinWidth: { type: "integer" },
+        gap: { type: "integer" },
+        panelPadding: { type: "integer" },
+        rowMinHeight: { type: "integer" }
+      }),
+      visual: objectSchema({
+        surface: stringSchema(),
+        status: stringSchema(),
+        dataDensity: stringSchema()
+      })
+    }),
     presentation: objectSchema({
       layout: enumSchema(AI_UI_LAYOUTS),
       density: enumSchema(AI_UI_DENSITIES),

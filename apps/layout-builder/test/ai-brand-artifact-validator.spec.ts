@@ -91,6 +91,66 @@ function artifactFixture(
       navigation: { dashboard: "Dashboard", payments: "Payments", customers: "Customers", balances: "Balances" },
       tableLabels: { id: "ID", status: "Status", amount: "Amount", customer: "Customer", createdAt: "Created" },
       formLabels: { amount: "Amount", customer: "Customer", method: "Method" },
+      authExperience: {
+        content: { headline: "Test Brand", description: "Secure access for the generated brand." },
+        layout: {
+          brandColumn: 50,
+          formMaxWidth: 420,
+          logoSize: 76,
+          panelPadding: 18,
+          gap: 24,
+          brandAlignment: "start",
+          formAlignment: "center",
+          textAlign: "left",
+          mobileOrder: "brand-first"
+        },
+        form: {
+          modeControl: "segmented",
+          fieldTreatment: "boxed",
+          surface: "raised",
+          showDisplayNameOnLogin: false,
+          fields: {
+            email: { label: "Email", placeholder: "client@example.com" },
+            password: { label: "Password", placeholder: "local-demo-password" },
+            displayName: { label: "Display name", placeholder: "Test operator" }
+          }
+        },
+        visual: {
+          background: "test shell",
+          panel: "test panel",
+          accent: "test accent"
+        }
+      },
+      paymentsExperience: {
+        content: {
+          headline: "Payments",
+          description: "Seeded payment activity for validation.",
+          emptyState: "No payments."
+        },
+        composition: {
+          metricsPlacement: "top",
+          activityPattern: "table",
+          statusTreatment: "badge",
+          amountEmphasis: "balanced",
+          showCustomer: true,
+          showMethod: true,
+          showTimestamp: true,
+          maxItems: 10
+        },
+        layout: {
+          metricsColumns: 3,
+          sidebarWidth: 280,
+          cardMinWidth: 240,
+          gap: 16,
+          panelPadding: 16,
+          rowMinHeight: 64
+        },
+        visual: {
+          surface: "test surface",
+          status: "test status",
+          dataDensity: "test density"
+        }
+      },
       presentation: {
         layout: "sidebar-ledger",
         density: "balanced",

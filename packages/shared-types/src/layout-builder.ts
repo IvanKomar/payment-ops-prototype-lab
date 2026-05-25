@@ -22,6 +22,16 @@ export type LayoutBuilderAiUiLayout =
 export type LayoutBuilderAiUiDensity = "compact" | "balanced" | "spacious";
 export type LayoutBuilderAiUiNavigationPattern = "sidebar" | "top-tabs" | "command-rail";
 export type LayoutBuilderAiDashboardBlock = "metrics" | "recentPayments" | "balances" | "customers" | "createPayment";
+export type LayoutBuilderAiAuthAlignment = "start" | "center" | "end";
+export type LayoutBuilderAiAuthTextAlign = "left" | "center" | "right";
+export type LayoutBuilderAiAuthMobileOrder = "brand-first" | "form-first";
+export type LayoutBuilderAiAuthModeControl = "segmented" | "tabs" | "toggle";
+export type LayoutBuilderAiAuthFieldTreatment = "boxed" | "filled" | "underlined";
+export type LayoutBuilderAiAuthSurface = "flat" | "raised" | "outlined";
+export type LayoutBuilderAiPaymentsMetricsPlacement = "top" | "left" | "right" | "hidden";
+export type LayoutBuilderAiPaymentsActivityPattern = "table" | "cards" | "timeline";
+export type LayoutBuilderAiPaymentsStatusTreatment = "badge" | "rail" | "dot";
+export type LayoutBuilderAiPaymentsAmountEmphasis = "primary" | "secondary" | "balanced";
 export type LayoutBuilderBrandIntentSource = "external-chat" | "codex" | "gemini" | "claude" | "manual";
 export type LayoutBuilderLayoutVariant =
   | "classic"
@@ -104,6 +114,71 @@ export interface LayoutBuilderAiUiPresentationSpec {
   emptyStates: Record<string, string>;
 }
 
+export interface LayoutBuilderAiAuthExperienceSpec {
+  content: {
+    headline: string;
+    description: string;
+  };
+  layout: {
+    brandColumn: number;
+    formMaxWidth: number;
+    logoSize: number;
+    panelPadding: number;
+    gap: number;
+    brandAlignment: LayoutBuilderAiAuthAlignment;
+    formAlignment: LayoutBuilderAiAuthAlignment;
+    textAlign: LayoutBuilderAiAuthTextAlign;
+    mobileOrder: LayoutBuilderAiAuthMobileOrder;
+  };
+  form: {
+    modeControl: LayoutBuilderAiAuthModeControl;
+    fieldTreatment: LayoutBuilderAiAuthFieldTreatment;
+    surface: LayoutBuilderAiAuthSurface;
+    showDisplayNameOnLogin: boolean;
+    fields: {
+      email: { label: string; placeholder: string };
+      password: { label: string; placeholder: string };
+      displayName: { label: string; placeholder: string };
+    };
+  };
+  visual: {
+    background: string;
+    panel: string;
+    accent: string;
+  };
+}
+
+export interface LayoutBuilderAiPaymentsExperienceSpec {
+  content: {
+    headline: string;
+    description: string;
+    emptyState: string;
+  };
+  composition: {
+    metricsPlacement: LayoutBuilderAiPaymentsMetricsPlacement;
+    activityPattern: LayoutBuilderAiPaymentsActivityPattern;
+    statusTreatment: LayoutBuilderAiPaymentsStatusTreatment;
+    amountEmphasis: LayoutBuilderAiPaymentsAmountEmphasis;
+    showCustomer: boolean;
+    showMethod: boolean;
+    showTimestamp: boolean;
+    maxItems: number;
+  };
+  layout: {
+    metricsColumns: number;
+    sidebarWidth: number;
+    cardMinWidth: number;
+    gap: number;
+    panelPadding: number;
+    rowMinHeight: number;
+  };
+  visual: {
+    surface: string;
+    status: string;
+    dataDensity: string;
+  };
+}
+
 export interface LayoutBuilderAiBrandSpec {
   brand: {
     displayName: string;
@@ -150,6 +225,8 @@ export interface LayoutBuilderAiBrandSpec {
     tableLabels: Record<string, string>;
     formLabels: Record<string, string>;
     presentation: LayoutBuilderAiUiPresentationSpec;
+    authExperience: LayoutBuilderAiAuthExperienceSpec;
+    paymentsExperience: LayoutBuilderAiPaymentsExperienceSpec;
   };
 }
 
@@ -185,6 +262,8 @@ export interface LayoutBuilderBrandGenerationIntent {
     emptyStates: Record<string, string>;
     actionLabels: Record<string, string>;
   };
+  authExperience?: Partial<LayoutBuilderAiAuthExperienceSpec> | undefined;
+  paymentsExperience?: Partial<LayoutBuilderAiPaymentsExperienceSpec> | undefined;
   statusVocabulary?: Partial<Record<PaymentCoreStatus, string | undefined>> | undefined;
 }
 
@@ -268,6 +347,8 @@ export interface LayoutBuilderBrandRuntimeDictionary {
     navigationPattern: LayoutBuilderAiUiNavigationPattern;
     dashboardComposition: LayoutBuilderAiDashboardBlock[];
   };
+  authExperience: LayoutBuilderAiAuthExperienceSpec;
+  paymentsExperience: LayoutBuilderAiPaymentsExperienceSpec;
 }
 
 export interface LayoutBuilderAiGenerationProfile {

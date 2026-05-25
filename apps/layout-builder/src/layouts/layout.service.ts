@@ -756,26 +756,6 @@ export class LayoutService {
       throw new NotFoundException(`Brand entity endpoint was not found: ${slug}/${entity}`);
     }
 
-    if (operation === "payments") {
-      const response = await this.paymentCoreClient.brandResources(brand.id);
-      const account = response.accounts[0] ?? null;
-      if (!account) {
-        return { [contract.responseKeys.payments]: [] };
-      }
-      const history = {
-        account,
-        balanceTransactions: response.balanceTransactions,
-        customers: response.customers,
-        paymentMethods: response.paymentMethods,
-        payments: response.payments
-      };
-      const mappedOverview = toRuntimeHistoryResponse(contract, history) as Record<string, unknown>;
-
-      return {
-        [contract.responseKeys.payments]: Array.isArray(mappedOverview[contract.resourceAlias]) ? mappedOverview[contract.resourceAlias] : []
-      };
-    }
-
     const sessionToken = parseBearerToken(authorization);
     const response = await this.paymentCoreClient.history(sessionToken);
     const canonicalOverview = toRuntimeOverviewResponse(contract, response) as Record<string, unknown>;
@@ -786,6 +766,8 @@ export class LayoutService {
         return { [contract.responseKeys.account]: mappedOverview.account ?? null };
       case "metrics":
         return { [contract.responseKeys.metrics]: canonicalOverview.metrics ?? null };
+      case "payments":
+        return { [contract.responseKeys.payments]: Array.isArray(mappedOverview[contract.resourceAlias]) ? mappedOverview[contract.resourceAlias] : [] };
       case "customers":
         return { [contract.responseKeys.customers]: Array.isArray(mappedOverview.customers) ? mappedOverview.customers : [] };
       case "paymentMethods":
@@ -1560,7 +1542,9 @@ function brandRuntimeDictionaryFromSpec(
       density: spec.ui.presentation.density,
       navigationPattern: spec.ui.presentation.navigationPattern,
       dashboardComposition: spec.ui.presentation.dashboardComposition
-    }
+    },
+    authExperience: spec.ui.authExperience,
+    paymentsExperience: spec.ui.paymentsExperience
   };
 }
 

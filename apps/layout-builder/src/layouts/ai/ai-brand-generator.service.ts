@@ -242,6 +242,39 @@ function defaultUiSpec(input: GenerateBrandArtifactInput): LayoutBuilderAiBrandS
     navigation: { dashboard: "Dashboard", payments: "Payments", customers: "Customers", balances: "Balances" },
     tableLabels: { id: "Reference", status: "Status", amount: "Amount", customer: "Customer", createdAt: "Created" },
     formLabels: { amount: "Amount", customer: "Customer", method: "Method" },
+    authExperience: {
+      content: {
+        headline: input.brandName,
+        description: input.generationProfile.visualDirection
+      },
+      layout: {
+        brandColumn: 50,
+        formMaxWidth: 420,
+        logoSize: 76,
+        panelPadding: 18,
+        gap: 24,
+        brandAlignment: "start",
+        formAlignment: "center",
+        textAlign: "left",
+        mobileOrder: "brand-first"
+      },
+      form: {
+        modeControl: "segmented",
+        fieldTreatment: "boxed",
+        surface: "raised",
+        showDisplayNameOnLogin: false,
+        fields: {
+          email: { label: "Email", placeholder: "client@example.com" },
+          password: { label: "Password", placeholder: "local-demo-password" },
+          displayName: { label: "Display name", placeholder: `${input.brandName} operator` }
+        }
+      },
+      visual: {
+        background: "brand access shell",
+        panel: "focused access panel",
+        accent: "primary action state"
+      }
+    },
     presentation: {
       layout: "sidebar-ledger",
       density: "balanced",
@@ -258,6 +291,36 @@ function defaultUiSpec(input: GenerateBrandArtifactInput): LayoutBuilderAiBrandS
       copyTone: input.generationProfile.visualDirection,
       componentLabels: { metricsCard: "Overview", paymentTable: "Payment history", createPanel: "Create payment" },
       emptyStates: { payments: "No payments yet.", customers: "No customers yet.", balances: "No balance activity yet." }
+    },
+    paymentsExperience: {
+      content: {
+        headline: input.generationProfile.actionLabels.history,
+        description: input.generationProfile.generatedSummary ?? input.generationProfile.visualDirection,
+        emptyState: "No payments yet."
+      },
+      composition: {
+        metricsPlacement: "top",
+        activityPattern: "table",
+        statusTreatment: "badge",
+        amountEmphasis: "balanced",
+        showCustomer: true,
+        showMethod: true,
+        showTimestamp: true,
+        maxItems: 10
+      },
+      layout: {
+        metricsColumns: 3,
+        sidebarWidth: 280,
+        cardMinWidth: 240,
+        gap: 16,
+        panelPadding: 16,
+        rowMinHeight: 64
+      },
+      visual: {
+        surface: "light panels with restrained borders",
+        status: "solid primary and quiet secondary buttons",
+        dataDensity: "balanced dashboard spacing"
+      }
     }
   };
 }

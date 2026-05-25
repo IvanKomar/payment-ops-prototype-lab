@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type {
   LayoutBuilderAgentManifest,
   LayoutBuilderAiBrandSpec,
+  LayoutBuilderBrandGenerationIntent,
   LayoutBuilderBrandIntentManifest
 } from "@payment-ops/shared-types";
 
@@ -91,6 +92,20 @@ export class AiAgentManifestService {
             reason: "Layout choice must materially change the generated interface."
           },
           {
+            id: "auth_experience",
+            label: "Auth Style",
+            prompt: "How should login and registration feel: minimal, game-like, premium, terminal-like, social, or another specific access ritual?",
+            required: false,
+            reason: "Auth style is generated into authExperience instead of selected from a fixed login template."
+          },
+          {
+            id: "payments_experience",
+            label: "Payments UI",
+            prompt: "How should seeded payment activity be organized: ledger, cards, timeline, market tickets, compact trade feed, or another specific pattern?",
+            required: false,
+            reason: "Payments UI is generated into paymentsExperience instead of selected from a fixed payments template."
+          },
+          {
             id: "restricted_words",
             label: "Forbidden Words",
             prompt: "Which public words should never appear in routes, labels, or field aliases?",
@@ -104,6 +119,8 @@ export class AiAgentManifestService {
           "Target one brand-facing page: /:brandSlug/app/payments with seeded payment activity.",
           "Use unique route language and field aliases; avoid canonical words in visible routes.",
           "Vary layout architecture, payment row or tile pattern, metrics, status treatment, typography, and color tokens compared with recent brands.",
+          "Generate authExperience with numeric composition, field copy, surface treatment, and mobile order; do not choose from fixed login templates.",
+          "Generate paymentsExperience with numeric composition, metrics placement, activity pattern, status treatment, and visible payment fields; do not choose from fixed payments templates.",
           "Let Layout Builder compile and store generationProfile.dictionary for BFF-only decoding and encoding."
         ]
       },
@@ -124,7 +141,9 @@ export class AiAgentManifestService {
           "fieldAliases",
           "statusAliases",
           "actionLabels",
-          "visualTokens"
+          "visualTokens",
+          "authExperience",
+          "paymentsExperience"
         ]
       },
       rules: {
@@ -149,7 +168,9 @@ export class AiAgentManifestService {
           "Include preferredTerms that can drive route and field naming without hashes.",
           "Vary payload structure, field style, response envelope, dashboard composition, and navigation pattern where the brief allows.",
           "For the brand-facing app, treat payments as the only required page and make the payment activity pattern visibly different from recent brands.",
-          "Do not rely on palette and copy changes alone; change layout architecture, density, status treatment, metric grouping, row or tile geometry, and typography."
+          "Do not rely on palette and copy changes alone; change layout architecture, density, status treatment, metric grouping, row or tile geometry, and typography.",
+          "For auth, generate authExperience with numeric layout, field copy, form control style, surface treatment, and visual notes instead of relying on canned login templates.",
+          "For the payments page, generate paymentsExperience with metrics placement, activity pattern, status treatment, field visibility, and numeric layout instead of relying on canned payments templates."
         ],
         requiredVariation: [
           "domain",
@@ -159,7 +180,9 @@ export class AiAgentManifestService {
           "paymentMetaphor",
           "visualStyle",
           "palette",
-          "copy tone"
+          "copy tone",
+          "authExperience",
+          "paymentsExperience"
         ]
       },
       examples: {
@@ -394,8 +417,71 @@ function exampleSpec(): LayoutBuilderAiBrandSpec {
       },
       navigation: { dashboard: "Signals", payments: "Ledger", customers: "Parties", balances: "Reserve" },
       tableLabels: { id: "Movement", status: "State", amount: "Value", customer: "Counterparty", createdAt: "Initiated" },
-      formLabels: { amount: "Settlement value", customer: "Counterparty", method: "Rail" },
-      presentation: {
+        formLabels: { amount: "Settlement value", customer: "Counterparty", method: "Rail" },
+        authExperience: {
+          content: {
+            headline: "Aster Vault",
+            description: "Secure access for operators returning to a compact wallet settlement console."
+          },
+          layout: {
+            brandColumn: 46,
+            formMaxWidth: 400,
+            logoSize: 72,
+            panelPadding: 18,
+            gap: 28,
+            brandAlignment: "center",
+            formAlignment: "center",
+            textAlign: "center",
+            mobileOrder: "brand-first"
+          },
+          form: {
+            modeControl: "toggle",
+            fieldTreatment: "filled",
+            surface: "outlined",
+            showDisplayNameOnLogin: false,
+            fields: {
+              email: { label: "Operator email", placeholder: "client@example.com" },
+              password: { label: "Access phrase", placeholder: "local-demo-password" },
+              displayName: { label: "Operator name", placeholder: "Aster Vault operator" }
+            }
+          },
+          visual: {
+            background: "graphite settlement shell with mint edge light",
+            panel: "outlined operator module with high-contrast fields",
+            accent: "mint signal line on active auth mode"
+          }
+        },
+        paymentsExperience: {
+          content: {
+            headline: "Movement ledger",
+            description: "Balance-first settlement movements with compact review signals and counterparty context.",
+            emptyState: "No vault movements yet."
+          },
+          composition: {
+            metricsPlacement: "left",
+            activityPattern: "timeline",
+            statusTreatment: "dot",
+            amountEmphasis: "balanced",
+            showCustomer: true,
+            showMethod: true,
+            showTimestamp: true,
+            maxItems: 12
+          },
+          layout: {
+            metricsColumns: 1,
+            sidebarWidth: 260,
+            cardMinWidth: 240,
+            gap: 14,
+            panelPadding: 14,
+            rowMinHeight: 58
+          },
+          visual: {
+            surface: "graphite shell with white ledger panels",
+            status: "mint signal states on movement rows",
+            dataDensity: "compact settlement review density"
+          }
+        },
+        presentation: {
         layout: "command-center",
         density: "compact",
         navigationPattern: "command-rail",
@@ -420,7 +506,7 @@ function entity(route: string, method: "GET" | "POST", requiresSession: boolean,
   return { route, method, requiresSession, requestKey, responseKey, emptyState: "No records are available yet." };
 }
 
-function exampleIntent() {
+function exampleIntent(): LayoutBuilderBrandGenerationIntent {
   return {
     brandName: "Copper Harbor",
     concept: {
@@ -463,6 +549,69 @@ function exampleIntent() {
         payments: "Cargo clearings",
         customers: "Operator book",
         balances: "Tide stream"
+      }
+    },
+    authExperience: {
+      content: {
+        headline: "Copper Harbor",
+        description: "Dock-pass access for market operators clearing cargo-style payment activity."
+      },
+      layout: {
+        brandColumn: 44,
+        formMaxWidth: 430,
+        logoSize: 86,
+        panelPadding: 22,
+        gap: 32,
+        brandAlignment: "start",
+        formAlignment: "center",
+        textAlign: "left",
+        mobileOrder: "brand-first"
+      },
+      form: {
+        modeControl: "segmented",
+        fieldTreatment: "boxed",
+        surface: "raised",
+        showDisplayNameOnLogin: false,
+        fields: {
+          email: { label: "Operator email", placeholder: "client@example.com" },
+          password: { label: "Dock pass", placeholder: "local-demo-password" },
+          displayName: { label: "Operator name", placeholder: "Copper Harbor operator" }
+        }
+      },
+      visual: {
+        background: "split harbor operations workspace with copper and steel balance",
+        panel: "raised access panel with clean payment-ops hierarchy",
+        accent: "tide-blue active state for login and registration controls"
+      }
+    },
+    paymentsExperience: {
+      content: {
+        headline: "Cargo clearings",
+        description: "A split harbor board where market operators scan cargo-style payment movements and reserve states.",
+        emptyState: "No cargo clearings have been logged."
+      },
+      composition: {
+        metricsPlacement: "left",
+        activityPattern: "cards",
+        statusTreatment: "rail",
+        amountEmphasis: "primary",
+        showCustomer: true,
+        showMethod: true,
+        showTimestamp: true,
+        maxItems: 10
+      },
+      layout: {
+        metricsColumns: 1,
+        sidebarWidth: 260,
+        cardMinWidth: 260,
+        gap: 18,
+        panelPadding: 16,
+        rowMinHeight: 72
+      },
+      visual: {
+        surface: "copper and steel payment board with tide-blue separators",
+        status: "status rail on each cargo card",
+        dataDensity: "balanced scan density for repeated payment review"
       }
     },
     statusVocabulary: {
@@ -513,6 +662,8 @@ function brandIntentJsonSchema(): unknown {
       emptyStates: recordStringSchema(),
       actionLabels: recordStringSchema()
     }),
+    authExperience: authExperienceJsonSchema(),
+    paymentsExperience: paymentsExperienceJsonSchema(),
     statusVocabulary: recordStringSchema()
   });
 }
@@ -581,6 +732,8 @@ function aiBrandSpecJsonSchema(): Record<string, unknown> {
       navigation: recordStringSchema(),
       tableLabels: recordStringSchema(),
       formLabels: recordStringSchema(),
+      authExperience: authExperienceJsonSchema(),
+      paymentsExperience: paymentsExperienceJsonSchema(),
       presentation: objectSchema({
         layout: enumSchema(AI_UI_LAYOUTS),
         density: enumSchema(AI_UI_DENSITIES),
@@ -622,6 +775,75 @@ function entitySchema(method: "GET" | "POST"): Record<string, unknown> {
     requestKey: stringSchema(),
     responseKey: stringSchema(),
     emptyState: stringSchema()
+  });
+}
+
+function authExperienceJsonSchema(): Record<string, unknown> {
+  return objectSchema({
+    content: objectSchema({
+      headline: stringSchema(),
+      description: stringSchema()
+    }),
+    layout: objectSchema({
+      brandColumn: { type: "integer", minimum: 30, maximum: 70 },
+      formMaxWidth: { type: "integer", minimum: 320, maximum: 620 },
+      logoSize: { type: "integer", minimum: 48, maximum: 128 },
+      panelPadding: { type: "integer", minimum: 12, maximum: 40 },
+      gap: { type: "integer", minimum: 16, maximum: 72 },
+      brandAlignment: enumSchema(["start", "center", "end"]),
+      formAlignment: enumSchema(["start", "center", "end"]),
+      textAlign: enumSchema(["left", "center", "right"]),
+      mobileOrder: enumSchema(["brand-first", "form-first"])
+    }),
+    form: objectSchema({
+      modeControl: enumSchema(["segmented", "tabs", "toggle"]),
+      fieldTreatment: enumSchema(["boxed", "filled", "underlined"]),
+      surface: enumSchema(["flat", "raised", "outlined"]),
+      showDisplayNameOnLogin: { type: "boolean" },
+      fields: objectSchema({
+        email: objectSchema({ label: stringSchema(), placeholder: stringSchema() }),
+        password: objectSchema({ label: stringSchema(), placeholder: stringSchema() }),
+        displayName: objectSchema({ label: stringSchema(), placeholder: stringSchema() })
+      })
+    }),
+    visual: objectSchema({
+      background: stringSchema(),
+      panel: stringSchema(),
+      accent: stringSchema()
+    })
+  });
+}
+
+function paymentsExperienceJsonSchema(): Record<string, unknown> {
+  return objectSchema({
+    content: objectSchema({
+      headline: stringSchema(),
+      description: stringSchema(),
+      emptyState: stringSchema()
+    }),
+    composition: objectSchema({
+      metricsPlacement: enumSchema(["top", "left", "right", "hidden"]),
+      activityPattern: enumSchema(["table", "cards", "timeline"]),
+      statusTreatment: enumSchema(["badge", "rail", "dot"]),
+      amountEmphasis: enumSchema(["primary", "secondary", "balanced"]),
+      showCustomer: { type: "boolean" },
+      showMethod: { type: "boolean" },
+      showTimestamp: { type: "boolean" },
+      maxItems: { type: "integer", minimum: 4, maximum: 30 }
+    }),
+    layout: objectSchema({
+      metricsColumns: { type: "integer", minimum: 1, maximum: 5 },
+      sidebarWidth: { type: "integer", minimum: 180, maximum: 420 },
+      cardMinWidth: { type: "integer", minimum: 180, maximum: 420 },
+      gap: { type: "integer", minimum: 8, maximum: 48 },
+      panelPadding: { type: "integer", minimum: 10, maximum: 36 },
+      rowMinHeight: { type: "integer", minimum: 44, maximum: 112 }
+    }),
+    visual: objectSchema({
+      surface: stringSchema(),
+      status: stringSchema(),
+      dataDensity: stringSchema()
+    })
   });
 }
 

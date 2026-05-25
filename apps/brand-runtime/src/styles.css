@@ -14,6 +14,165 @@ body {
   margin: 0;
 }
 
+.brand-auth-shell {
+  align-items: center;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--runtime-primary, #16a34a) 16%, transparent), transparent 32rem),
+    var(--runtime-bg, #f4f7f8);
+  color: var(--runtime-shell-text, var(--text));
+  display: grid;
+  font-family: var(--runtime-font, Inter, ui-sans-serif, system-ui, sans-serif);
+  gap: var(--auth-gap, 24px);
+  grid-template-columns: minmax(0, var(--auth-brand-column, 1fr)) minmax(320px, var(--auth-form-column, 420px));
+  min-height: 100vh;
+  padding: clamp(20px, 4vw, 54px);
+}
+
+.auth-identity {
+  align-content: center;
+  align-self: var(--auth-brand-align, center);
+  display: grid;
+  gap: 24px;
+  justify-items: var(--auth-brand-align, start);
+  min-width: 0;
+  text-align: var(--auth-text-align, left);
+}
+
+.auth-brand {
+  display: grid;
+  gap: 16px;
+  max-width: 680px;
+}
+
+.auth-brand-mark {
+  align-items: center;
+  background: var(--runtime-panel, #ffffff);
+  border: 1px solid var(--runtime-border, #d8e2e8);
+  border-radius: var(--runtime-radius, 8px);
+  display: flex;
+  height: var(--auth-logo-size, 76px);
+  justify-content: center;
+  width: var(--auth-logo-size, 76px);
+}
+
+.auth-brand-mark img {
+  display: block;
+  height: calc(var(--auth-logo-size, 76px) * 0.72);
+  object-fit: contain;
+  width: calc(var(--auth-logo-size, 76px) * 0.72);
+}
+
+.auth-brand h1 {
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 0.98;
+  max-width: 760px;
+}
+
+.auth-brand p {
+  color: var(--runtime-muted, #647482);
+  font-size: 17px;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 680px;
+}
+
+.auth-panel {
+  align-self: var(--auth-form-align, center);
+  background: var(--runtime-panel, #ffffff);
+  border: 1px solid var(--runtime-border, #d8e2e8);
+  border-radius: var(--runtime-radius, 8px);
+  box-shadow: var(--runtime-shadow, 0 16px 42px rgba(22, 35, 48, 0.08));
+  color: var(--text);
+  display: grid;
+  gap: 14px;
+  justify-self: var(--auth-form-align, center);
+  max-width: var(--auth-form-max, 420px);
+  padding: var(--auth-panel-padding, 18px);
+  width: 100%;
+}
+
+.auth-panel form {
+  margin-top: 0;
+}
+
+.auth-mode-switch {
+  background: var(--runtime-panel-alt, #f8fafc);
+  border: 1px solid var(--runtime-border, #d8e2e8);
+  border-radius: var(--runtime-radius, 8px);
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.auth-mode-tabs {
+  gap: calc(var(--auth-gap, 24px) * 0.6);
+}
+
+.auth-mode-tabs .auth-mode-switch {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--runtime-border, #d8e2e8);
+  border-radius: 0;
+  padding: 0;
+}
+
+.auth-mode-tabs .auth-mode-switch button {
+  border-radius: 0;
+}
+
+.auth-mode-tabs .auth-mode-switch button.active {
+  background: transparent;
+  border-bottom: 2px solid var(--runtime-primary, #16a34a);
+  color: var(--runtime-primary, #16a34a);
+}
+
+.auth-mode-toggle .auth-mode-switch {
+  border-radius: 999px;
+}
+
+.auth-mode-toggle .auth-mode-switch button {
+  border-radius: 999px;
+}
+
+.auth-mode-switch button {
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--runtime-radius, 8px) - 2px);
+  color: var(--runtime-muted, #647482);
+  font-weight: 800;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.auth-mode-switch button.active {
+  background: var(--runtime-primary, #16a34a);
+  color: var(--runtime-button-text, #ffffff);
+}
+
+.auth-surface-flat .auth-panel {
+  box-shadow: none;
+}
+
+.auth-surface-outlined .auth-panel {
+  background: color-mix(in srgb, var(--runtime-panel, #ffffff) 86%, transparent);
+  box-shadow: none;
+}
+
+.auth-field-filled input {
+  background: var(--runtime-panel-alt, #f8fafc);
+}
+
+.auth-field-underlined input {
+  background: transparent;
+  border-left: 0;
+  border-radius: 0;
+  border-right: 0;
+  border-top: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .payments-shell {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--runtime-primary, #16a34a) 9%, transparent), transparent 340px),
@@ -118,6 +277,158 @@ body {
 
 .payments-shell.layout-card-operations .payments-main {
   padding-top: 18px;
+}
+
+.payments-generated {
+  gap: var(--payments-gap, 16px);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.payments-generated-intro {
+  display: grid;
+  gap: 8px;
+}
+
+.payments-generated-intro p {
+  color: var(--runtime-muted, #657384);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 760px;
+}
+
+.payments-metrics-left,
+.payments-metrics-right {
+  grid-template-columns: var(--payments-sidebar-width, 280px) minmax(0, 1fr);
+}
+
+.payments-metrics-right {
+  grid-template-columns: minmax(0, 1fr) var(--payments-sidebar-width, 280px);
+}
+
+.generated-metrics {
+  align-self: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(var(--payments-metrics-columns, 3), minmax(0, 1fr));
+  padding: var(--payments-panel-padding, 16px);
+}
+
+.payments-metrics-left .generated-metrics,
+.payments-metrics-right .generated-metrics {
+  grid-template-columns: 1fr;
+  position: sticky;
+  top: 20px;
+}
+
+.generated-metrics > small {
+  color: var(--runtime-muted, #657384);
+  grid-column: 1 / -1;
+  line-height: 1.4;
+}
+
+.generated-activity {
+  padding: var(--payments-panel-padding, 16px);
+}
+
+.generated-activity-list {
+  display: grid;
+  gap: calc(var(--payments-gap, 16px) * 0.65);
+}
+
+.generated-payment-row {
+  align-items: center;
+  border: 1px solid var(--runtime-border, #dce4ec);
+  border-radius: var(--runtime-radius, 8px);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(88px, auto) minmax(160px, 1fr) minmax(120px, 0.7fr) minmax(130px, 0.6fr) auto;
+  min-height: var(--payments-row-min, 64px);
+  padding: 10px 12px;
+}
+
+.payments-activity-cards .generated-activity-list {
+  grid-template-columns: repeat(auto-fit, minmax(var(--payments-card-min, 240px), 1fr));
+}
+
+.payments-activity-cards .generated-payment-row {
+  align-content: start;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: calc(var(--payments-row-min, 64px) * 2.25);
+}
+
+.payments-activity-timeline .generated-payment-row {
+  border-left-width: 4px;
+  grid-template-columns: auto minmax(180px, 1fr) minmax(120px, 0.7fr) auto;
+}
+
+.payments-activity-timeline .generated-payment-time {
+  display: none;
+}
+
+.generated-payment-main {
+  min-width: 0;
+}
+
+.generated-payment-main strong,
+.generated-payment-main small,
+.generated-payment-method,
+.generated-payment-time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generated-payment-main small,
+.generated-payment-method,
+.generated-payment-time {
+  color: var(--runtime-muted, #657384);
+  font-size: 12px;
+}
+
+.generated-payment-amount {
+  font-size: 16px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.payments-amount-primary .generated-payment-amount {
+  color: var(--runtime-primary, #16a34a);
+  font-size: 22px;
+}
+
+.payments-amount-secondary .generated-payment-amount {
+  color: var(--runtime-muted, #657384);
+  font-size: 14px;
+}
+
+.generated-status {
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 84px;
+  padding: 4px 8px;
+}
+
+.payments-status-rail .generated-status {
+  align-self: stretch;
+  border-radius: 999px 0 0 999px;
+  min-width: 8px;
+  overflow: hidden;
+  text-indent: -999px;
+}
+
+.payments-status-dot .generated-status {
+  border-radius: 999px;
+  height: 12px;
+  min-height: 12px;
+  min-width: 12px;
+  padding: 0;
+  width: 12px;
 }
 
 .payments-shell.layout-compact-terminal,
@@ -1058,6 +1369,7 @@ td small {
 
 @media (max-width: 960px) {
   .app-shell,
+  .brand-auth-shell,
   .payments-shell,
   .payments-command,
   .payments-terminal,
@@ -1070,6 +1382,33 @@ td small {
   .dashboard-split,
   .console-grid {
     grid-template-columns: 1fr;
+  }
+
+  .brand-auth-shell {
+    padding: 20px;
+  }
+
+  .brand-auth-shell.auth-mobile-form-first .auth-panel {
+    order: -1;
+  }
+
+  .auth-brand h1 {
+    font-size: 32px;
+  }
+
+  .payments-metrics-left,
+  .payments-metrics-right,
+  .generated-payment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .payments-metrics-left .generated-metrics,
+  .payments-metrics-right .generated-metrics {
+    position: static;
+  }
+
+  .generated-payment-amount {
+    text-align: left;
   }
 
   .payments-brand-rail,

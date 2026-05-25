@@ -20,6 +20,7 @@ import "./styles.css";
 interface LayoutState {
   activeBrand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem | null;
   activeSchema: LayoutBuilderBrandSchemaResponse | null;
+  activeDetailTab: BrandDetailTab;
   activeRuntimeContract: BrandRuntimeContract | null;
   activeRuntimeResources: BrandRuntimeResources | null;
   activeRuntimeRequestLogs: BrandRuntimeRequestLog[];
@@ -68,6 +69,7 @@ interface BrandRuntimeRequestLog {
   createdAt: string;
 }
 
+type BrandDetailTab = "overview" | "contracts" | "users" | "transactions" | "requests";
 type DemoRoute = "sms" | "receipts" | "layouts";
 
 const ROUTES: readonly DemoRoute[] = ["sms", "receipts", "layouts"];
@@ -75,6 +77,7 @@ const ROUTES: readonly DemoRoute[] = ["sms", "receipts", "layouts"];
 const layoutState: LayoutState = {
   activeBrand: null,
   activeSchema: null,
+  activeDetailTab: "overview",
   activeRuntimeContract: null,
   activeRuntimeResources: null,
   activeRuntimeRequestLogs: [],
@@ -238,21 +241,24 @@ app.innerHTML = `
           <section class="preview-column">
             <div class="preview-header">
               <div>
-                <h3>Brand runtime preview</h3>
+                <h3>Brand admin detail</h3>
                 <div class="selected-brand" id="selected-brand-title">No brand selected</div>
               </div>
-            </div>
-            <div class="live-preview" id="live-preview">
-              <div class="empty">Select a brand to load the preview.</div>
-            </div>
-
-            <aside class="inspector-sidebar">
-              <div class="inspector-header">
-                <h3>Integration</h3>
-                <span>Contract, seed state, and generated frontend versions</span>
+              <div class="preview-actions selected-brand-actions">
+                <button class="button secondary" id="copy-brand-url" type="button" disabled>Copy URL</button>
               </div>
-              <div class="contract-inspector" id="contract-inspector"></div>
-            </aside>
+            </div>
+            <nav class="brand-detail-tabs" aria-label="Brand detail sections">
+              <button class="brand-detail-tab active" type="button" data-brand-detail-tab="overview">Overview</button>
+              <button class="brand-detail-tab" type="button" data-brand-detail-tab="contracts">Contracts</button>
+              <button class="brand-detail-tab" type="button" data-brand-detail-tab="users">Users</button>
+              <button class="brand-detail-tab" type="button" data-brand-detail-tab="transactions">Transactions</button>
+              <button class="brand-detail-tab" type="button" data-brand-detail-tab="requests">Request log</button>
+            </nav>
+            <section class="brand-detail-panel" id="contract-inspector">
+              <div class="empty">Select a brand to load admin details.</div>
+            </section>
+            <div class="live-preview" id="live-preview" hidden></div>
           </section>
 
         </div>
@@ -383,12 +389,24 @@ const receiptHistory = required<HTMLElement>("#receipt-history");
 const brandList = required<HTMLElement>("#brand-list");
 const selectedBrandTitle = required<HTMLElement>("#selected-brand-title");
 const contractInspector = required<HTMLElement>("#contract-inspector");
+const copyBrandUrlButton = required<HTMLButtonElement>("#copy-brand-url");
 const openBrandAppButton = required<HTMLButtonElement>("#open-brand-app");
 const openDemoMerchantButton = required<HTMLButtonElement>("#open-demo-merchant");
 const resetBrandDemoButton = required<HTMLButtonElement>("#reset-brand-demo");
 const seedBrandDemoButton = required<HTMLButtonElement>("#seed-brand-demo");
 const deleteBrandButton = required<HTMLButtonElement>("#delete-brand");
 const livePreview = required<HTMLElement>("#live-preview");
+
+document.querySelectorAll<HTMLButtonElement>("[data-brand-detail-tab]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const tab = button.dataset.brandDetailTab;
+
+    if (isBrandDetailTab(tab)) {
+      layoutState.activeDetailTab = tab;
+      renderActiveBrandDetail();
+    }
+  });
+});
 
 window.addEventListener("hashchange", () => {
   void setActiveRoute(routeFromHash());
@@ -515,6 +533,10 @@ openBrandAppButton.addEventListener("click", () => {
   }
 });
 
+copyBrandUrlButton.addEventListener("click", () => {
+  void copyActiveBrandUrl();
+});
+
 void setActiveRoute(routeFromHash());
 void refreshAll();
 
@@ -526,6 +548,10 @@ function required<T extends Element>(selector: string): T {
   }
 
   return element;
+}
+
+function isBrandDetailTab(value: string | undefined): value is BrandDetailTab {
+  return value === "overview" || value === "contracts" || value === "users" || value === "transactions" || value === "requests";
 }
 
 function openBrandModal(): void {
@@ -677,6 +703,69 @@ function defaultBrandIntentJson(): string {
           payments: "Cargo clearings",
           customers: "Operator book",
           balances: "Tide stream"
+        }
+      },
+      authExperience: {
+        content: {
+          headline: "Copper Harbor",
+          description: "Dock-pass access for market operators clearing cargo-style payment activity."
+        },
+        layout: {
+          brandColumn: 44,
+          formMaxWidth: 430,
+          logoSize: 86,
+          panelPadding: 22,
+          gap: 32,
+          brandAlignment: "start",
+          formAlignment: "center",
+          textAlign: "left",
+          mobileOrder: "brand-first"
+        },
+        form: {
+          modeControl: "segmented",
+          fieldTreatment: "boxed",
+          surface: "raised",
+          showDisplayNameOnLogin: false,
+          fields: {
+            email: { label: "Operator email", placeholder: "client@example.com" },
+            password: { label: "Dock pass", placeholder: "local-demo-password" },
+            displayName: { label: "Operator name", placeholder: "Copper Harbor operator" }
+          }
+        },
+        visual: {
+          background: "split harbor operations workspace with copper and steel balance",
+          panel: "raised access panel with clean payment-ops hierarchy",
+          accent: "tide-blue active state for login and registration controls"
+        }
+      },
+      paymentsExperience: {
+        content: {
+          headline: "Cargo clearings",
+          description: "A split harbor board where market operators scan cargo-style payment movements and reserve states.",
+          emptyState: "No cargo clearings have been logged."
+        },
+        composition: {
+          metricsPlacement: "left",
+          activityPattern: "cards",
+          statusTreatment: "rail",
+          amountEmphasis: "primary",
+          showCustomer: true,
+          showMethod: true,
+          showTimestamp: true,
+          maxItems: 10
+        },
+        layout: {
+          metricsColumns: 1,
+          sidebarWidth: 260,
+          cardMinWidth: 260,
+          gap: 18,
+          panelPadding: 16,
+          rowMinHeight: 72
+        },
+        visual: {
+          surface: "copper and steel payment board with tide-blue separators",
+          status: "status rail on each cargo card",
+          dataDensity: "balanced scan density for repeated payment review"
         }
       },
       statusVocabulary: {
@@ -1188,6 +1277,7 @@ function applyBrandPreview(
   );
   deleteBrandButton.disabled = false;
   openBrandAppButton.disabled = false;
+  copyBrandUrlButton.disabled = false;
   openDemoMerchantButton.disabled = !layoutState.activeRuntimeResources?.demoSessionToken;
   resetBrandDemoButton.disabled = false;
   seedBrandDemoButton.disabled = false;
@@ -1195,8 +1285,12 @@ function applyBrandPreview(
 }
 
 function renderLivePreview(brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem): void {
-  livePreview.removeAttribute("style");
-  livePreview.innerHTML = `
+  livePreview.hidden = true;
+  livePreview.innerHTML = brandPreviewFrameHtml(brand);
+}
+
+function brandPreviewFrameHtml(brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem): string {
+  return `
     <iframe
       class="preview-frame"
       title="${escapeHtml(brand.name)} live preview"
@@ -1273,18 +1367,22 @@ function clearLayoutSelection(): void {
   contractInspector.innerHTML = "";
   deleteBrandButton.disabled = true;
   openBrandAppButton.disabled = true;
+  copyBrandUrlButton.disabled = true;
   openDemoMerchantButton.disabled = true;
   resetBrandDemoButton.disabled = true;
   seedBrandDemoButton.disabled = true;
   livePreview.removeAttribute("style");
   livePreview.innerHTML = `<div class="empty">Select a brand to load the preview.</div>`;
+  renderBrandDetailTabs();
 }
 
 function renderContractLoading(brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem): void {
   const profile = brand.generationProfile;
 
+  renderBrandDetailTabs();
+
   if (!profile) {
-    contractInspector.innerHTML = `<span>deterministic layout contract</span>`;
+    contractInspector.innerHTML = `<div class="empty">Deterministic layout contract is loading.</div>`;
     return;
   }
 
@@ -1313,17 +1411,128 @@ function renderContractInspector(
     return;
   }
 
-  contractInspector.innerHTML = `
+  renderBrandDetailTabs();
+
+  if (layoutState.activeDetailTab === "contracts") {
+    contractInspector.innerHTML = contractsDetailHtml(schema, runtimeContract, contractVersions, profile);
+    return;
+  }
+
+  if (layoutState.activeDetailTab === "users") {
+    contractInspector.innerHTML = usersDetailHtml(runtimeContract, runtimeResources, brandMemberships);
+    return;
+  }
+
+  if (layoutState.activeDetailTab === "transactions") {
+    contractInspector.innerHTML = transactionsDetailHtml(runtimeContract, runtimeResources);
+    return;
+  }
+
+  if (layoutState.activeDetailTab === "requests") {
+    contractInspector.innerHTML = requestsDetailHtml(runtimeRequestLogs);
+    return;
+  }
+
+  contractInspector.innerHTML = overviewDetailHtml(brand, schema, runtimeContract, runtimeResources, contractVersions, brandMemberships, profile);
+}
+
+function renderActiveBrandDetail(): void {
+  const brand = layoutState.activeBrand;
+
+  renderBrandDetailTabs();
+
+  if (!brand) {
+    contractInspector.innerHTML = `<div class="empty">Select a brand to load admin details.</div>`;
+    return;
+  }
+
+  renderContractInspector(
+    brand,
+    layoutState.activeSchema,
+    layoutState.activeRuntimeContract,
+    layoutState.activeRuntimeResources,
+    layoutState.activeRuntimeRequestLogs,
+    layoutState.activeContractVersions,
+    layoutState.activeBrandMemberships
+  );
+}
+
+function renderBrandDetailTabs(): void {
+  document.querySelectorAll<HTMLButtonElement>("[data-brand-detail-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.brandDetailTab === layoutState.activeDetailTab);
+  });
+}
+
+function overviewDetailHtml(
+  brand: LayoutBuilderBrandResponse | LayoutBuilderBrandListItem,
+  schema: LayoutBuilderBrandSchemaResponse,
+  runtimeContract: BrandRuntimeContract,
+  runtimeResources: BrandRuntimeResources | null,
+  contractVersions: LayoutBuilderContractVersionRecord[],
+  brandMemberships: LayoutBuilderBrandMembership[],
+  profile: NonNullable<LayoutBuilderBrandSchemaResponse["generationProfile"]>
+): string {
+  const brandUrl = brandUserAppUrl(brand);
+
+  return `
+    <div class="brand-summary-strip">
+      <div class="brand-summary-main">
+        <span class="swatch large" style="background:${escapeHtml(brand.palette.primary)}"></span>
+        <div>
+          <h3>${escapeHtml(brand.name)}</h3>
+          <p>${escapeHtml(profile.visualDirection)}</p>
+        </div>
+      </div>
+      <div class="brand-url-box">
+        <span>Brand URL</span>
+        <code>${escapeHtml(brandUrl)}</code>
+      </div>
+    </div>
+    <div class="contract-grid admin-metrics">
+      ${contractMetric("users", runtimeResources?.users.length ?? 0)}
+      ${contractMetric("members", brandMemberships.length)}
+      ${contractMetric(runtimeContract.resourceAlias, runtimeResources?.payments.length ?? 0)}
+      ${contractMetric("contracts", contractVersions.length)}
+      ${contractMetric("methods", runtimeResources?.paymentMethods.length ?? 0)}
+      ${contractMetric("balances", runtimeResources?.balanceTransactions.length ?? 0)}
+    </div>
+    <div class="admin-detail-grid">
+      <section class="contract-card">
+        <h4>Active contract</h4>
+        ${contractRow("resource", runtimeContract.resourceAlias)}
+        ${contractRow("payload", schema.structure)}
+        ${contractRow("fields", schema.fieldsStyle)}
+        ${contractRow("contract", schema.contractVersion?.contractVersionId ?? "legacy")}
+      </section>
+      <section class="contract-card">
+        <h4>Public routes</h4>
+        ${contractRow("app", brandUrl)}
+        ${contractRow("payments", runtimeEndpoint(schema.endpoint, runtimeContract, "payments"))}
+        ${contractRow("customers", runtimeEndpoint(schema.endpoint, runtimeContract, "customers"))}
+      </section>
+    </div>
+    <section class="contract-card preview-card">
+      <h4>Brand preview</h4>
+      <div class="live-preview embedded-preview">
+        ${brandPreviewFrameHtml(brand)}
+      </div>
+    </section>
+  `;
+}
+
+function contractsDetailHtml(
+  schema: LayoutBuilderBrandSchemaResponse,
+  runtimeContract: BrandRuntimeContract,
+  contractVersions: LayoutBuilderContractVersionRecord[],
+  profile: NonNullable<LayoutBuilderBrandSchemaResponse["generationProfile"]>
+): string {
+  return `
     <div class="contract-card">
       <span>${escapeHtml(profile.provider)} · ${escapeHtml(profile.model)}</span>
       <strong>${escapeHtml(runtimeContract.resourceAlias)}</strong>
       <small>${escapeHtml(profile.contractSummary)}</small>
     </div>
-    ${
-      schema.generatedArtifact
-        ? generatedArtifactHtml(schema.generatedArtifact, schema.contractVersion, contractVersions, profile)
-        : ""
-    }
+    ${schema.generatedArtifact ? generatedArtifactHtml(schema.generatedArtifact, schema.contractVersion, contractVersions, profile) : ""}
     <div class="contract-grid">
       <div class="contract-card">
         <h4>Endpoints</h4>
@@ -1358,7 +1567,6 @@ function renderContractInspector(
         ${mappingRows(runtimeContract.authFields)}
       </div>
     </div>
-    ${runtimeResources ? runtimeResourcesHtml(runtimeContract, runtimeResources, runtimeRequestLogs, brandMemberships) : ""}
     ${profile.clarificationAnswers ? clarificationAnswersHtml(profile.clarificationAnswers) : ""}
     <details class="contract-json">
       <summary>System prompt</summary>
@@ -1368,6 +1576,115 @@ function renderContractInspector(
       <summary>Runtime contract JSON</summary>
       <pre>${escapeHtml(JSON.stringify(runtimeContract, null, 2))}</pre>
     </details>
+  `;
+}
+
+function usersDetailHtml(
+  runtimeContract: BrandRuntimeContract,
+  resources: BrandRuntimeResources | null,
+  memberships: LayoutBuilderBrandMembership[]
+): string {
+  const users = resources?.users ?? [];
+  const rows = users.map((user) => {
+    const userId = stringCell(user[runtimeContract.userFields.userId ?? "userId"] ?? user["userId"] ?? user["id"] ?? user["merchantUserId"]);
+    const email = stringCell(user[runtimeContract.userFields.email ?? "email"] ?? user["email"]);
+    const displayName = stringCell(user[runtimeContract.userFields.displayName ?? "displayName"] ?? user["displayName"]);
+    const createdAt = stringCell(user["createdAt"]);
+    const membership = memberships.find((item) => item.merchantUserId === userId || item.merchantEmail === email);
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(displayName || email || userId)}</strong><small>${escapeHtml(userId)}</small></td>
+        <td>${escapeHtml(email || "-")}</td>
+        <td>${escapeHtml(membership?.role ?? "merchant_owner")}</td>
+        <td>${escapeHtml(membership?.merchantAccountId ?? "-")}</td>
+        <td>${escapeHtml(createdAt ? new Date(createdAt).toLocaleString() : "-")}</td>
+      </tr>
+    `;
+  });
+
+  return `
+    <div class="admin-section-header">
+      <div>
+        <h3>Users</h3>
+        <p>All users and shared auth memberships recorded for the selected brand.</p>
+      </div>
+      <strong>${users.length} users</strong>
+    </div>
+    ${rows.length > 0 ? adminTable(["User", "Email", "Role", "Account", "Created"], rows.join("")) : `<div class="empty">No users have been recorded for this brand yet.</div>`}
+    ${brandMembershipsHtml(memberships)}
+  `;
+}
+
+function transactionsDetailHtml(runtimeContract: BrandRuntimeContract, resources: BrandRuntimeResources | null): string {
+  const payments = resources?.payments ?? [];
+  const rows = payments.map((payment) => {
+    const reference = stringCell(payment[runtimeContract.fields.externalReference ?? "externalReference"] ?? payment["externalReference"]);
+    const paymentId = stringCell(payment[runtimeContract.fields.paymentId ?? "paymentId"] ?? payment["paymentId"]);
+    const status = stringCell(payment[runtimeContract.fields.status ?? "status"] ?? payment["status"]);
+    const amount = stringCell(payment[runtimeContract.fields.amount ?? "amount"] ?? payment["amount"]);
+    const currency = stringCell(payment[runtimeContract.fields.currency ?? "currency"] ?? payment["currency"]);
+    const destination = stringCell(payment[runtimeContract.fields.destinationLabel ?? "destinationLabel"] ?? payment["destinationLabel"]);
+    const createdAt = stringCell(payment[runtimeContract.fields.createdAt ?? "createdAt"] ?? payment["createdAt"]);
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(reference || paymentId)}</strong><small>${escapeHtml(paymentId)}</small></td>
+        <td><span class="badge ${statusClass(status)}">${escapeHtml(status || "-")}</span></td>
+        <td>${escapeHtml(`${amount} ${currency}`.trim())}</td>
+        <td>${escapeHtml(destination || "-")}</td>
+        <td>${escapeHtml(createdAt ? new Date(createdAt).toLocaleString() : "-")}</td>
+      </tr>
+    `;
+  });
+
+  return `
+    <div class="admin-section-header">
+      <div>
+        <h3>Transactions</h3>
+        <p>Seeded and live transaction rows as decoded through this brand contract.</p>
+      </div>
+      <strong>${payments.length} rows</strong>
+    </div>
+    ${rows.length > 0 ? adminTable(["Transaction", "Status", "Amount", "Player / destination", "Created"], rows.join("")) : `<div class="empty">No transactions have been loaded for this brand yet.</div>`}
+  `;
+}
+
+function requestsDetailHtml(requestLogs: BrandRuntimeRequestLog[]): string {
+  const rows = requestLogs.map(
+    (log) => `
+      <tr>
+        <td><strong>${escapeHtml(`${log.method} ${log.alias}`)}</strong><small>${escapeHtml(log.publicEndpoint)}</small></td>
+        <td>${escapeHtml(log.operation)}</td>
+        <td><span class="badge ${log.status === "success" ? "ok" : "bad"}">${escapeHtml(log.status)}</span></td>
+        <td>${log.durationMs}ms</td>
+        <td>${escapeHtml(log.errorMessage ?? new Date(log.createdAt).toLocaleString())}</td>
+      </tr>
+    `
+  );
+
+  return `
+    <div class="admin-section-header">
+      <div>
+        <h3>Request log</h3>
+        <p>Recent BFF calls made against the active brand contract.</p>
+      </div>
+      <strong>${requestLogs.length} events</strong>
+    </div>
+    ${rows.length > 0 ? adminTable(["Request", "Operation", "Status", "Duration", "Time / error"], rows.join("")) : `<div class="empty">No BFF requests have been logged for this brand yet.</div>`}
+  `;
+}
+
+function adminTable(headers: string[], rows: string): string {
+  return `
+    <div class="table-wrap admin-table">
+      <table>
+        <thead>
+          <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -1838,6 +2155,26 @@ function openActiveBrandAsDemoMerchant(): void {
   const url = new URL(brandUserAppUrl(brand), window.location.origin);
   url.searchParams.set("sessionToken", sessionToken);
   window.open(url.toString(), "_blank", "noopener,noreferrer");
+}
+
+async function copyActiveBrandUrl(): Promise<void> {
+  const brand = layoutState.activeBrand;
+
+  if (!brand) {
+    return;
+  }
+
+  const url = brandUserAppUrl(brand);
+
+  try {
+    await navigator.clipboard.writeText(url);
+    copyBrandUrlButton.textContent = "Copied";
+    window.setTimeout(() => {
+      copyBrandUrlButton.textContent = "Copy URL";
+    }, 1200);
+  } catch {
+    window.prompt("Brand URL", url);
+  }
 }
 
 function brandUserAppUrlWithSession(

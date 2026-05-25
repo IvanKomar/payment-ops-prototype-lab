@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from "react";
+import { Fragment, StrictMode, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -7,6 +7,8 @@ import "./styles.css";
 type RuntimeView = "login" | "dashboard" | "payments" | "customers" | "balances";
 
 type RuntimePresentation = NonNullable<RuntimeShell["ui"]>["presentation"];
+type RuntimeAuthExperience = NonNullable<NonNullable<RuntimeShell["ui"]>["authExperience"]>;
+type RuntimePaymentsExperience = NonNullable<NonNullable<RuntimeShell["ui"]>["paymentsExperience"]>;
 
 interface RuntimeLocation {
   routeBase: string;
@@ -87,6 +89,69 @@ interface RuntimeShell {
       componentLabels: Record<string, string>;
       emptyStates: Record<string, string>;
     };
+    authExperience?: {
+      content: {
+        headline: string;
+        description: string;
+      };
+      layout: {
+        brandColumn: number;
+        formMaxWidth: number;
+        logoSize: number;
+        panelPadding: number;
+        gap: number;
+        brandAlignment: "start" | "center" | "end";
+        formAlignment: "start" | "center" | "end";
+        textAlign: "left" | "center" | "right";
+        mobileOrder: "brand-first" | "form-first";
+      };
+      form: {
+        modeControl: "segmented" | "tabs" | "toggle";
+        fieldTreatment: "boxed" | "filled" | "underlined";
+        surface: "flat" | "raised" | "outlined";
+        showDisplayNameOnLogin: boolean;
+        fields: {
+          email: { label: string; placeholder: string };
+          password: { label: string; placeholder: string };
+          displayName: { label: string; placeholder: string };
+        };
+      };
+      visual: {
+        background: string;
+        panel: string;
+        accent: string;
+      };
+    };
+    paymentsExperience?: {
+      content: {
+        headline: string;
+        description: string;
+        emptyState: string;
+      };
+      composition: {
+        metricsPlacement: "top" | "left" | "right" | "hidden";
+        activityPattern: "table" | "cards" | "timeline";
+        statusTreatment: "badge" | "rail" | "dot";
+        amountEmphasis: "primary" | "secondary" | "balanced";
+        showCustomer: boolean;
+        showMethod: boolean;
+        showTimestamp: boolean;
+        maxItems: number;
+      };
+      layout: {
+        metricsColumns: number;
+        sidebarWidth: number;
+        cardMinWidth: number;
+        gap: number;
+        panelPadding: number;
+        rowMinHeight: number;
+      };
+      visual: {
+        surface: string;
+        status: string;
+        dataDensity: string;
+      };
+    };
   } | null;
 }
 
@@ -164,9 +229,10 @@ createRoot(root).render(
 function BrandRuntimeApp() {
   const [locationState, setLocationState] = useState(() => parseRuntimeLocation());
   const [shell] = useState<RuntimeShell | null>(() => window.__BRAND_RUNTIME_SHELL__ ?? null);
+  const [sessionToken, setSessionToken] = useState(() => localStorage.getItem(sessionKey(locationState)));
   const [overview, setOverview] = useState<RuntimeOverview | null>(null);
   const [status, setStatus] = useState(
-    window.__BRAND_RUNTIME_SHELL__ ? "Loading seeded payment activity." : "Runtime bootstrap was not injected."
+    window.__BRAND_RUNTIME_SHELL__ ? "Sign in or register to open this brand workspace." : "Runtime bootstrap was not injected."
   );
 
   useEffect(() => {
@@ -177,12 +243,28 @@ function BrandRuntimeApp() {
   }, []);
 
   useEffect(() => {
-    if (!shell) {
+    setSessionToken(localStorage.getItem(sessionKey(locationState)));
+  }, [locationState.slug]);
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("sessionToken");
+
+    if (!token) {
       return;
     }
 
-    refreshPayments().catch((error: unknown) => setStatus(errorMessage(error)));
-  }, [shell, locationState.slug]);
+    localStorage.setItem(sessionKey(locationState), token);
+    setSessionToken(token);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [locationState.slug]);
+
+  useEffect(() => {
+    if (!shell || !sessionToken) {
+      return;
+    }
+
+    refreshPayments(sessionToken).catch((error: unknown) => setStatus(errorMessage(error)));
+  }, [shell, sessionToken, locationState.slug]);
 
   const payments = overview?.payments ?? [];
   const account = overview?.account ?? null;
@@ -200,13 +282,48 @@ function BrandRuntimeApp() {
   const presentation = shell.ui?.presentation;
   const runtimeClass = `layout-${presentation?.layout ?? "sidebar-ledger"} density-${presentation?.density ?? "balanced"} nav-${presentation?.navigationPattern ?? "sidebar"}`;
 
-  async function refreshPayments() {
+  async function authenticate(mode: "login" | "register", form: HTMLFormElement) {
+    if (!shell) {
+      return;
+    }
+
+    const formData = new FormData(form);
+    const response = await requestJson<RuntimeAuthResponse>(entityUrl(locationState, shell.routes[mode]), {
+      body: JSON.stringify(aliasPayload(shell.auth.fields, {
+        currency: String(formData.get("currency") ?? "USD"),
+        displayName: String(formData.get("displayName") ?? `${shell.brand.name} operator`),
+        email: String(formData.get("email") ?? ""),
+        password: String(formData.get("password") ?? "")
+      })),
+      headers: { "content-type": "application/json" },
+      method: "POST"
+    });
+    const token = String(response[shell.auth.tokenResponseKey] ?? response.sessionToken ?? "");
+
+    if (!token) {
+      throw new Error("Authentication response did not include a session token.");
+    }
+
+    localStorage.setItem(sessionKey(locationState), token);
+    setSessionToken(token);
+    setStatus(mode === "register" ? "Registration accepted." : "Signed in.");
+    await refreshPayments(token);
+  }
+
+  async function refreshPayments(token = sessionToken) {
     if (!shell) {
       setStatus("Runtime bootstrap was not injected.");
       return;
     }
 
-    const paymentsResponse = await requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.payments));
+    if (!token) {
+      setStatus("Sign in or register first.");
+      return;
+    }
+
+    const paymentsResponse = await requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.payments), {
+      headers: { authorization: `Bearer ${token}` }
+    });
     const decodedPayments = arrayValue(paymentsResponse[responseKey(shell, "payments")] ?? paymentsResponse.payments).map((payment) =>
       decodePayment(shell, payment)
     );
@@ -218,7 +335,29 @@ function BrandRuntimeApp() {
       paymentMethods: [],
       payments: decodedPayments
     });
-    setStatus("Seeded payments loaded.");
+    setStatus("Payments loaded.");
+  }
+
+  function logout() {
+    localStorage.removeItem(sessionKey(locationState));
+    setSessionToken("");
+    setOverview(null);
+    setStatus("Session closed.");
+  }
+
+  if (!sessionToken) {
+    return (
+      <AuthExperience
+        presentation={presentation}
+        runtimeClass={runtimeClass}
+        shell={shell}
+        shellStyle={shellStyle}
+        status={status}
+        onSubmit={(mode, form) => {
+          void authenticate(mode, form).catch((error: unknown) => setStatus(errorMessage(error)));
+        }}
+      />
+    );
   }
 
   return (
@@ -234,9 +373,14 @@ function BrandRuntimeApp() {
             <h1>{shell.labels.payments}</h1>
             <p className="subtle">{shell.copy.visualDirection}</p>
           </div>
-          <span className="status">{status}</span>
+          <div className="top-actions">
+            <span className="status">{status}</span>
+            <button className="secondary" type="button" onClick={logout}>
+              Sign out
+            </button>
+          </div>
         </header>
-        <PaymentsExperience account={account} labels={shell.labels} metrics={metrics} payments={payments} presentation={presentation} />
+        <PaymentsExperience account={account} labels={shell.labels} metrics={metrics} payments={payments} presentation={presentation} shell={shell} />
       </section>
     </main>
   );
@@ -251,6 +395,55 @@ function BrandLockup({ shell }: { shell: RuntimeShell }) {
         <small>Merchant gateway</small>
       </div>
     </div>
+  );
+}
+
+function AuthExperience({
+  onSubmit,
+  presentation,
+  runtimeClass,
+  shell,
+  shellStyle,
+  status
+}: {
+  onSubmit: (mode: "login" | "register", form: HTMLFormElement) => void;
+  presentation: RuntimePresentation | undefined;
+  runtimeClass: string;
+  shell: RuntimeShell;
+  shellStyle: CSSProperties;
+  status: string;
+}) {
+  const layout = presentation?.layout ?? "sidebar-ledger";
+  const authExperience = authExperienceFor(shell, presentation);
+  const showStatus = status !== "Sign in or register to open this brand workspace.";
+
+  return (
+    <main
+      className={[
+        "brand-auth-shell",
+        runtimeClass,
+        `auth-${layout}`,
+        `auth-mode-${authExperience.form.modeControl}`,
+        `auth-field-${authExperience.form.fieldTreatment}`,
+        `auth-surface-${authExperience.form.surface}`,
+        `auth-mobile-${authExperience.layout.mobileOrder}`
+      ].join(" ")}
+      style={authShellStyle(shellStyle, authExperience)}
+    >
+      <section className="auth-identity">
+        <div className="auth-brand">
+          <div className="auth-brand-mark">
+            {shell.brand.logoDataUri ? <img alt={`${shell.brand.name} logo`} src={shell.brand.logoDataUri} /> : null}
+          </div>
+          <h1>{shell.brand.name}</h1>
+          <p>{authExperience.content.description}</p>
+        </div>
+      </section>
+      <section className="auth-panel">
+        <AuthForm authExperience={authExperience} labels={shell.labels} shell={shell} onSubmit={onSubmit} />
+        {showStatus ? <div className="status">{status}</div> : null}
+      </section>
+    </main>
   );
 }
 
@@ -312,86 +505,109 @@ function PaymentsExperience({
   labels,
   metrics,
   payments,
-  presentation
+  presentation,
+  shell
 }: {
   account: RuntimeAccount | null;
   labels: RuntimeShell["labels"];
   metrics: RuntimeMetrics;
   payments: RuntimePayment[];
   presentation: RuntimePresentation | undefined;
+  shell: RuntimeShell;
 }) {
-  const variant = presentation?.layout ?? "sidebar-ledger";
+  const experience = paymentsExperienceFor(shell, presentation);
+  const metricsPlacement = experience.composition.metricsPlacement;
+  const activity = <GeneratedPaymentActivity experience={experience} payments={payments} />;
+  const metricsBlock = metricsPlacement === "hidden" ? null : <GeneratedMetricDeck account={account} experience={experience} metrics={metrics} />;
+  const orderedBlocks =
+    metricsPlacement === "right"
+      ? [activity, metricsBlock]
+      : metricsPlacement === "left"
+        ? [metricsBlock, activity]
+        : [metricsBlock, activity];
 
-  if (variant === "compact-terminal") {
-    return (
-      <div className="payments-page payments-terminal">
-        <section className="terminal-command">
-          <MetricDeck account={account} metrics={metrics} />
-        </section>
-        <section className="terminal-stream panel">
-          <div className="section-title">
-            <h2>{labels.history}</h2>
-          </div>
-          <PaymentSignalList payments={payments} />
-        </section>
-      </div>
-    );
-  }
+  return (
+    <div
+      className={[
+        "payments-page",
+        "payments-generated",
+        `payments-metrics-${metricsPlacement}`,
+        `payments-activity-${experience.composition.activityPattern}`,
+        `payments-status-${experience.composition.statusTreatment}`,
+        `payments-amount-${experience.composition.amountEmphasis}`
+      ].join(" ")}
+      style={paymentsExperienceStyle(experience)}
+    >
+      <section className="payments-generated-intro">
+        <div>
+          <span className="kicker">{labels.payments}</span>
+          <h2>{experience.content.headline}</h2>
+          <p>{experience.content.description}</p>
+        </div>
+      </section>
+      {orderedBlocks.map((block, index) => (block ? <Fragment key={index}>{block}</Fragment> : null))}
+    </div>
+  );
+}
 
-  if (variant === "command-center") {
-    return (
-      <div className="payments-page payments-command">
-        <MetricSummary account={account} metrics={metrics} />
-        <section className="command-board panel">
-          <div className="section-title">
-            <h2>{labels.history}</h2>
-          </div>
-          <PaymentSignalList payments={payments} />
-        </section>
-      </div>
-    );
-  }
+function GeneratedMetricDeck({
+  account,
+  experience,
+  metrics
+}: {
+  account: RuntimeAccount | null;
+  experience: RuntimePaymentsExperience;
+  metrics: RuntimeMetrics;
+}) {
+  const balance = account ? formatAmount(account.balance, account.currency) : formatAmount(0, metrics.currency);
 
-  if (variant === "card-operations") {
-    return (
-      <div className="payments-page payments-card-wall">
-        <MetricDeck account={account} metrics={metrics} />
-        <section className="receipt-wall panel">
-          <div className="section-title">
-            <h2>{labels.payments}</h2>
-          </div>
-          <PaymentTiles payments={payments} />
-        </section>
-      </div>
-    );
-  }
+  return (
+    <section className="generated-metrics panel">
+      <Metric caption={account ? account.currency : metrics.currency} label="Available" value={balance} />
+      <Metric caption="Gross flow" label="Volume" value={formatAmount(metrics.volume, metrics.currency)} />
+      <Metric caption={`${metrics.customers} profiles`} label="Count" value={String(metrics.count)} />
+      <Metric caption="Review queue" label="Attention" value={String(metrics.review)} />
+      <small>{experience.visual.dataDensity}</small>
+    </section>
+  );
+}
 
-  if (variant === "split-workspace") {
+function GeneratedPaymentActivity({ experience, payments }: { experience: RuntimePaymentsExperience; payments: RuntimePayment[] }) {
+  const visiblePayments = payments.slice(0, experience.composition.maxItems);
+
+  if (visiblePayments.length === 0) {
     return (
-      <div className="payments-page payments-split">
-        <aside className="split-rail">
-          <MetricDeck account={account} metrics={metrics} />
-        </aside>
-        <section className="split-ledger panel">
-          <div className="section-title">
-            <h2>{labels.history}</h2>
-          </div>
-          <PaymentsTable payments={payments} />
-        </section>
-      </div>
+      <section className="generated-activity panel">
+        <div className="empty">{experience.content.emptyState}</div>
+      </section>
     );
   }
 
   return (
-    <div className="payments-page payments-ledger">
-      <MetricSummary account={account} metrics={metrics} />
-      <section className="panel">
-        <div className="section-title">
-          <h2>{labels.history}</h2>
-        </div>
-        <PaymentsTable payments={payments} />
-      </section>
-    </div>
+    <section className="generated-activity panel">
+      <div className="generated-activity-list">
+        {visiblePayments.map((payment) => (
+          <GeneratedPaymentRow experience={experience} key={payment.id} payment={payment} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function GeneratedPaymentRow({ experience, payment }: { experience: RuntimePaymentsExperience; payment: RuntimePayment }) {
+  const customer = customerFromPayment(payment);
+
+  return (
+    <article className="generated-payment-row">
+      <span className={`generated-status ${statusClass(payment.status)}`}>{experience.composition.statusTreatment === "dot" ? "" : payment.status}</span>
+      <div className="generated-payment-main">
+        <strong>{payment.reference}</strong>
+        {experience.composition.showCustomer ? <small>{customer.name}</small> : null}
+      </div>
+      {experience.composition.showMethod ? <span className="generated-payment-method">{customer.instrument}</span> : null}
+      {experience.composition.showTimestamp ? <span className="generated-payment-time">{formatDateTime(payment.createdAt)}</span> : null}
+      <strong className="generated-payment-amount">{formatAmount(payment.amount, payment.currency)}</strong>
+    </article>
   );
 }
 
@@ -805,52 +1021,176 @@ function Metric({ caption, label, value }: { caption: string; label: string; val
 }
 
 function AuthForm({
+  authExperience,
   labels,
+  shell,
   onSubmit
 }: {
+  authExperience: RuntimeAuthExperience;
   labels: RuntimeShell["labels"];
+  shell: RuntimeShell;
   onSubmit: (mode: "login" | "register", form: HTMLFormElement) => void;
 }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const isRegister = mode === "register";
+  const showDisplayName = isRegister || authExperience.form.showDisplayNameOnLogin;
+
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit("register", event.currentTarget);
+        onSubmit(mode, event.currentTarget);
       }}
     >
+      <div className="auth-mode-switch" role="group" aria-label="Choose authentication mode">
+        <button className={mode === "login" ? "active" : ""} type="button" onClick={() => setMode("login")}>
+          {labels.login}
+        </button>
+        <button className={mode === "register" ? "active" : ""} type="button" onClick={() => setMode("register")}>
+          {labels.register}
+        </button>
+      </div>
       <label>
-        Merchant email
-        <input autoComplete="email" defaultValue="client@example.com" name="email" required type="email" />
+        {authExperience.form.fields.email.label}
+        <input
+          autoComplete="email"
+          defaultValue="client@example.com"
+          name="email"
+          placeholder={authExperience.form.fields.email.placeholder}
+          required
+          type="email"
+        />
       </label>
       <label>
-        Password
-        <input autoComplete="current-password" defaultValue="local-demo-password" name="password" required type="password" />
+        {authExperience.form.fields.password.label}
+        <input
+          autoComplete="current-password"
+          defaultValue="local-demo-password"
+          name="password"
+          placeholder={authExperience.form.fields.password.placeholder}
+          required
+          type="password"
+        />
       </label>
-      <label>
-        Business name
-        <input defaultValue="Demo Merchant LLC" name="displayName" />
-      </label>
+      {showDisplayName ? (
+        <label>
+          {authExperience.form.fields.displayName.label}
+          <input
+            autoComplete="name"
+            defaultValue={`${shell.brand.name} Operator`}
+            name="displayName"
+            placeholder={authExperience.form.fields.displayName.placeholder}
+          />
+        </label>
+      ) : (
+        <input name="displayName" type="hidden" value={`${shell.brand.name} Operator`} />
+      )}
       <input name="currency" type="hidden" value="USD" />
       <div className="button-row">
         <button className="primary" type="submit">
-          {labels.register}
-        </button>
-        <button
-          className="secondary"
-          type="button"
-          onClick={(event) => {
-            const form = event.currentTarget.closest("form");
-
-            if (form) {
-              onSubmit("login", form);
-            }
-          }}
-        >
-          {labels.login}
+          {isRegister ? labels.register : labels.login}
         </button>
       </div>
     </form>
   );
+}
+
+function authExperienceFor(shell: RuntimeShell, presentation: RuntimePresentation | undefined): RuntimeAuthExperience {
+  return shell.ui?.authExperience ?? {
+    content: {
+      headline: shell.brand.name,
+      description: shell.copy.visualDirection || shell.copy.contractSummary || "Secure access for this brand workspace."
+    },
+    layout: {
+      brandColumn: 50,
+      formMaxWidth: 420,
+      logoSize: 76,
+      panelPadding: 18,
+      gap: 24,
+      brandAlignment: presentation?.layout === "command-center" ? "center" : "start",
+      formAlignment: "center",
+      textAlign: presentation?.layout === "command-center" ? "center" : "left",
+      mobileOrder: "brand-first"
+    },
+    form: {
+      modeControl: "segmented",
+      fieldTreatment: "boxed",
+      surface: "raised",
+      showDisplayNameOnLogin: false,
+      fields: {
+        email: { label: "Email", placeholder: "client@example.com" },
+        password: { label: "Password", placeholder: "local-demo-password" },
+        displayName: { label: "Display name", placeholder: `${shell.brand.name} operator` }
+      }
+    },
+    visual: {
+      background: presentation?.visualTokens.surfaces ?? "brand access shell",
+      panel: presentation?.visualTokens.buttons ?? "focused access panel",
+      accent: presentation?.copyTone ?? "secure brand access"
+    }
+  };
+}
+
+function paymentsExperienceFor(shell: RuntimeShell, presentation: RuntimePresentation | undefined): RuntimePaymentsExperience {
+  return shell.ui?.paymentsExperience ?? {
+    content: {
+      headline: shell.labels.payments,
+      description: shell.copy.visualDirection || shell.copy.contractSummary || "Seeded payment activity for this brand workspace.",
+      emptyState: "No payment activity yet."
+    },
+    composition: {
+      metricsPlacement: presentation?.layout === "split-workspace" ? "left" : "top",
+      activityPattern: presentation?.layout === "card-operations" ? "cards" : presentation?.layout === "compact-terminal" ? "timeline" : "table",
+      statusTreatment: presentation?.layout === "compact-terminal" ? "dot" : presentation?.layout === "card-operations" ? "rail" : "badge",
+      amountEmphasis: "balanced",
+      showCustomer: true,
+      showMethod: true,
+      showTimestamp: true,
+      maxItems: 10
+    },
+    layout: {
+      metricsColumns: presentation?.layout === "topbar-console" ? 4 : 3,
+      sidebarWidth: 280,
+      cardMinWidth: 240,
+      gap: 16,
+      panelPadding: 16,
+      rowMinHeight: 64
+    },
+    visual: {
+      surface: presentation?.visualTokens.surfaces ?? "brand payment surface",
+      status: presentation?.visualTokens.buttons ?? "clear status treatment",
+      dataDensity: presentation?.visualTokens.spacing ?? "balanced payment density"
+    }
+  };
+}
+
+function authShellStyle(shellStyle: CSSProperties, authExperience: RuntimeAuthExperience): CSSProperties {
+  const brandColumn = Math.min(70, Math.max(30, authExperience.layout.brandColumn));
+  const formColumn = 100 - brandColumn;
+
+  return {
+    ...shellStyle,
+    "--auth-brand-column": `${brandColumn}fr`,
+    "--auth-form-column": `${formColumn}fr`,
+    "--auth-form-max": `${authExperience.layout.formMaxWidth}px`,
+    "--auth-logo-size": `${authExperience.layout.logoSize}px`,
+    "--auth-panel-padding": `${authExperience.layout.panelPadding}px`,
+    "--auth-gap": `${authExperience.layout.gap}px`,
+    "--auth-brand-align": authExperience.layout.brandAlignment,
+    "--auth-form-align": authExperience.layout.formAlignment,
+    "--auth-text-align": authExperience.layout.textAlign
+  } as CSSProperties;
+}
+
+function paymentsExperienceStyle(experience: RuntimePaymentsExperience): CSSProperties {
+  return {
+    "--payments-metrics-columns": experience.layout.metricsColumns,
+    "--payments-sidebar-width": `${experience.layout.sidebarWidth}px`,
+    "--payments-card-min": `${experience.layout.cardMinWidth}px`,
+    "--payments-gap": `${experience.layout.gap}px`,
+    "--payments-panel-padding": `${experience.layout.panelPadding}px`,
+    "--payments-row-min": `${experience.layout.rowMinHeight}px`
+  } as CSSProperties;
 }
 
 function PaymentForm({ label, onSubmit }: { label: string; onSubmit: (form: HTMLFormElement) => void }) {
