@@ -13,8 +13,11 @@ import type {
   LayoutBuilderClarifyBrandResponse,
   LayoutBuilderCreateBrandDraftRequest,
   LayoutBuilderCreateBrandIntentDraftRequest,
+  LayoutBuilderCreateGeneratedBrandRequest,
   LayoutBuilderContractVersionRecord,
   LayoutBuilderDeleteBrandResponse,
+  LayoutBuilderGeneratedArtifactInstructionsRequest,
+  LayoutBuilderGeneratedArtifactInstructionsResponse,
   LayoutBuilderRegenerateContractRequest,
   ReceiptRecognitionModel,
   ReceiptRecognizerRawTextResponse,
@@ -239,6 +242,32 @@ export const api = {
         },
         body: JSON.stringify(payload)
       })),
+    getGeneratedArtifactInstructions: (payload: LayoutBuilderGeneratedArtifactInstructionsRequest) =>
+      requestJson<LayoutBuilderGeneratedArtifactInstructionsResponse>(
+        apiBases.layout,
+        "/brands/generated-artifacts/instructions",
+        withAdminAuth({
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        })
+      ),
+    createBrandFromGeneratedArtifact: (payload: LayoutBuilderCreateGeneratedBrandRequest, logo: File | Blob) => {
+      const formData = new FormData();
+      formData.set("payload", JSON.stringify(payload));
+      formData.set("logo", logo, logo instanceof File ? logo.name : "demo-mark.svg");
+
+      return requestJson<LayoutBuilderBrandResponse>(
+        apiBases.layout,
+        "/brands/generated-artifacts/create",
+        withAdminAuth({
+          method: "POST",
+          body: formData
+        })
+      );
+    },
     appendBrandDraftMessage: (draftId: string, payload: LayoutBuilderAppendBrandDraftMessageRequest) =>
       requestJson<LayoutBuilderBrandGenerationDraft>(
         apiBases.layout,

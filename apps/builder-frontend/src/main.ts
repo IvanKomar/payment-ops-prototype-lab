@@ -1757,6 +1757,7 @@ function generatedArtifactHtml(
     <div class="contract-card artifact-card">
       <h4>Generated frontend artifact</h4>
       <div class="contract-grid compact">
+        ${contractMetric("checks", artifact.validation.checks.length)}
         ${contractMetric("files", artifact.files.length)}
         ${contractMetric("routes", artifact.routes.length)}
         ${contractMetric("capabilities", artifact.capabilities.length)}
@@ -1793,8 +1794,15 @@ function generatedArtifactHtml(
           <code>${escapeHtml(artifact.entryFile)}</code>
         </div>
         <div class="contract-row">
+          <span>source</span>
+          <code>${escapeHtml(`${artifact.sourceType} · ${artifact.framework}`)}</code>
+        </div>
+        <div class="contract-row">
           <span>BFF base</span>
           <code>${escapeHtml(artifact.facadeBasePath)}</code>
+        </div>
+        <div class="artifact-files">
+          ${artifact.validation.checks.map((check) => `<code>${escapeHtml(check)}</code>`).join("")}
         </div>
         <div class="artifact-files">
           ${artifact.files.map((file) => `<code>${escapeHtml(file.path)} · ${file.kind} · ${file.bytes}b</code>`).join("")}
@@ -1841,52 +1849,6 @@ function contractVersionHistoryHtml(activeContractVersionId: string, versions: L
   `;
 }
 
-function runtimeResourcesHtml(
-  runtimeContract: BrandRuntimeContract,
-  resources: BrandRuntimeResources,
-  requestLogs: BrandRuntimeRequestLog[],
-  brandMemberships: LayoutBuilderBrandMembership[]
-): string {
-  const recentPayments = resources.payments.slice(0, 5);
-  const recentCustomers = resources.customers.slice(0, 5);
-
-  return `
-    <div class="contract-card">
-      <h4>Live payment core data</h4>
-      <div class="contract-grid compact">
-        ${contractMetric("merchants", resources.users.length)}
-        ${contractMetric("accounts", resources.accounts.length)}
-        ${contractMetric(runtimeContract.resourceAlias, resources.payments.length)}
-        ${contractMetric("customers", resources.customers.length)}
-        ${contractMetric("methods", resources.paymentMethods.length)}
-        ${contractMetric("intents", resources.paymentIntents.length)}
-        ${contractMetric("balances", resources.balanceTransactions.length)}
-      </div>
-      ${
-        recentPayments.length > 0
-          ? `<div class="mini-table">${recentPayments
-              .map((payment) => {
-                const reference = stringCell(payment[runtimeContract.fields.externalReference ?? "externalReference"]);
-                const status = stringCell(payment[runtimeContract.fields.status ?? "status"]);
-                const amount = stringCell(payment[runtimeContract.fields.amount ?? "amount"]);
-                const currency = stringCell(payment[runtimeContract.fields.currency ?? "currency"]);
-
-                return `<div><strong>${escapeHtml(reference)}</strong><span>${escapeHtml(status)}</span><code>${escapeHtml(`${amount} ${currency}`)}</code></div>`;
-              })
-              .join("")}</div>`
-          : `<small>No live payments for this brand yet.</small>`
-      }
-      ${
-        recentCustomers.length > 0
-          ? `<details class="contract-json"><summary>Recent customers</summary><pre>${escapeHtml(JSON.stringify(recentCustomers, null, 2))}</pre></details>`
-          : ""
-      }
-      ${brandMembershipsHtml(brandMemberships)}
-      ${requestLogsHtml(requestLogs)}
-    </div>
-  `;
-}
-
 function brandMembershipsHtml(memberships: LayoutBuilderBrandMembership[]): string {
   if (memberships.length === 0) {
     return `<small>No shared auth memberships have been recorded for this brand yet.</small>`;
@@ -1910,32 +1872,6 @@ function brandMembershipsHtml(memberships: LayoutBuilderBrandMembership[]): stri
               </div>
             `;
           })
-          .join("")}
-      </div>
-    </details>
-  `;
-}
-
-function requestLogsHtml(requestLogs: BrandRuntimeRequestLog[]): string {
-  if (requestLogs.length === 0) {
-    return `<small>No BFF requests have been logged for this brand yet.</small>`;
-  }
-
-  return `
-    <details class="contract-json" open>
-      <summary>BFF request log</summary>
-      <div class="mini-table request-log-table">
-        ${requestLogs
-          .slice(0, 8)
-          .map(
-            (log) => `
-              <div>
-                <strong>${escapeHtml(`${log.method} ${log.alias}`)}</strong>
-                <span>${escapeHtml(`${log.operation} · ${log.status} · ${log.durationMs}ms`)}</span>
-                <code>${escapeHtml(log.errorMessage ?? new Date(log.createdAt).toLocaleTimeString())}</code>
-              </div>
-            `
-          )
           .join("")}
       </div>
     </details>
@@ -2217,6 +2153,10 @@ function brandUserAppUrlWithSession(
   brand: Pick<LayoutBuilderBrandListItem, "appUrl" | "generatedPreviewUrl">,
   sessionToken: string | undefined
 ): string {
+  if (brand.generatedPreviewUrl) {
+    return api.layout.publicUrl(brand.generatedPreviewUrl);
+  }
+
   const url = new URL(brandUserAppUrl(brand), window.location.origin);
 
   if (sessionToken) {
@@ -2227,6 +2167,10 @@ function brandUserAppUrlWithSession(
 }
 
 function brandUserAppUrl(brand: Pick<LayoutBuilderBrandListItem, "appUrl" | "generatedPreviewUrl">): string {
+  if (brand.generatedPreviewUrl) {
+    return api.layout.publicUrl(brand.generatedPreviewUrl);
+  }
+
   return api.layout.brandRuntimeUrl(brand.appUrl);
 }
 

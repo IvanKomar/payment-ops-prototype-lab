@@ -56,6 +56,14 @@ export type LayoutBuilderAiPaymentsTableTitlePlacement = "page" | "table" | "hid
 export type LayoutBuilderAiPaymentsTableControlPlacement = "above" | "side" | "none";
 export type LayoutBuilderAiPaymentsTableDensity = "compact" | "regular" | "spacious";
 export type LayoutBuilderBrandIntentSource = "external-chat" | "codex" | "gemini" | "claude" | "manual";
+export type LayoutBuilderGeneratedBrandSourceType =
+  | "ai-intent"
+  | "ai-spec"
+  | "external-spec"
+  | "generated-react"
+  | "generated-react-fallback"
+  | "codex-generated-artifact";
+export type LayoutBuilderGeneratedArtifactFileKind = "entry" | "component" | "style" | "contract" | "bundle";
 export type LayoutBuilderLayoutVariant =
   | "classic"
   | "summary-left"
@@ -372,6 +380,70 @@ export interface LayoutBuilderCreateBrandIntentDraftRequest {
   controls?: Partial<LayoutBuilderAiGenerationControls>;
 }
 
+export interface LayoutBuilderGeneratedArtifactSourceFile {
+  path: string;
+  kind: Exclude<LayoutBuilderGeneratedArtifactFileKind, "bundle">;
+  content: string;
+}
+
+export interface LayoutBuilderGeneratedArtifactSource {
+  framework: "react-vite";
+  entryFile: string;
+  files: LayoutBuilderGeneratedArtifactSourceFile[];
+  routes: Array<{
+    path: string;
+    label: string;
+    requiresSession: boolean;
+  }>;
+  capabilities: LayoutBuilderGeneratedBrandCapability[];
+}
+
+export interface LayoutBuilderCreateGeneratedBrandRequest {
+  intent: LayoutBuilderBrandGenerationIntent;
+  artifact: LayoutBuilderGeneratedArtifactSource;
+  source?: LayoutBuilderBrandIntentSource;
+  model?: string;
+  adminPrompt?: string;
+  controls?: Partial<LayoutBuilderAiGenerationControls>;
+  allowFallback?: boolean;
+}
+
+export interface LayoutBuilderGeneratedArtifactInstructionsRequest {
+  userRequest: string;
+  recentBrandIds?: string[];
+}
+
+export interface LayoutBuilderGeneratedArtifactInstructionsResponse {
+  promptVersion: string;
+  systemPrompt: string;
+  userPrompt: string;
+  requiredQuestions: LayoutBuilderBrandIntentManifest["codexPrompt"]["userQuestions"];
+  artifactSchema: unknown;
+  sdkContract: {
+    importPath: "@brand/sdk";
+    exports: string[];
+    notes: string[];
+  };
+  constraints: {
+    framework: "react-vite";
+    entryFile: "src/App.tsx";
+    allowedImports: string[];
+    forbiddenPatterns: string[];
+    requiredRoutes: string[];
+    requiredCapabilities: LayoutBuilderGeneratedBrandCapability[];
+  };
+  recentBrandFingerprints: Array<{
+    brandId: string;
+    name: string;
+    slug: string;
+    sourceType: LayoutBuilderGeneratedBrandSourceType | null;
+    visualDirection: string | null;
+    palette: string[];
+    layout: string | null;
+    navigation: string | null;
+  }>;
+}
+
 export interface LayoutBuilderAppendBrandDraftMessageRequest {
   message: string;
   controls?: Partial<LayoutBuilderAiGenerationControls>;
@@ -444,7 +516,7 @@ export interface LayoutBuilderGeneratedBrandArtifact {
   brandId: string;
   provider: LayoutBuilderAiGenerationProfile["provider"];
   model: string;
-  sourceType: "ai-intent" | "ai-spec" | "external-spec" | "generated-react";
+  sourceType: LayoutBuilderGeneratedBrandSourceType;
   status: "draft" | "active" | "archived";
   framework: "react-vite";
   entryFile: string;
@@ -459,7 +531,7 @@ export interface LayoutBuilderGeneratedBrandArtifact {
   capabilities: LayoutBuilderGeneratedBrandCapability[];
   files: Array<{
     path: string;
-    kind: "entry" | "component" | "style" | "contract";
+    kind: LayoutBuilderGeneratedArtifactFileKind;
     bytes: number;
     content: string;
   }>;

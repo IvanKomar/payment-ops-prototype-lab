@@ -13,6 +13,7 @@ catalog:
   '@prisma/client': ^6.19.0
   '@types/node': ^24.10.1
   bullmq: ^5.66.0
+  esbuild: ^0.27.7
   eslint: ^9.39.1
   node-vibrant: ^4.0.3
   pino: ^10.1.0

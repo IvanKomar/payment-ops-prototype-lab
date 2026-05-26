@@ -40,4 +40,15 @@ describe("AiAgentManifestService", () => {
     expect(intentManifest.schema).toMatchObject({ type: "object" });
     expect(intentManifest.examples.intent.concept.paymentMetaphor).toBeTruthy();
   });
+
+  it("describes the Codex-generated React artifact flow and SDK limits", () => {
+    const generatedManifest = service.getGeneratedBrandManifest();
+
+    expect(generatedManifest.constraints.framework).toBe("react-vite");
+    expect(generatedManifest.constraints.entryFile).toBe("src/App.tsx");
+    expect(generatedManifest.sdkContract.importPath).toBe("@brand/sdk");
+    expect(generatedManifest.constraints.forbiddenPatterns).toContain("fetch(");
+    expect(generatedManifest.constraints.requiredCapabilities).toContain("create_payment");
+    expect(JSON.stringify(generatedManifest.artifactSchema)).toContain("src/App.tsx");
+  });
 });

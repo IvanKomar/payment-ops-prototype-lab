@@ -48,6 +48,27 @@ describe("AiBrandArtifactValidatorService", () => {
     ).toThrow(BadRequestException);
   });
 
+  it("allows generated sources to use the virtual brand SDK import", () => {
+    const artifact = validator.validate({
+      artifact: artifactFixture({
+        files: [
+          {
+            path: "src/App.tsx",
+            kind: "entry",
+            bytes: 86,
+            content: "import { sdk } from '@brand/sdk'; export function App() { return sdk.brand.name; }"
+          }
+        ]
+      }),
+      brandId,
+      contractVersionId,
+      slug,
+      contract: contractFixture()
+    });
+
+    expect(artifact.validation.status).toBe("passed");
+  });
+
   it("rejects generated contracts with direct runtime endpoints", () => {
     expect(() =>
       validator.validate({

@@ -12,6 +12,9 @@ import type {
   LayoutBuilderCreateBrandDraftFromSpecRequest,
   LayoutBuilderCreateBrandIntentDraftRequest,
   LayoutBuilderCreateBrandDraftRequest,
+  LayoutBuilderCreateGeneratedBrandRequest,
+  LayoutBuilderGeneratedArtifactInstructionsRequest,
+  LayoutBuilderGeneratedArtifactInstructionsResponse,
   LayoutBuilderAiBrandSpec,
   LayoutBuilderAgentManifest,
   LayoutBuilderBrandIntentManifest,
@@ -44,6 +47,7 @@ import { AiBrandSpecService, RESERVED_PUBLIC_ROUTES } from "./ai/ai-brand-spec.s
 import { AiAgentManifestService } from "./ai/ai-agent-manifest.service.js";
 import { BrandIntentCompilerService } from "./ai/brand-intent-compiler.service.js";
 import { BrandSpecUniquenessService } from "./ai/brand-spec-uniqueness.service.js";
+import { GeneratedArtifactCompilerService } from "./ai/generated-artifact-compiler.service.js";
 import { parseBearerToken } from "./dto/layout.schemas.js";
 import { PaymentCoreClientService } from "./runtime/payment-core-client.service.js";
 import {
@@ -70,6 +74,13 @@ import {
 } from "./runtime/brand-runtime.types.js";
 import type { BrandRuntimeContract } from "./runtime/brand-runtime.types.js";
 
+interface GeneratedArtifactCreateOptions {
+  artifact: LayoutBuilderCreateGeneratedBrandRequest["artifact"];
+  allowFallback: boolean;
+  model: string;
+  sourceType: LayoutBuilderGeneratedBrandArtifact["sourceType"];
+}
+
 @Injectable()
 export class LayoutService {
   constructor(
@@ -86,6 +97,7 @@ export class LayoutService {
     @Inject(AiAgentManifestService) private readonly aiAgentManifestService: AiAgentManifestService,
     @Inject(BrandIntentCompilerService) private readonly brandIntentCompiler: BrandIntentCompilerService,
     @Inject(BrandSpecUniquenessService) private readonly brandSpecUniquenessService: BrandSpecUniquenessService,
+    @Inject(GeneratedArtifactCompilerService) private readonly generatedArtifactCompiler: GeneratedArtifactCompilerService,
     @Inject(PaymentCoreClientService) private readonly paymentCoreClient: PaymentCoreClientService,
     @Inject(AuthBoundaryService) private readonly authBoundary: AuthBoundaryService
   ) {}
@@ -100,6 +112,30 @@ export class LayoutService {
 
   getBrandIntentManifest(): LayoutBuilderBrandIntentManifest {
     return this.aiAgentManifestService.getIntentManifest();
+  }
+
+  async getGeneratedArtifactInstructions(
+    input: LayoutBuilderGeneratedArtifactInstructionsRequest,
+    adminSessionToken?: string
+  ): Promise<LayoutBuilderGeneratedArtifactInstructionsResponse> {
+    await this.authBoundary.resolveAdminSession(adminSessionToken);
+    const recentBrands = input.recentBrandIds?.length
+      ? (await Promise.all(input.recentBrandIds.map((brandId) => this.repository.findBrand(brandId)))).filter((brand): brand is BrandWithSchema => Boolean(brand))
+      : await this.repository.findLatestBrands(8);
+
+    return this.aiAgentManifestService.getGeneratedArtifactInstructions({
+      userRequest: input.userRequest,
+      recentBrandFingerprints: recentBrands.map((brand) => ({
+        brandId: brand.id,
+        name: brand.name,
+        slug: brand.schema.slug,
+        sourceType: brand.schema.generatedArtifact?.sourceType ?? null,
+        visualDirection: brand.schema.generationProfile?.visualDirection ?? null,
+        palette: Object.values(brand.palette ?? {}).filter((value): value is string => typeof value === "string"),
+        layout: brand.schema.generationProfile?.dictionary?.visualTokens.layout ?? null,
+        navigation: brand.schema.generationProfile?.dictionary?.visualTokens.navigationPattern ?? null
+      }))
+    });
   }
 
   async createBrandIntentDraft(
@@ -236,6 +272,38 @@ export class LayoutService {
     }
 
     const brand = await this.createBrandFromAiSpec(file, draft.spec, draft, adminSessionToken);
+    await this.repository.markBrandGenerationDraftCreated(draft.draftId, brand.brandId);
+
+    return brand;
+  }
+
+  async createBrandFromGeneratedArtifact(
+    input: LayoutBuilderCreateGeneratedBrandRequest,
+    file: UploadedLogoFile | undefined,
+    adminSessionToken?: string
+  ): Promise<LayoutBuilderBrandResponse> {
+    this.assertLogo(file);
+    const draft = await this.createBrandIntentDraft(
+      {
+        intent: input.intent,
+        source: input.source ?? "codex",
+        model: input.model ?? "codex-generated-react-vite-v1",
+        ...(input.adminPrompt ? { adminPrompt: input.adminPrompt } : {}),
+        ...(input.controls ? { controls: input.controls } : {})
+      },
+      adminSessionToken
+    );
+
+    if (!draft.spec || draft.validationIssues.length > 0) {
+      throw new BadRequestException({ message: "Cannot create a brand from an invalid generated intent", issues: draft.validationIssues });
+    }
+
+    const brand = await this.createBrandFromAiSpec(file, draft.spec, draft, adminSessionToken, {
+      artifact: input.artifact,
+      allowFallback: input.allowFallback ?? false,
+      model: input.model ?? draft.model,
+      sourceType: "codex-generated-artifact"
+    });
     await this.repository.markBrandGenerationDraftCreated(draft.draftId, brand.brandId);
 
     return brand;
@@ -1087,7 +1155,8 @@ export class LayoutService {
     file: UploadedLogoFile,
     spec: LayoutBuilderAiBrandSpec,
     draft: LayoutBuilderBrandGenerationDraft,
-    adminSessionToken?: string
+    adminSessionToken?: string,
+    generatedArtifactOptions?: GeneratedArtifactCreateOptions
   ): Promise<LayoutBuilderBrandResponse> {
     const brandId = `br_${randomUUID().replaceAll("-", "")}`;
     const recentBrands = await this.repository.findLatestBrands(6);
@@ -1122,25 +1191,20 @@ export class LayoutService {
       aiSpec: spec,
       createdAt: now
     });
-    const generatedArtifact = this.aiProviderRegistry.generateArtifact({
+    const generatedArtifact = await this.createValidatedArtifactForBrand({
       brandId,
       brandName: spec.brand.displayName,
-      contractVersionId: contractVersion.contractVersionId,
+      contractVersion,
       contractSlug: schema.slug,
       generationProfile,
       contract,
       uiSpec: spec.ui,
-      sourceType: draft.model.includes("brand-intent") ? "ai-intent" : draft.provider === "codex" || draft.provider === "anthropic" || draft.provider === "openai" ? "external-spec" : "ai-spec"
+      draft,
+      ...(generatedArtifactOptions ? { options: generatedArtifactOptions } : {})
     });
 
     schema.contractVersion = contractVersion;
-    schema.generatedArtifact = this.artifactValidator.validate({
-      artifact: generatedArtifact,
-      brandId,
-      contractVersionId: contractVersion.contractVersionId,
-      slug: schema.slug,
-      contract
-    });
+    schema.generatedArtifact = generatedArtifact;
 
     const brand = await this.repository.createBrand({
       name: spec.brand.displayName,
@@ -1152,6 +1216,73 @@ export class LayoutService {
     await this.seedCreatedBrandDemoData(brand.id);
 
     return this.toBrandResponse(brand);
+  }
+
+  private async createValidatedArtifactForBrand(input: {
+    brandId: string;
+    brandName: string;
+    contractVersion: LayoutBuilderContractVersion;
+    contractSlug: string;
+    generationProfile: LayoutBuilderAiGenerationProfile;
+    contract: BrandRuntimeContract;
+    uiSpec: LayoutBuilderAiBrandSpec["ui"];
+    draft: LayoutBuilderBrandGenerationDraft;
+    options?: GeneratedArtifactCreateOptions;
+  }): Promise<LayoutBuilderGeneratedBrandArtifact> {
+    const validate = (artifact: LayoutBuilderGeneratedBrandArtifact): LayoutBuilderGeneratedBrandArtifact =>
+      this.artifactValidator.validate({
+        artifact,
+        brandId: input.brandId,
+        contractVersionId: input.contractVersion.contractVersionId,
+        slug: input.contractSlug,
+        contract: input.contract
+      });
+
+    if (input.options) {
+      try {
+        const artifact = await this.generatedArtifactCompiler.compile({
+          source: input.options.artifact,
+          brandId: input.brandId,
+          brandName: input.brandName,
+          contractVersionId: input.contractVersion.contractVersionId,
+          contractSlug: input.contractSlug,
+          facadeBasePath: `/brands/${input.brandId}/${input.contractSlug}`,
+          generationProfile: input.generationProfile,
+          contract: input.contract,
+          uiSpec: input.uiSpec,
+          model: input.options.model,
+          sourceType: input.options.sourceType
+        });
+
+        return validate(artifact);
+      } catch (error) {
+        if (!input.options.allowFallback) {
+          throw new BadRequestException({
+            message: "Generated artifact is invalid and allowFallback is false",
+            issues: [error instanceof Error ? error.message : String(error)]
+          });
+        }
+      }
+    }
+
+    const generatedArtifact = this.aiProviderRegistry.generateArtifact({
+      brandId: input.brandId,
+      brandName: input.brandName,
+      contractVersionId: input.contractVersion.contractVersionId,
+      contractSlug: input.contractSlug,
+      generationProfile: input.generationProfile,
+      contract: input.contract,
+      uiSpec: input.uiSpec,
+      sourceType: input.options
+        ? "generated-react-fallback"
+        : input.draft.model.includes("brand-intent")
+          ? "ai-intent"
+          : input.draft.provider === "codex" || input.draft.provider === "anthropic" || input.draft.provider === "openai"
+            ? "external-spec"
+            : "ai-spec"
+    });
+
+    return validate(generatedArtifact);
   }
 
   private async seedCreatedBrandDemoData(brandId: string): Promise<void> {
@@ -1592,6 +1723,12 @@ interface GeneratedArtifactPreviewInput {
 }
 
 function renderGeneratedArtifactPreview(input: GeneratedArtifactPreviewInput): string {
+  const bundle = input.artifact.files.find((file) => file.kind === "bundle" && file.path.endsWith(".js"));
+
+  if (bundle) {
+    return renderCompiledGeneratedArtifactPreview(input, bundle.content);
+  }
+
   const resourceLabel = humanizeRuntimeLabel(input.generationProfile.resourceAlias);
   const context = JSON.stringify(input).replace(/</gu, "\\u003c");
   const presentation = input.artifact.uiSpec.presentation;
@@ -1952,6 +2089,65 @@ function renderGeneratedArtifactPreview(input: GeneratedArtifactPreviewInput): s
         return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
       }
     </script>
+  </body>
+</html>`;
+}
+
+function renderCompiledGeneratedArtifactPreview(input: GeneratedArtifactPreviewInput, bundle: string): string {
+  const distStyles = input.artifact.files.filter((file) => file.kind === "style" && file.path.startsWith("dist/"));
+  const sourceStyles = input.artifact.files.filter((file) => file.kind === "style" && !file.path.startsWith("dist/"));
+  const styleContent = (distStyles.length > 0 ? distStyles : sourceStyles).map((file) => file.content).join("\n");
+  const slug = input.artifact.facadeBasePath.split("/").pop() ?? input.brand.name.toLowerCase().replace(/[^a-z0-9]+/gu, "-");
+  const context = JSON.stringify({
+    slug,
+    brand: {
+      name: input.brand.name,
+      logoDataUri: input.brand.logoDataUri,
+      palette: input.brand.palette
+    },
+    facadeBasePath: input.artifact.facadeBasePath,
+    contract: {
+      slug,
+      resourceAlias: input.contract.resourceAlias,
+      responseEnvelope: input.contract.responseEnvelope,
+      endpoints: input.contract.endpoints,
+      fields: input.contract.fields,
+      customerFields: input.contract.customerFields,
+      paymentMethodFields: input.contract.paymentMethodFields,
+      balanceFields: input.contract.balanceFields,
+      authFields: input.contract.authFields,
+      responseKeys: input.contract.responseKeys,
+      statusMap: input.contract.statusMap
+    },
+    labels: {
+      ...input.contract.actionLabels,
+      ...(input.artifact.uiSpec.labels ?? {})
+    },
+    copy: {
+      visualDirection: input.generationProfile.visualDirection,
+      contractSummary: input.generationProfile.contractSummary
+    },
+    themeTokens: input.generationProfile.dictionary?.visualTokens ?? input.artifact.uiSpec.presentation.visualTokens
+  }).replace(/</gu, "\\u003c");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(input.brand.name)} generated preview</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body, #root { min-height: 100%; }
+      body { margin: 0; }
+      button, input, select, textarea { font: inherit; }
+      ${styleContent}
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>window.__BRAND_SDK_CONTEXT__ = ${context};</script>
+    <script>${bundle.replace(/<\/script/giu, "<\\/script")}</script>
   </body>
 </html>`;
 }

@@ -108,7 +108,9 @@ function assertFileSafety(artifact: LayoutBuilderGeneratedBrandArtifact): string
       throw new BadRequestException("Generated artifact contains an unsafe file path");
     }
 
-    if (FORBIDDEN_SOURCE_PATTERNS.some((pattern) => pattern.test(file.content))) {
+    const forbiddenPatterns = file.kind === "bundle" ? FORBIDDEN_COMPILED_PATTERNS : FORBIDDEN_SOURCE_PATTERNS;
+
+    if (forbiddenPatterns.some((pattern) => pattern.test(file.content))) {
       throw new BadRequestException("Generated artifact source exposes internal platform details");
     }
   }
@@ -117,6 +119,14 @@ function assertFileSafety(artifact: LayoutBuilderGeneratedBrandArtifact): string
 }
 
 const FORBIDDEN_SOURCE_PATTERNS = [
+  /\bfetch\s*\(/iu,
+  /\bXMLHttpRequest\b/u,
+  /\bWebSocket\b/u,
+  /\bEventSource\b/u,
+  /\bnavigator\.sendBeacon\b/u,
+  /\beval\s*\(/u,
+  /\bnew\s+Function\b/u,
+  /\bdocument\.cookie\b/u,
   /\bpayment-core\b/iu,
   /\bPaymentCore\b/u,
   /\bPrisma\b/u,
@@ -127,5 +137,15 @@ const FORBIDDEN_SOURCE_PATTERNS = [
   /\/runtime\//u,
   /\/profile\b/iu,
   /\/rest-api\b/iu,
-  /^https?:\/\//imu
+  /https?:\/\//iu
+];
+
+const FORBIDDEN_COMPILED_PATTERNS = [
+  /\bXMLHttpRequest\b/u,
+  /\bWebSocket\b/u,
+  /\bEventSource\b/u,
+  /\bnavigator\.sendBeacon\b/u,
+  /\beval\s*\(/u,
+  /\bnew\s+Function\b/u,
+  /https?:\/\//iu
 ];

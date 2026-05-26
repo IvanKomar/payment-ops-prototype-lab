@@ -3,7 +3,6 @@ import { ApiNotFoundResponse, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 
 import {
   entitySlugSchema,
-  parseBearerToken,
   slugSchema,
   ZodValidationPipe
 } from "../dto/layout.schemas.js";

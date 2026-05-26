@@ -3,7 +3,8 @@ import type {
   LayoutBuilderAgentManifest,
   LayoutBuilderAiBrandSpec,
   LayoutBuilderBrandGenerationIntent,
-  LayoutBuilderBrandIntentManifest
+  LayoutBuilderBrandIntentManifest,
+  LayoutBuilderGeneratedArtifactInstructionsResponse
 } from "@payment-ops/shared-types";
 
 import {
@@ -18,6 +19,73 @@ import { BRAND_SPEC_UNIQUENESS_THRESHOLD } from "./brand-spec-uniqueness.service
 
 @Injectable()
 export class AiAgentManifestService {
+  getGeneratedBrandManifest(): LayoutBuilderGeneratedArtifactInstructionsResponse {
+    return this.getGeneratedArtifactInstructions({
+      userRequest: "Create a visually unique generated payment brand with a React artifact.",
+      recentBrandFingerprints: []
+    });
+  }
+
+  getGeneratedArtifactInstructions(input: {
+    userRequest: string;
+    recentBrandFingerprints: LayoutBuilderGeneratedArtifactInstructionsResponse["recentBrandFingerprints"];
+  }): LayoutBuilderGeneratedArtifactInstructionsResponse {
+    const intentManifest = this.getIntentManifest();
+
+    return {
+      promptVersion: "2026-05-26.codex-generated-artifact.v1",
+      systemPrompt: [
+        "You are Codex acting as the primary LLM executor for brand generation.",
+        "Read the repository/server manifest, ask the user for missing brand inputs, then generate two objects: BrandGenerationIntent and a React/Vite source artifact.",
+        "The backend compiles the intent into the private integration contract and injects @brand/sdk; the artifact must never make raw network calls or expose internal platform words.",
+        "The generated UI must be authored as real React components and CSS, not as a thin wrapper around server templates."
+      ].join(" "),
+      userPrompt: [
+        input.userRequest,
+        "Return a multipart create payload containing { intent, artifact, source, model, adminPrompt, controls, allowFallback } plus a logo file.",
+        "Generate artifact.framework='react-vite', artifact.entryFile='src/App.tsx', and include all source files inline.",
+        "Use import { sdk } from '@brand/sdk'; for brand context, auth, payments, customers, and balances.",
+        "Make the payments page a usable payment table with seeded data loading and create-payment flow."
+      ].join("\n"),
+      requiredQuestions: intentManifest.codexPrompt.userQuestions,
+      artifactSchema: generatedArtifactSourceJsonSchema(),
+      sdkContract: {
+        importPath: "@brand/sdk",
+        exports: ["sdk"],
+        notes: [
+          "sdk.brand exposes name, logoDataUri, palette, labels, themeTokens, and contract copy.",
+          "sdk.auth.login/register/logout/getSession handle auth aliases, envelopes, token storage, and headers.",
+          "sdk.payments.list/create map public aliases and decoded response envelopes.",
+          "sdk.customers.list and sdk.balances.list provide read helpers for supporting UI.",
+          "Generated source must not import backend files, call fetch, or construct URLs manually."
+        ]
+      },
+      constraints: {
+        framework: "react-vite",
+        entryFile: "src/App.tsx",
+        allowedImports: ["react", "react/jsx-runtime", "@brand/sdk", "./*.css", "./*.tsx"],
+        forbiddenPatterns: [
+          "fetch(",
+          "XMLHttpRequest",
+          "WebSocket",
+          "EventSource",
+          "navigator.sendBeacon",
+          "eval(",
+          "new Function",
+          "http://",
+          "https://",
+          "bff",
+          "runtime",
+          "payment-core",
+          "brandId"
+        ],
+        requiredRoutes: ["/login", "/dashboard", "/payments"],
+        requiredCapabilities: ["register_user", "login_user", "read_payments", "create_payment"]
+      },
+      recentBrandFingerprints: input.recentBrandFingerprints
+    };
+  }
+
   getIntentManifest(): LayoutBuilderBrandIntentManifest {
     const intent = exampleIntent();
 
@@ -954,6 +1022,58 @@ function paymentsExperienceJsonSchema(): Record<string, unknown> {
         submit: stringSchema()
       })
     })
+  });
+}
+
+function generatedArtifactSourceJsonSchema(): unknown {
+  return objectSchema({
+    framework: { const: "react-vite" },
+    entryFile: { const: "src/App.tsx" },
+    files: {
+      type: "array",
+      minItems: 1,
+      maxItems: 16,
+      items: {
+        type: "object",
+        required: ["path", "kind", "content"],
+        additionalProperties: false,
+        properties: {
+          path: { type: "string", pattern: "^src/[A-Za-z0-9_./-]+$" },
+          kind: { type: "string", enum: ["entry", "component", "style", "contract"] },
+          content: { type: "string", minLength: 1 }
+        }
+      }
+    },
+    routes: {
+      type: "array",
+      minItems: 3,
+      items: {
+        type: "object",
+        required: ["path", "label", "requiresSession"],
+        additionalProperties: false,
+        properties: {
+          path: { type: "string", enum: ["/login", "/dashboard", "/payments"] },
+          label: stringSchema(),
+          requiresSession: { type: "boolean" }
+        }
+      }
+    },
+    capabilities: {
+      type: "array",
+      minItems: 4,
+      items: {
+        type: "string",
+        enum: [
+          "register_user",
+          "login_user",
+          "read_payments",
+          "create_payment",
+          "read_customers",
+          "create_customer",
+          "read_balance_transactions"
+        ]
+      }
+    }
   });
 }
 

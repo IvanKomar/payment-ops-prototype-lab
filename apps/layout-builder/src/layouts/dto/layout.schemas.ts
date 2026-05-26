@@ -274,6 +274,57 @@ export const createBrandIntentDraftSchema = z.object({
   controls: aiGenerationControlsSchema
 });
 
+const generatedArtifactCapabilitySchema = z.enum([
+  "register_user",
+  "login_user",
+  "read_payments",
+  "create_payment",
+  "read_customers",
+  "create_customer",
+  "read_balance_transactions"
+]);
+
+const generatedArtifactFilePathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(160)
+  .refine((value) => !value.startsWith("/") && !value.includes(".."), "file path must be relative and stay inside the artifact")
+  .refine((value) => value.startsWith("src/"), "source files must live under src/");
+
+const generatedArtifactRouteSchema = z.object({
+  path: z.string().trim().regex(/^\/[a-z0-9][a-z0-9_/-]{0,80}$/u),
+  label: z.string().trim().min(1).max(80),
+  requiresSession: z.boolean()
+});
+
+const generatedArtifactSourceSchema = z.object({
+  framework: z.literal("react-vite"),
+  entryFile: z.literal("src/App.tsx"),
+  files: z.array(z.object({
+    path: generatedArtifactFilePathSchema,
+    kind: z.enum(["entry", "component", "style", "contract"]),
+    content: z.string().min(1).max(80_000)
+  })).min(1).max(16),
+  routes: z.array(generatedArtifactRouteSchema).min(3).max(12),
+  capabilities: z.array(generatedArtifactCapabilitySchema).min(4).max(12)
+});
+
+export const generatedArtifactInstructionsSchema = z.object({
+  userRequest: z.string().trim().min(1).max(6000),
+  recentBrandIds: z.array(brandIdSchema).max(12).optional()
+});
+
+export const createGeneratedBrandArtifactSchema = z.object({
+  intent: brandGenerationIntentSchema,
+  artifact: generatedArtifactSourceSchema,
+  source: z.enum(["external-chat", "codex", "gemini", "claude", "manual"]).default("codex"),
+  model: z.string().trim().min(1).max(120).optional(),
+  adminPrompt: z.string().trim().min(1).max(6000).optional(),
+  controls: aiGenerationControlsSchema,
+  allowFallback: z.boolean().default(false)
+});
+
 export const appendBrandDraftMessageSchema = z.object({
   message: z.string().trim().min(1).max(6000),
   controls: aiGenerationControlsSchema

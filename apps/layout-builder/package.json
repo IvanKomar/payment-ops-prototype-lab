@@ -22,7 +22,10 @@
     "@payment-ops/shared-logger": "workspace:*",
     "@payment-ops/shared-types": "workspace:*",
     "@prisma/client": "catalog:",
+    "esbuild": "catalog:",
     "node-vibrant": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
     "zod": "catalog:"

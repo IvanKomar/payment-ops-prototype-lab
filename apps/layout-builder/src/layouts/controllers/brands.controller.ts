@@ -34,8 +34,11 @@ import type {
   LayoutBuilderCreateBrandIntentDraftRequest,
   LayoutBuilderCreateBrandDraftFromSpecRequest,
   LayoutBuilderCreateBrandDraftRequest,
+  LayoutBuilderCreateGeneratedBrandRequest,
   LayoutBuilderDeleteBrandResponse,
   LayoutBuilderAgentManifest,
+  LayoutBuilderGeneratedArtifactInstructionsRequest,
+  LayoutBuilderGeneratedArtifactInstructionsResponse,
   LayoutBuilderRegenerateContractRequest
 } from "@payment-ops/shared-types";
 import type { z } from "zod";
@@ -52,9 +55,11 @@ import {
   createBrandDraftSchema,
   createBrandIntentDraftSchema,
   createBrandDraftFromSpecSchema,
+  createGeneratedBrandArtifactSchema,
   createBrandSchema,
   CreateBrandResponseDto,
   DeleteBrandResponseDto,
+  generatedArtifactInstructionsSchema,
   parseOptionalBearerToken,
   regenerateContractSchema,
   slugSchema,
@@ -148,6 +153,37 @@ export class BrandsController {
     @Headers("authorization") authorization: string | undefined
   ): Promise<LayoutBuilderBrandGenerationDraft> {
     return this.layoutService.createBrandIntentDraft(body, parseOptionalBearerToken(authorization));
+  }
+
+  @Post("generated-artifacts/instructions")
+  @ApiOkResponse({ description: "Return Codex prompt, questions, SDK docs, constraints, and recent brand fingerprints" })
+  getGeneratedArtifactInstructions(
+    @Body(new ZodValidationPipe(generatedArtifactInstructionsSchema)) body: LayoutBuilderGeneratedArtifactInstructionsRequest,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderGeneratedArtifactInstructionsResponse> {
+    return this.layoutService.getGeneratedArtifactInstructions(body, parseOptionalBearerToken(authorization));
+  }
+
+  @Post("generated-artifacts/create")
+  @UseInterceptors(
+    FileInterceptor("logo", {
+      limits: {
+        fileSize: config.LAYOUT_MAX_UPLOAD_BYTES
+      }
+    })
+  )
+  @ApiConsumes("multipart/form-data")
+  @ApiOkResponse({ type: BrandResponseDto })
+  createBrandFromGeneratedArtifact(
+    @UploadedFile() file: UploadedLogoFile | undefined,
+    @Body("payload") payload: string | undefined,
+    @Headers("authorization") authorization: string | undefined
+  ): Promise<LayoutBuilderBrandResponse> {
+    return this.layoutService.createBrandFromGeneratedArtifact(
+      parseGeneratedArtifactPayload(payload),
+      file,
+      parseOptionalBearerToken(authorization)
+    );
   }
 
   @Get("intent-drafts/:draftId")
@@ -471,6 +507,16 @@ function parseIntentPayload(payload: string | undefined): LayoutBuilderCreateBra
   return cleanIntentRequest(parsed.data);
 }
 
+function parseGeneratedArtifactPayload(payload: string | undefined): LayoutBuilderCreateGeneratedBrandRequest {
+  const parsed = createGeneratedBrandArtifactSchema.safeParse(parseJsonPayload(payload));
+
+  if (!parsed.success) {
+    throw new BadRequestException(parsed.error.issues.map((issue) => `${issue.path.join(".") || "payload"}: ${issue.message}`).join("; "));
+  }
+
+  return cleanGeneratedArtifactRequest(parsed.data);
+}
+
 function cleanFromSpecRequest(input: z.infer<typeof createBrandDraftFromSpecSchema>): LayoutBuilderCreateBrandDraftFromSpecRequest {
   return {
     brandName: input.brandName,
@@ -487,6 +533,20 @@ function cleanIntentRequest(input: z.infer<typeof createBrandIntentDraftSchema>)
   return {
     intent: input.intent,
     source: input.source,
+    ...(input.adminPrompt ? { adminPrompt: input.adminPrompt } : {}),
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.controls ? { controls: cleanControls(input.controls) } : {})
+  };
+}
+
+function cleanGeneratedArtifactRequest(
+  input: z.infer<typeof createGeneratedBrandArtifactSchema>
+): LayoutBuilderCreateGeneratedBrandRequest {
+  return {
+    intent: input.intent,
+    artifact: input.artifact,
+    source: input.source,
+    allowFallback: input.allowFallback,
     ...(input.adminPrompt ? { adminPrompt: input.adminPrompt } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.controls ? { controls: cleanControls(input.controls) } : {})

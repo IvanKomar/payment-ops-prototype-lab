@@ -42,6 +42,9 @@ catalogs:
     bullmq:
       specifier: ^5.66.0
       version: 5.76.8
+    esbuild:
+      specifier: ^0.27.7
+      version: 0.27.7
     eslint:
       specifier: ^9.39.1
       version: 9.39.4
@@ -196,9 +199,18 @@ importers:
       '@prisma/client':
         specifier: 'catalog:'
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      esbuild:
+        specifier: 'catalog:'
+        version: 0.27.7
       node-vibrant:
         specifier: 'catalog:'
         version: 4.0.4
+      react:
+        specifier: 'catalog:'
+        version: 19.2.6
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.6(react@19.2.6)
       reflect-metadata:
         specifier: 'catalog:'
         version: 0.2.2

@@ -24,6 +24,7 @@ import { AiBrandSpecService } from "./ai/ai-brand-spec.service.js";
 import { AiAgentManifestService } from "./ai/ai-agent-manifest.service.js";
 import { BrandIntentCompilerService } from "./ai/brand-intent-compiler.service.js";
 import { BrandSpecUniquenessService } from "./ai/brand-spec-uniqueness.service.js";
+import { GeneratedArtifactCompilerService } from "./ai/generated-artifact-compiler.service.js";
 import { PaymentCoreClientService } from "./runtime/payment-core-client.service.js";
 
 @Module({
@@ -44,6 +45,7 @@ import { PaymentCoreClientService } from "./runtime/payment-core-client.service.
     AiAgentManifestService,
     BrandIntentCompilerService,
     BrandSpecUniquenessService,
+    GeneratedArtifactCompilerService,
     PaymentCoreClientService,
     LogoStorageService,
     PaletteService,
