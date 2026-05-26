@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { LayoutBuilderGeneratedBrandArtifact } from "@payment-ops/shared-types";
 
 import { AiBrandArtifactValidatorService } from "../src/layouts/ai/ai-brand-artifact-validator.service.js";
+import { toRuntimeEntityResponse } from "../src/layouts/runtime/brand-runtime.types.js";
 import type { BrandRuntimeContract } from "../src/layouts/runtime/brand-runtime.types.js";
 
 const validator = new AiBrandArtifactValidatorService();
@@ -60,6 +61,20 @@ describe("AiBrandArtifactValidatorService", () => {
       })
     ).toThrow(BadRequestException);
   });
+
+  it("applies generated runtime response envelopes to public entity data", () => {
+    const payload = [{ paymentId: "PM-1" }];
+
+    expect(toRuntimeEntityResponse({ ...contractFixture(), responseEnvelope: "plain" }, "payments", payload)).toEqual(payload);
+    expect(toRuntimeEntityResponse({ ...contractFixture(), responseEnvelope: "data" }, "payments", payload)).toEqual({
+      data: payload,
+      meta: { count: 1, resource: "payments" }
+    });
+    expect(toRuntimeEntityResponse({ ...contractFixture(), responseEnvelope: "result" }, "payments", payload)).toEqual({
+      ok: true,
+      result: { count: 1, payments: payload, resource: "payments" }
+    });
+  });
 });
 
 function artifactFixture(
@@ -93,6 +108,11 @@ function artifactFixture(
       formLabels: { amount: "Amount", customer: "Customer", method: "Method" },
       authExperience: {
         content: { headline: "Test Brand", description: "Secure access for the generated brand." },
+        composition: {
+          frame: "split",
+          brandTreatment: "stacked",
+          showDescription: true
+        },
         layout: {
           brandColumn: 50,
           formMaxWidth: 420,
@@ -145,10 +165,40 @@ function artifactFixture(
           panelPadding: 16,
           rowMinHeight: 64
         },
+        table: {
+          titlePlacement: "table",
+          controlsPlacement: "above",
+          density: "regular",
+          columns: [
+            { key: "reference", label: "Payment", priority: 1 },
+            { key: "status", label: "State", priority: 2 },
+            { key: "amount", label: "Amount", priority: 3 },
+            { key: "customer", label: "Customer", priority: 4 },
+            { key: "createdAt", label: "Created", priority: 5 }
+          ]
+        },
         visual: {
           surface: "test surface",
           status: "test status",
           dataDensity: "test density"
+        },
+        createPayment: {
+          enabled: true,
+          placement: "activity-top",
+          surface: "panel",
+          tone: "operator",
+          defaultScenario: "settle",
+          labels: {
+            title: "Create payment",
+            amount: "Amount",
+            currency: "Currency",
+            customer: "Customer",
+            customerEmail: "Customer email",
+            methodType: "Payment source",
+            instrument: "Card or account",
+            scenario: "Processing route",
+            submit: "Create payment"
+          }
         }
       },
       presentation: {
@@ -203,6 +253,8 @@ function contractFixture(endpoints: Partial<BrandRuntimeContract["endpoints"]> =
     brandId,
     brandName: "Nova",
     resourceAlias: "settlementCases",
+    payloadStructure: "nested",
+    responseEnvelope: "resource_key",
     statusMap: {
       created: "created",
       requires_payment_method: "requiresMethod",

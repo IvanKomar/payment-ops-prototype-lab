@@ -33,7 +33,7 @@ export class SchemaGeneratorService {
     return {
       id: `sch_${randomUUID().replaceAll("-", "")}`,
       brandId,
-      slug: `${brandSlug(brandName)}_${createHash("sha1").update(`${brandId}:${brandName}`).digest("hex").slice(0, 16)}`,
+      slug: `${schemaSlugStem(brandId, brandName, generationProfile)}_${createHash("sha1").update(`${brandId}:${brandName}`).digest("hex").slice(0, 16)}`,
       fieldsStyle,
       structure,
       fields,
@@ -75,6 +75,60 @@ export function brandSlug(value: string): string {
     .slice(0, 42);
 
   return normalized || "brand";
+}
+
+function schemaSlugStem(
+  brandId: string,
+  brandName: string,
+  generationProfile: LayoutBuilderAiGenerationProfile | null
+): string {
+  if (!generationProfile) {
+    return brandSlug(brandName);
+  }
+
+  const candidates = [
+    generationProfile.dictionary?.publicRoutes.payments,
+    generationProfile.dictionary?.publicRoutes.metrics,
+    generationProfile.resourceAlias,
+    generationProfile.actionLabels.history,
+    generationProfile.actionLabels.createPayment,
+    generationProfile.visualDirection
+  ];
+
+  for (const candidate of candidates) {
+    const stem = publicRouteSlug(candidate);
+    if (stem) {
+      return stem;
+    }
+  }
+
+  return `workspace-${createHash("sha1").update(brandId).digest("hex").slice(0, 6)}`;
+}
+
+function publicRouteSlug(value: string | undefined): string | null {
+  const blocked = new Set([
+    "brand",
+    "payment",
+    "payments",
+    "ledger",
+    "runtime",
+    "profile",
+    "bff",
+    "api",
+    "app",
+    "system"
+  ]);
+  const words = brandSlug(value ?? "")
+    .split("-")
+    .filter((word) => word.length > 1 && !blocked.has(word))
+    .slice(0, 3);
+
+  if (words.length === 0) {
+    return null;
+  }
+
+  const stem = words.join("-").slice(0, 42).replace(/-+$/u, "");
+  return stem.length >= 7 ? stem : `${stem}-gate`;
 }
 
 const CYRILLIC_TO_LATIN: Record<string, string> = {

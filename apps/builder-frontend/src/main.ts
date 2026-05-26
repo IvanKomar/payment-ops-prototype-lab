@@ -710,6 +710,11 @@ function defaultBrandIntentJson(): string {
           headline: "Copper Harbor",
           description: "Dock-pass access for market operators clearing cargo-style payment activity."
         },
+        composition: {
+          frame: "split",
+          brandTreatment: "stacked",
+          showDescription: true
+        },
         layout: {
           brandColumn: 44,
           formMaxWidth: 430,
@@ -746,7 +751,7 @@ function defaultBrandIntentJson(): string {
         },
         composition: {
           metricsPlacement: "left",
-          activityPattern: "cards",
+          activityPattern: "table",
           statusTreatment: "rail",
           amountEmphasis: "primary",
           showCustomer: true,
@@ -762,10 +767,41 @@ function defaultBrandIntentJson(): string {
           panelPadding: 16,
           rowMinHeight: 72
         },
+        table: {
+          titlePlacement: "hidden",
+          controlsPlacement: "side",
+          density: "spacious",
+          columns: [
+            { key: "reference", label: "Cargo file", priority: 1 },
+            { key: "status", label: "Dock state", priority: 2 },
+            { key: "customer", label: "Client orbit", priority: 3 },
+            { key: "destination", label: "Berth", priority: 4 },
+            { key: "amount", label: "Cargo value", priority: 5 },
+            { key: "method", label: "Rail array", priority: 6 }
+          ]
+        },
         visual: {
           surface: "copper and steel payment board with tide-blue separators",
-          status: "status rail on each cargo card",
+          status: "status rail embedded into cargo table rows",
           dataDensity: "balanced scan density for repeated payment review"
+        },
+        createPayment: {
+          enabled: true,
+          placement: "sidecar",
+          surface: "panel",
+          tone: "guided",
+          defaultScenario: "settle",
+          labels: {
+            title: "Log cargo clearing",
+            amount: "Cargo value",
+            currency: "Currency",
+            customer: "Client orbit",
+            customerEmail: "Client signal",
+            methodType: "Rail array",
+            instrument: "Rail reference",
+            scenario: "Dock route",
+            submit: "Clear cargo"
+          }
         }
       },
       statusVocabulary: {

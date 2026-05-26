@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type {
   LayoutBuilderAiBrandSpec,
   LayoutBuilderAiDashboardBlock,
+  LayoutBuilderDeepPartial,
   LayoutBuilderAiGenerationControls,
   LayoutBuilderBrandGenerationIntent,
   LayoutBuilderFieldStyle,
@@ -48,7 +49,7 @@ export class BrandIntentCompilerService {
         login: entity(routes.next("login", [intent.concept.authMetaphor, "enter"]), "POST", false, field(`${terms.auth}_check`), field(`${terms.auth}_session`), empty(intent, "login")),
         account: entity(routes.next("account", [intent.concept.authMetaphor, "seat"]), "GET", true, field(`${terms.auth}_lookup`), field(`${terms.auth}_record`), empty(intent, "account")),
         metrics: entity(routes.next("metrics", [intent.concept.productMetaphor, "pulse"]), "GET", true, field(`${terms.product}_scope`), field(`${terms.product}_signals`), empty(intent, "metrics")),
-        payments: entity(routes.next("payments", [intent.concept.paymentMetaphor, "ledger"]), "GET", true, field(`${terms.payment}_filter`), resourceAlias, empty(intent, "payments")),
+        payments: entity(routes.next("payments", paymentRouteParts(intent, terms, presentation)), "GET", true, field(`${terms.payment}_filter`), resourceAlias, empty(intent, "payments")),
         customers: entity(routes.next("customers", [terms.audience, "book"]), "GET", true, field(`${terms.audience}_filter`), field(`${terms.audience}_records`), empty(intent, "customers")),
         paymentMethods: entity(routes.next("paymentMethods", [terms.rail, "vault"]), "GET", true, field(`${terms.rail}_filter`), field(`${terms.rail}_records`), empty(intent, "paymentMethods")),
         balances: entity(routes.next("balances", [terms.reserve, "stream"]), "GET", true, field(`${terms.reserve}_scope`), field(`${terms.reserve}_entries`), empty(intent, "balances"))
@@ -140,7 +141,7 @@ export class BrandIntentCompilerService {
           customer: title(human(terms.audience)),
           method: title(human(terms.rail))
         },
-        authExperience: authExperience(intent, presentation),
+        authExperience: authExperience(intent, presentation, terms),
         paymentsExperience: paymentsExperience(intent, presentation, terms, resourceAlias),
         presentation: {
           layout: presentation.layout,
@@ -217,6 +218,55 @@ function routeFactory(terms: Record<string, string>, intent: LayoutBuilderBrandG
       return fallback;
     }
   };
+}
+
+function paymentRouteParts(
+  intent: LayoutBuilderBrandGenerationIntent,
+  terms: Record<"product" | "auth" | "payment" | "audience" | "rail" | "reserve", string>,
+  presentation: ReturnType<typeof visualSystem>
+): string[] {
+  const suffix = routeStyleToken(intent) ?? paymentRouteSuffix(presentation.layout);
+  return [intent.concept.paymentMetaphor || terms.payment, suffix];
+}
+
+function routeStyleToken(intent: LayoutBuilderBrandGenerationIntent): string | undefined {
+  const blocked = new Set([
+    "payment",
+    "payments",
+    "generic",
+    "words",
+    "without",
+    "terms",
+    "route",
+    "routes",
+    "slug",
+    "slugs",
+    "style",
+    "short",
+    "public",
+    "canonical",
+    ...intent.namingRules.forbiddenCanonicalNames.map((value) => safeToken(value)),
+    ...intent.concept.avoidWords.map((value) => safeToken(value))
+  ]);
+  const tokens = intent.namingRules.routeStyle
+    .split(/[^a-zA-Zа-яА-Я0-9]+/u)
+    .map((value) => safeToken(value))
+    .filter((value) => value.length > 2 && value !== "ledger" && !blocked.has(value));
+
+  return tokens[0];
+}
+
+function paymentRouteSuffix(layout: ReturnType<typeof visualSystem>["layout"]): string {
+  const suffixes: Record<ReturnType<typeof visualSystem>["layout"], string> = {
+    "card-operations": "drop",
+    "compact-terminal": "stream",
+    "split-workspace": "flow",
+    "topbar-console": "lane",
+    "command-center": "run",
+    "sidebar-ledger": "register"
+  };
+
+  return suffixes[layout] ?? "flow";
 }
 
 function entity(route: string, method: "GET" | "POST", requiresSession: boolean, requestKey: string, responseKey: string, emptyState: string): LayoutBuilderAiBrandSpec["entities"]["payments"] {
@@ -319,6 +369,71 @@ function pickAllowed<T extends string>(value: string, allowed: readonly T[], fal
   return allowed.find((entry) => entry === normalized) ?? fallback;
 }
 
+function pickLayout(value: string): LayoutBuilderAiBrandSpec["ui"]["presentation"]["layout"] {
+  const normalized = normalizedPhrase(value);
+  const compactWords = ["terminal", "console log", "cli", "shell", "compact terminal"];
+  const cardWords = ["card", "tile", "wall", "board", "kanban"];
+  const splitWords = ["split", "two column", "workspace", "dual", "side by side"];
+  const topbarWords = ["topbar", "top bar", "top nav", "header", "tabs"];
+  const commandWords = ["command", "control", "mission", "ops center", "center"];
+  const sidebarWords = ["sidebar", "ledger", "classic"];
+
+  if (hasAny(normalized, compactWords)) {
+    return "compact-terminal";
+  }
+  if (hasAny(normalized, cardWords)) {
+    return "card-operations";
+  }
+  if (hasAny(normalized, splitWords)) {
+    return "split-workspace";
+  }
+  if (hasAny(normalized, topbarWords)) {
+    return "topbar-console";
+  }
+  if (hasAny(normalized, commandWords)) {
+    return "command-center";
+  }
+  if (hasAny(normalized, sidebarWords)) {
+    return "sidebar-ledger";
+  }
+
+  return pickAllowed(value, AI_UI_LAYOUTS, "sidebar-ledger");
+}
+
+function pickDensity(value: string): LayoutBuilderAiBrandSpec["ui"]["presentation"]["density"] {
+  const normalized = normalizedPhrase(value);
+
+  if (hasAny(normalized, ["compact", "dense", "tight", "terminal"])) {
+    return "compact";
+  }
+  if (hasAny(normalized, ["spacious", "open", "airy", "large"])) {
+    return "spacious";
+  }
+
+  return pickAllowed(value, AI_UI_DENSITIES, "balanced");
+}
+
+function pickNavigation(value: string): LayoutBuilderAiBrandSpec["ui"]["presentation"]["navigationPattern"] {
+  const normalized = normalizedPhrase(value);
+
+  if (hasAny(normalized, ["command", "rail", "palette", "launcher"])) {
+    return "command-rail";
+  }
+  if (hasAny(normalized, ["top", "tab", "header"])) {
+    return "top-tabs";
+  }
+
+  return pickAllowed(value, AI_UI_NAVIGATION_PATTERNS, "sidebar");
+}
+
+function normalizedPhrase(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/gu, " ").trim();
+}
+
+function hasAny(value: string, needles: readonly string[]): boolean {
+  return needles.some((needle) => value.includes(needle));
+}
+
 function dashboardBlocks(values: string[]): LayoutBuilderAiDashboardBlock[] {
   const normalized = values.map((value) => value.replaceAll(/\s+/gu, "").replace(/^recentpayments$/iu, "recentPayments"));
   const selected = normalized.filter((value): value is LayoutBuilderAiDashboardBlock =>
@@ -344,38 +459,49 @@ function visualSystem(
   typography: string;
   visualDirection: string;
 } {
-  const layout = pickAllowed(intent.uiDirection.layout, AI_UI_LAYOUTS, "command-center");
-  const density = pickAllowed(intent.uiDirection.density, AI_UI_DENSITIES, "balanced");
-  const navigationPattern = pickAllowed(intent.uiDirection.navigation, AI_UI_NAVIGATION_PATTERNS, "sidebar");
+  const layout = pickLayout(intent.uiDirection.layout);
+  const density = pickDensity(intent.uiDirection.density);
+  const navigationPattern = pickNavigation(intent.uiDirection.navigation);
   const palette = professionalPalette(intent, layout);
   const isDarkLayout = layout === "command-center" || layout === "compact-terminal";
   const densityText = density === "compact" ? "dense but legible" : density === "spacious" ? "open and scannable" : "balanced";
+  const visualStyle = intent.uiDirection.visualStyle.trim();
+  const navigation = intent.uiDirection.navigation.trim();
 
   return {
-    buttons: isDarkLayout
-      ? "high-contrast primary actions, restrained secondary controls, clear focus and review states"
-      : "solid primary actions, quiet secondary controls, visible focus states, and non-destructive review actions",
+    buttons: limitText(isDarkLayout
+      ? `${visualStyle}; high-contrast primary actions with restrained secondary controls`
+      : `${visualStyle}; solid primary actions with quiet secondary controls`, 176),
     density,
     layout,
     navigationPattern,
     palette,
     radius: controls.namingIntensity === "maximum" || density === "compact" ? "6px" : "8px",
-    spacing: `${densityText} spacing, stable table rows, predictable forms`,
-    surfaces: isDarkLayout
-      ? "dark application shell with readable raised panels, subtle borders, and strong numeric contrast"
-      : "light application shell with white work surfaces, low-noise borders, and calm financial hierarchy",
+    spacing: limitText(`${densityText} spacing shaped by ${navigation || "the generated navigation model"}`, 176),
+    surfaces: limitText(isDarkLayout
+      ? `${visualStyle}; dark shell with readable raised panels and strong numeric contrast`
+      : `${visualStyle}; readable work surfaces with low-noise borders and clear hierarchy`, 176),
     typography: typographyForLayout(layout, intent.concept.tone),
     visualDirection: `${intent.uiDirection.visualStyle}. Normalize into a production payment dashboard with readable contrast, restrained accents, clear hierarchy, and accessible controls.`
   };
 }
 
+function limitText(value: string, max: number): string {
+  const clean = value.replaceAll(/\s+/gu, " ").trim();
+
+  return clean.length <= max ? clean : clean.slice(0, max - 1).trimEnd();
+}
+
 function authExperience(
   intent: LayoutBuilderBrandGenerationIntent,
-  presentation: ReturnType<typeof visualSystem>
+  presentation: ReturnType<typeof visualSystem>,
+  terms: Record<"product" | "auth" | "payment" | "audience" | "rail" | "reserve", string>
 ): LayoutBuilderAiBrandSpec["ui"]["authExperience"] {
   const input = intent.authExperience;
-  const isCompact = presentation.density === "compact";
-  const isDark = presentation.layout === "command-center" || presentation.layout === "compact-terminal";
+  const authDefaults = authDefaultsFor(presentation, intent.brandName);
+  const authLabel = title(human(terms.auth));
+  const audienceLabel = title(human(terms.audience));
+  const passwordLabel = authSecretLabel(intent, authLabel);
 
   return {
     content: {
@@ -384,33 +510,38 @@ function authExperience(
         input?.content?.description ??
         `${intent.brandName} access for ${intent.concept.audience}, shaped around ${intent.concept.authMetaphor} and ${intent.concept.paymentMetaphor}.`
     },
+    composition: {
+      frame: pickAllowed(input?.composition?.frame ?? "", ["split", "centered", "offset", "console", "minimal"] as const, authDefaults.frame),
+      brandTreatment: pickAllowed(input?.composition?.brandTreatment ?? "", ["stacked", "inline", "badge"] as const, authDefaults.brandTreatment),
+      showDescription: input?.composition?.showDescription ?? authDefaults.showDescription
+    },
     layout: {
-      brandColumn: clampNumber(input?.layout?.brandColumn, 30, 70, presentation.layout === "split-workspace" ? 44 : 50),
-      formMaxWidth: clampNumber(input?.layout?.formMaxWidth, 320, 620, isCompact ? 380 : 440),
-      logoSize: clampNumber(input?.layout?.logoSize, 48, 128, isCompact ? 64 : 84),
-      panelPadding: clampNumber(input?.layout?.panelPadding, 12, 40, isCompact ? 16 : 22),
-      gap: clampNumber(input?.layout?.gap, 16, 72, isCompact ? 22 : 32),
-      brandAlignment: pickAllowed(input?.layout?.brandAlignment ?? "", ["start", "center", "end"] as const, presentation.layout === "command-center" ? "center" : "start"),
-      formAlignment: pickAllowed(input?.layout?.formAlignment ?? "", ["start", "center", "end"] as const, "center"),
-      textAlign: pickAllowed(input?.layout?.textAlign ?? "", ["left", "center", "right"] as const, presentation.layout === "command-center" ? "center" : "left"),
-      mobileOrder: pickAllowed(input?.layout?.mobileOrder ?? "", ["brand-first", "form-first"] as const, "brand-first")
+      brandColumn: clampNumber(input?.layout?.brandColumn, 30, 70, authDefaults.brandColumn),
+      formMaxWidth: clampNumber(input?.layout?.formMaxWidth, 320, 620, authDefaults.formMaxWidth),
+      logoSize: clampNumber(input?.layout?.logoSize, 48, 128, authDefaults.logoSize),
+      panelPadding: clampNumber(input?.layout?.panelPadding, 12, 40, authDefaults.panelPadding),
+      gap: clampNumber(input?.layout?.gap, 16, 72, authDefaults.gap),
+      brandAlignment: pickAllowed(input?.layout?.brandAlignment ?? "", ["start", "center", "end"] as const, authDefaults.brandAlignment),
+      formAlignment: pickAllowed(input?.layout?.formAlignment ?? "", ["start", "center", "end"] as const, authDefaults.formAlignment),
+      textAlign: pickAllowed(input?.layout?.textAlign ?? "", ["left", "center", "right"] as const, authDefaults.textAlign),
+      mobileOrder: pickAllowed(input?.layout?.mobileOrder ?? "", ["brand-first", "form-first"] as const, authDefaults.mobileOrder)
     },
     form: {
-      modeControl: pickAllowed(input?.form?.modeControl ?? "", ["segmented", "tabs", "toggle"] as const, presentation.navigationPattern === "top-tabs" ? "tabs" : "segmented"),
-      fieldTreatment: pickAllowed(input?.form?.fieldTreatment ?? "", ["boxed", "filled", "underlined"] as const, isCompact ? "underlined" : isDark ? "filled" : "boxed"),
-      surface: pickAllowed(input?.form?.surface ?? "", ["flat", "raised", "outlined"] as const, isDark ? "outlined" : "raised"),
+      modeControl: pickAllowed(input?.form?.modeControl ?? "", ["segmented", "tabs", "toggle"] as const, authDefaults.modeControl),
+      fieldTreatment: pickAllowed(input?.form?.fieldTreatment ?? "", ["boxed", "filled", "underlined"] as const, authDefaults.fieldTreatment),
+      surface: pickAllowed(input?.form?.surface ?? "", ["flat", "raised", "outlined"] as const, authDefaults.surface),
       showDisplayNameOnLogin: input?.form?.showDisplayNameOnLogin ?? false,
       fields: {
         email: {
-          label: input?.form?.fields?.email?.label ?? "Email",
+          label: input?.form?.fields?.email?.label ?? `${audienceLabel} email`,
           placeholder: input?.form?.fields?.email?.placeholder ?? "client@example.com"
         },
         password: {
-          label: input?.form?.fields?.password?.label ?? "Password",
+          label: input?.form?.fields?.password?.label ?? passwordLabel,
           placeholder: input?.form?.fields?.password?.placeholder ?? "local-demo-password"
         },
         displayName: {
-          label: input?.form?.fields?.displayName?.label ?? "Display name",
+          label: input?.form?.fields?.displayName?.label ?? `${audienceLabel} name`,
           placeholder: input?.form?.fields?.displayName?.placeholder ?? `${intent.brandName} operator`
         }
       }
@@ -423,6 +554,135 @@ function authExperience(
   };
 }
 
+function authSecretLabel(intent: LayoutBuilderBrandGenerationIntent, authLabel: string): string {
+  if (/\b(key|pass|seal|code|token|phrase|pin)\b/iu.test(authLabel)) {
+    return title(human(intent.concept.authMetaphor)) || authLabel;
+  }
+
+  return `${authLabel} key`;
+}
+
+function authDefaultsFor(
+  presentation: ReturnType<typeof visualSystem>,
+  brandName: string
+): {
+  brandColumn: number;
+  formMaxWidth: number;
+  logoSize: number;
+  panelPadding: number;
+  gap: number;
+  brandAlignment: "start" | "center" | "end";
+  formAlignment: "start" | "center" | "end";
+  textAlign: "left" | "center" | "right";
+  mobileOrder: "brand-first" | "form-first";
+  modeControl: "segmented" | "tabs" | "toggle";
+  fieldTreatment: "boxed" | "filled" | "underlined";
+  surface: "flat" | "raised" | "outlined";
+  frame: "split" | "centered" | "offset" | "console" | "minimal";
+  brandTreatment: "stacked" | "inline" | "badge";
+  showDescription: boolean;
+} {
+  const isCompact = presentation.density === "compact";
+
+  if (presentation.layout === "card-operations") {
+    return {
+      brandColumn: 38,
+      formMaxWidth: 520,
+      logoSize: 96,
+      panelPadding: 24,
+      gap: 42,
+      brandAlignment: "start",
+      formAlignment: "end",
+      textAlign: "left",
+      mobileOrder: "form-first",
+      modeControl: "toggle",
+      fieldTreatment: "boxed",
+      surface: "raised",
+      frame: "offset",
+      brandTreatment: "stacked",
+      showDescription: true
+    };
+  }
+
+  if (presentation.layout === "split-workspace") {
+    return {
+      brandColumn: 44,
+      formMaxWidth: 460,
+      logoSize: 72,
+      panelPadding: 18,
+      gap: 28,
+      brandAlignment: "start",
+      formAlignment: "center",
+      textAlign: "left",
+      mobileOrder: "brand-first",
+      modeControl: "tabs",
+      fieldTreatment: "boxed",
+      surface: "outlined",
+      frame: "split",
+      brandTreatment: "stacked",
+      showDescription: true
+    };
+  }
+
+  if (presentation.layout === "topbar-console") {
+    return {
+      brandColumn: 58,
+      formMaxWidth: 400,
+      logoSize: 68,
+      panelPadding: 20,
+      gap: 30,
+      brandAlignment: "start",
+      formAlignment: "center",
+      textAlign: "left",
+      mobileOrder: "brand-first",
+      modeControl: "tabs",
+      fieldTreatment: "filled",
+      surface: "raised",
+      frame: "offset",
+      brandTreatment: "inline",
+      showDescription: true
+    };
+  }
+
+  if (presentation.layout === "compact-terminal") {
+    return {
+      brandColumn: 52,
+      formMaxWidth: 390,
+      logoSize: 58,
+      panelPadding: 14,
+      gap: 20,
+      brandAlignment: "start",
+      formAlignment: "end",
+      textAlign: "left",
+      mobileOrder: "form-first",
+      modeControl: "segmented",
+      fieldTreatment: "underlined",
+      surface: "flat",
+      frame: "console",
+      brandTreatment: "badge",
+      showDescription: false
+    };
+  }
+
+  return {
+    brandColumn: brandName.length > 18 ? 46 : 50,
+    formMaxWidth: isCompact ? 380 : 440,
+    logoSize: isCompact ? 64 : 84,
+    panelPadding: isCompact ? 16 : 22,
+    gap: isCompact ? 22 : 32,
+    brandAlignment: presentation.layout === "command-center" ? "center" : "start",
+    formAlignment: "center",
+    textAlign: presentation.layout === "command-center" ? "center" : "left",
+    mobileOrder: "brand-first",
+    modeControl: presentation.navigationPattern === "top-tabs" ? "tabs" : "segmented",
+    fieldTreatment: isCompact ? "underlined" : presentation.layout === "command-center" ? "filled" : "boxed",
+    surface: presentation.layout === "command-center" ? "outlined" : "raised",
+    frame: presentation.layout === "command-center" ? "centered" : "split",
+    brandTreatment: presentation.layout === "command-center" ? "badge" : "stacked",
+    showDescription: presentation.layout !== "command-center"
+  };
+}
+
 function paymentsExperience(
   intent: LayoutBuilderBrandGenerationIntent,
   presentation: ReturnType<typeof visualSystem>,
@@ -430,40 +690,356 @@ function paymentsExperience(
   resourceAlias: string
 ): LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"] {
   const input = intent.paymentsExperience;
-  const isCompact = presentation.density === "compact";
-  const isCardLike = presentation.layout === "card-operations";
+  const paymentDefaults = paymentDefaultsFor(presentation);
 
   return {
     content: {
       headline: input?.content?.headline ?? label(intent, "payments", title(human(resourceAlias))),
-      description:
-        input?.content?.description ??
-        `${intent.brandName} shows ${human(terms.payment)} activity for ${intent.concept.audience} with ${intent.concept.paymentMetaphor} language.`,
+      description: input?.content?.description ?? `${title(human(terms.payment))} activity table for ${intent.concept.audience}.`,
       emptyState: input?.content?.emptyState ?? empty(intent, "payments")
     },
     composition: {
-      metricsPlacement: pickAllowed(input?.composition?.metricsPlacement ?? "", ["top", "left", "right", "hidden"] as const, presentation.layout === "split-workspace" ? "left" : "top"),
-      activityPattern: pickAllowed(input?.composition?.activityPattern ?? "", ["table", "cards", "timeline"] as const, isCardLike ? "cards" : "table"),
-      statusTreatment: pickAllowed(input?.composition?.statusTreatment ?? "", ["badge", "rail", "dot"] as const, isCardLike ? "rail" : "badge"),
-      amountEmphasis: pickAllowed(input?.composition?.amountEmphasis ?? "", ["primary", "secondary", "balanced"] as const, isCompact ? "secondary" : "balanced"),
+      metricsPlacement: pickAllowed(input?.composition?.metricsPlacement ?? "", ["top", "left", "right", "hidden"] as const, paymentDefaults.metricsPlacement),
+      activityPattern: "table",
+      statusTreatment: pickAllowed(input?.composition?.statusTreatment ?? "", ["badge", "rail", "dot"] as const, paymentDefaults.statusTreatment),
+      amountEmphasis: pickAllowed(input?.composition?.amountEmphasis ?? "", ["primary", "secondary", "balanced"] as const, paymentDefaults.amountEmphasis),
       showCustomer: input?.composition?.showCustomer ?? true,
-      showMethod: input?.composition?.showMethod ?? !isCompact,
+      showMethod: input?.composition?.showMethod ?? paymentDefaults.showMethod,
       showTimestamp: input?.composition?.showTimestamp ?? true,
-      maxItems: clampNumber(input?.composition?.maxItems, 4, 30, isCompact ? 12 : 10)
+      maxItems: clampNumber(input?.composition?.maxItems, 4, 30, paymentDefaults.maxItems)
     },
     layout: {
-      metricsColumns: clampNumber(input?.layout?.metricsColumns, 1, 5, presentation.layout === "topbar-console" ? 4 : 3),
-      sidebarWidth: clampNumber(input?.layout?.sidebarWidth, 180, 420, isCompact ? 220 : 280),
-      cardMinWidth: clampNumber(input?.layout?.cardMinWidth, 180, 420, isCardLike ? 260 : 220),
-      gap: clampNumber(input?.layout?.gap, 8, 48, isCompact ? 12 : 18),
-      panelPadding: clampNumber(input?.layout?.panelPadding, 10, 36, isCompact ? 12 : 16),
-      rowMinHeight: clampNumber(input?.layout?.rowMinHeight, 44, 112, isCompact ? 54 : 68)
+      metricsColumns: clampNumber(input?.layout?.metricsColumns, 1, 5, paymentDefaults.metricsColumns),
+      sidebarWidth: clampNumber(input?.layout?.sidebarWidth, 180, 420, paymentDefaults.sidebarWidth),
+      cardMinWidth: clampNumber(input?.layout?.cardMinWidth, 180, 420, paymentDefaults.cardMinWidth),
+      gap: clampNumber(input?.layout?.gap, 8, 48, paymentDefaults.gap),
+      panelPadding: clampNumber(input?.layout?.panelPadding, 10, 36, paymentDefaults.panelPadding),
+      rowMinHeight: clampNumber(input?.layout?.rowMinHeight, 44, 112, paymentDefaults.rowMinHeight)
     },
+    table: paymentTableFor(input?.table, paymentDefaults.table, terms, resourceAlias),
     visual: {
-      surface: input?.visual?.surface ?? presentation.surfaces,
-      status: input?.visual?.status ?? presentation.buttons,
-      dataDensity: input?.visual?.dataDensity ?? presentation.spacing
+      surface: limitText(input?.visual?.surface ?? presentation.surfaces, 176),
+      status: limitText(input?.visual?.status ?? presentation.buttons, 156),
+      dataDensity: limitText(input?.visual?.dataDensity ?? presentation.spacing, 176)
+    },
+    createPayment: {
+      enabled: input?.createPayment?.enabled ?? true,
+      placement: pickAllowed(
+        input?.createPayment?.placement ?? "",
+        ["intro", "activity-top", "activity-bottom", "sidecar"] as const,
+        paymentDefaults.createPlacement
+      ),
+      surface: pickAllowed(input?.createPayment?.surface ?? "", ["compact", "panel", "inline"] as const, paymentDefaults.createSurface),
+      tone: pickAllowed(input?.createPayment?.tone ?? "", ["minimal", "operator", "guided"] as const, paymentDefaults.createTone),
+      defaultScenario: pickAllowed(input?.createPayment?.defaultScenario ?? "", ["settle", "review", "reserve", "fail"] as const, "settle"),
+      labels: {
+        title: input?.createPayment?.labels?.title ?? label(intent, "createPayment", `Create ${human(terms.payment)}`),
+        amount: input?.createPayment?.labels?.amount ?? "Amount",
+        currency: input?.createPayment?.labels?.currency ?? "Currency",
+        customer: input?.createPayment?.labels?.customer ?? title(human(terms.audience)),
+        customerEmail: input?.createPayment?.labels?.customerEmail ?? `${title(human(terms.audience))} email`,
+        methodType: input?.createPayment?.labels?.methodType ?? title(human(terms.rail)),
+        instrument: input?.createPayment?.labels?.instrument ?? `${title(human(terms.rail))} reference`,
+        scenario: input?.createPayment?.labels?.scenario ?? "Processing route",
+        submit: input?.createPayment?.labels?.submit ?? label(intent, "createPayment", `Create ${human(terms.payment)}`)
+      }
     }
+  };
+}
+
+function paymentDefaultsFor(presentation: ReturnType<typeof visualSystem>): {
+  metricsPlacement: "top" | "left" | "right" | "hidden";
+  activityPattern: "table";
+  statusTreatment: "badge" | "rail" | "dot";
+  amountEmphasis: "primary" | "secondary" | "balanced";
+  showMethod: boolean;
+  maxItems: number;
+  metricsColumns: number;
+  sidebarWidth: number;
+  cardMinWidth: number;
+  gap: number;
+  panelPadding: number;
+  rowMinHeight: number;
+  createPlacement: "intro" | "activity-top" | "activity-bottom" | "sidecar";
+  createSurface: "compact" | "panel" | "inline";
+  createTone: "minimal" | "operator" | "guided";
+  table: LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"];
+} {
+  if (presentation.layout === "card-operations") {
+    return {
+      metricsPlacement: "right",
+      activityPattern: "table",
+      statusTreatment: "rail",
+      amountEmphasis: "primary",
+      showMethod: true,
+      maxItems: 8,
+      metricsColumns: 1,
+      sidebarWidth: 300,
+      cardMinWidth: 280,
+      gap: 20,
+      panelPadding: 18,
+      rowMinHeight: 78,
+      createPlacement: "sidecar",
+      createSurface: "panel",
+      createTone: "guided",
+      table: tableDefaults("card-operations")
+    };
+  }
+
+  if (presentation.layout === "compact-terminal") {
+    return {
+      metricsPlacement: "hidden",
+      activityPattern: "table",
+      statusTreatment: "dot",
+      amountEmphasis: "secondary",
+      showMethod: false,
+      maxItems: 14,
+      metricsColumns: 2,
+      sidebarWidth: 220,
+      cardMinWidth: 220,
+      gap: 10,
+      panelPadding: 12,
+      rowMinHeight: 52,
+      createPlacement: "activity-bottom",
+      createSurface: "compact",
+      createTone: "minimal",
+      table: tableDefaults("compact-terminal")
+    };
+  }
+
+  if (presentation.layout === "split-workspace") {
+    return {
+      metricsPlacement: "left",
+      activityPattern: "table",
+      statusTreatment: "badge",
+      amountEmphasis: "balanced",
+      showMethod: true,
+      maxItems: 10,
+      metricsColumns: 1,
+      sidebarWidth: 260,
+      cardMinWidth: 240,
+      gap: 18,
+      panelPadding: 16,
+      rowMinHeight: 66,
+      createPlacement: "activity-top",
+      createSurface: "inline",
+      createTone: "operator",
+      table: tableDefaults("split-workspace")
+    };
+  }
+
+  if (presentation.layout === "topbar-console") {
+    return {
+      metricsPlacement: "top",
+      activityPattern: "table",
+      statusTreatment: "badge",
+      amountEmphasis: "primary",
+      showMethod: true,
+      maxItems: 9,
+      metricsColumns: 4,
+      sidebarWidth: 280,
+      cardMinWidth: 250,
+      gap: 18,
+      panelPadding: 16,
+      rowMinHeight: 72,
+      createPlacement: "intro",
+      createSurface: "inline",
+      createTone: "operator",
+      table: tableDefaults("topbar-console")
+    };
+  }
+
+  if (presentation.layout === "command-center") {
+    return {
+      metricsPlacement: "top",
+      activityPattern: "table",
+      statusTreatment: "dot",
+      amountEmphasis: "balanced",
+      showMethod: true,
+      maxItems: 12,
+      metricsColumns: 3,
+      sidebarWidth: 280,
+      cardMinWidth: 240,
+      gap: 14,
+      panelPadding: 14,
+      rowMinHeight: 58,
+      createPlacement: "activity-top",
+      createSurface: "compact",
+      createTone: "operator",
+      table: tableDefaults("command-center")
+    };
+  }
+
+  return {
+    metricsPlacement: "top",
+    activityPattern: "table",
+    statusTreatment: "badge",
+    amountEmphasis: "balanced",
+    showMethod: true,
+    maxItems: 10,
+    metricsColumns: 3,
+    sidebarWidth: 280,
+    cardMinWidth: 240,
+    gap: 16,
+    panelPadding: 16,
+    rowMinHeight: 64,
+    createPlacement: "activity-top",
+    createSurface: "panel",
+    createTone: "operator",
+    table: tableDefaults("sidebar-ledger")
+  };
+}
+
+function paymentTableFor(
+  input: LayoutBuilderDeepPartial<LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]> | undefined,
+  fallback: LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"],
+  terms: Record<"product" | "auth" | "payment" | "audience" | "rail" | "reserve", string>,
+  resourceAlias: string
+): LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"] {
+  return {
+    titlePlacement: pickAllowed(input?.titlePlacement ?? "", ["page", "table", "hidden"] as const, fallback.titlePlacement),
+    controlsPlacement: pickAllowed(input?.controlsPlacement ?? "", ["above", "side", "none"] as const, fallback.controlsPlacement),
+    density: pickAllowed(input?.density ?? "", ["compact", "regular", "spacious"] as const, fallback.density),
+    columns: normalizeTableColumns(input?.columns, fallback.columns, terms, resourceAlias)
+  };
+}
+
+function normalizeTableColumns(
+  input: readonly LayoutBuilderDeepPartial<LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"][number]>[] | undefined,
+  fallback: LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"],
+  terms: Record<"product" | "auth" | "payment" | "audience" | "rail" | "reserve", string>,
+  resourceAlias: string
+): LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"] {
+  const allowed = new Set(["reference", "status", "amount", "customer", "method", "createdAt", "destination"]);
+  const cleaned = (input ?? [])
+    .filter((column): column is LayoutBuilderDeepPartial<LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"][number]> & { key: LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"][number]["key"]; label: string } =>
+      typeof column.key === "string" && allowed.has(column.key) && typeof column.label === "string" && column.label.trim().length > 0
+    )
+    .map((column, index) => ({
+      key: column.key,
+      label: column.label.trim().slice(0, 50),
+      priority: clampNumber(column.priority, 1, 7, index + 1)
+    }));
+  const source = cleaned.length >= 4 ? cleaned : fallback;
+  const deduped: LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"] = [];
+
+  for (const column of source) {
+    if (!deduped.some((existing) => existing.key === column.key)) {
+      deduped.push(column);
+    }
+  }
+
+  for (const required of requiredTableColumns(terms, resourceAlias)) {
+    if (!deduped.some((column) => column.key === required.key)) {
+      deduped.unshift(required);
+    }
+  }
+
+  return deduped
+    .slice(0, 7)
+    .map((column, index) => ({ ...column, priority: index + 1 }));
+}
+
+function requiredTableColumns(
+  terms: Record<"product" | "auth" | "payment" | "audience" | "rail" | "reserve", string>,
+  resourceAlias: string
+): LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"] {
+  return [
+    { key: "reference", label: title(human(resourceAlias)), priority: 1 },
+    { key: "status", label: `${title(human(terms.payment))} state`, priority: 2 },
+    { key: "amount", label: title(human(terms.reserve)), priority: 3 }
+  ];
+}
+
+function tableDefaults(layout: ReturnType<typeof visualSystem>["layout"]): LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"] {
+  const common = {
+    "sidebar-ledger": {
+      titlePlacement: "table",
+      controlsPlacement: "above",
+      density: "regular",
+      columns: [
+        ["reference", "Movement"],
+        ["status", "State"],
+        ["amount", "Value"],
+        ["customer", "Counterparty"],
+        ["method", "Rail"],
+        ["createdAt", "Opened"]
+      ]
+    },
+    "topbar-console": {
+      titlePlacement: "hidden",
+      controlsPlacement: "above",
+      density: "regular",
+      columns: [
+        ["status", "Lane"],
+        ["reference", "Trade"],
+        ["customer", "Player"],
+        ["destination", "Destination"],
+        ["amount", "Value"],
+        ["method", "Source"],
+        ["createdAt", "Queued"]
+      ]
+    },
+    "split-workspace": {
+      titlePlacement: "table",
+      controlsPlacement: "side",
+      density: "spacious",
+      columns: [
+        ["reference", "Case"],
+        ["customer", "Party"],
+        ["method", "Instrument"],
+        ["status", "Review"],
+        ["amount", "Gross"],
+        ["createdAt", "Booked"]
+      ]
+    },
+    "command-center": {
+      titlePlacement: "page",
+      controlsPlacement: "none",
+      density: "compact",
+      columns: [
+        ["status", "Signal"],
+        ["createdAt", "Time"],
+        ["reference", "Command"],
+        ["amount", "Reserve"],
+        ["customer", "Identity"]
+      ]
+    },
+    "card-operations": {
+      titlePlacement: "table",
+      controlsPlacement: "side",
+      density: "spacious",
+      columns: [
+        ["reference", "Drop"],
+        ["customer", "Player"],
+        ["amount", "Reward"],
+        ["status", "Rail"],
+        ["destination", "Target"]
+      ]
+    },
+    "compact-terminal": {
+      titlePlacement: "hidden",
+      controlsPlacement: "none",
+      density: "compact",
+      columns: [
+        ["createdAt", "Time"],
+        ["reference", "Packet"],
+        ["status", "Exit"],
+        ["amount", "Cache"],
+        ["method", "Socket"]
+      ]
+    }
+  }[layout];
+
+  return {
+    titlePlacement: common.titlePlacement as LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["titlePlacement"],
+    controlsPlacement: common.controlsPlacement as LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["controlsPlacement"],
+    density: common.density as LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["density"],
+    columns: common.columns.map(([key, label], index) => ({
+      key: key as LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"][number]["key"],
+      label: String(label ?? key),
+      priority: index + 1
+    }))
   };
 }
 
@@ -495,7 +1071,17 @@ function professionalPalette(intent: LayoutBuilderBrandGenerationIntent, layout:
 }
 
 function professionalColorTokens(value: string): string[] {
-  const normalized = value.toLowerCase();
+  const raw = value.trim().toLowerCase();
+
+  if (/^#[0-9a-f]{6}$/u.test(raw)) {
+    return [raw];
+  }
+
+  if (/^#[0-9a-f]{3}$/u.test(raw)) {
+    return [`#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`];
+  }
+
+  const normalized = raw;
   const tokens: string[] = [];
 
   for (const [needle, token] of Object.entries(PROFESSIONAL_COLOR_TOKENS)) {
@@ -539,9 +1125,12 @@ const PROFESSIONAL_COLOR_TOKENS: Record<string, string> = {
   grey: "slate",
   gray: "slate",
   ink: "ink",
+  lime: "lime",
+  magenta: "magenta",
   midnight: "midnight",
   navy: "navy",
   orange: "orange",
+  acid: "acid lime",
   quartz: "quartz green",
   green: "quartz green",
   slate: "slate",

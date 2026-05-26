@@ -1,5 +1,5 @@
 import { Fragment, StrictMode, useEffect, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 
 import "./styles.css";
@@ -9,6 +9,9 @@ type RuntimeView = "login" | "dashboard" | "payments" | "customers" | "balances"
 type RuntimePresentation = NonNullable<RuntimeShell["ui"]>["presentation"];
 type RuntimeAuthExperience = NonNullable<NonNullable<RuntimeShell["ui"]>["authExperience"]>;
 type RuntimePaymentsExperience = NonNullable<NonNullable<RuntimeShell["ui"]>["paymentsExperience"]>;
+type RuntimePaymentComposer = NonNullable<RuntimePaymentsExperience["createPayment"]>;
+type RuntimePaymentTable = NonNullable<RuntimePaymentsExperience["table"]>;
+type RuntimePaymentTableColumn = RuntimePaymentTable["columns"][number];
 
 interface RuntimeLocation {
   routeBase: string;
@@ -94,6 +97,11 @@ interface RuntimeShell {
         headline: string;
         description: string;
       };
+      composition?: {
+        frame: "split" | "centered" | "offset" | "console" | "minimal";
+        brandTreatment: "stacked" | "inline" | "badge";
+        showDescription: boolean;
+      };
       layout: {
         brandColumn: number;
         formMaxWidth: number;
@@ -146,10 +154,38 @@ interface RuntimeShell {
         panelPadding: number;
         rowMinHeight: number;
       };
+      table?: {
+        titlePlacement: "page" | "table" | "hidden";
+        controlsPlacement: "above" | "side" | "none";
+        density: "compact" | "regular" | "spacious";
+        columns: Array<{
+          key: "reference" | "status" | "amount" | "customer" | "method" | "createdAt" | "destination";
+          label: string;
+          priority: number;
+        }>;
+      };
       visual: {
         surface: string;
         status: string;
         dataDensity: string;
+      };
+      createPayment?: {
+        enabled: boolean;
+        placement: "intro" | "activity-top" | "activity-bottom" | "sidecar";
+        surface: "compact" | "panel" | "inline";
+        tone: "minimal" | "operator" | "guided";
+        defaultScenario: "settle" | "review" | "reserve" | "fail";
+        labels: {
+          title: string;
+          amount: string;
+          currency: string;
+          customer: string;
+          customerEmail: string;
+          methodType: string;
+          instrument: string;
+          scenario: string;
+          submit: string;
+        };
       };
     };
   } | null;
@@ -321,10 +357,10 @@ function BrandRuntimeApp() {
       return;
     }
 
-    const paymentsResponse = await requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.payments), {
+    const paymentsResponse = await requestJson<unknown>(entityUrl(locationState, shell.routes.payments), {
       headers: { authorization: `Bearer ${token}` }
     });
-    const decodedPayments = arrayValue(paymentsResponse[responseKey(shell, "payments")] ?? paymentsResponse.payments).map((payment) =>
+    const decodedPayments = arrayValue(responseValue(shell, paymentsResponse, "payments")).map((payment) =>
       decodePayment(shell, payment)
     );
 
@@ -336,6 +372,46 @@ function BrandRuntimeApp() {
       payments: decodedPayments
     });
     setStatus("Payments loaded.");
+  }
+
+  async function createPayment(form: HTMLFormElement) {
+    if (!shell) {
+      setStatus("Runtime bootstrap was not injected.");
+      return;
+    }
+
+    if (!sessionToken) {
+      setStatus("Sign in or register first.");
+      return;
+    }
+
+    const formData = new FormData(form);
+    const methodType = String(formData.get("methodType") ?? "card");
+    await requestJson<Record<string, unknown>>(entityUrl(locationState, shell.routes.payments), {
+      body: JSON.stringify({
+        [shell.fields.payment.amount ?? "amount"]: Number(formData.get("amount") ?? 0),
+        [shell.fields.payment.currency ?? "currency"]: String(formData.get("currency") ?? "USD"),
+        [shell.fields.payment.methodType ?? "methodType"]: methodType,
+        scenario: String(formData.get("scenario") ?? "settle"),
+        customer: {
+          [shell.fields.customer.name ?? "name"]: String(formData.get("customerName") ?? ""),
+          [shell.fields.customer.email ?? "email"]: String(formData.get("customerEmail") ?? "")
+        },
+        paymentMethod: {
+          [shell.fields.paymentMethod.type ?? "type"]: methodType,
+          [shell.fields.paymentMethod.label ?? "label"]: String(formData.get("instrumentReference") ?? ""),
+          [shell.fields.paymentMethod.last4 ?? "last4"]: last4(String(formData.get("instrumentReference") ?? ""))
+        }
+      }),
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json"
+      },
+      method: "POST"
+    });
+    form.reset();
+    setStatus("Payment created.");
+    await refreshPayments(sessionToken);
   }
 
   function logout() {
@@ -364,14 +440,13 @@ function BrandRuntimeApp() {
     <main className={`payments-shell ${runtimeClass}`} style={shellStyle}>
       <aside className="payments-brand-rail">
         <BrandLockup shell={shell} />
-        <div className="sidebar-footer">{presentation?.copyTone ?? shell.copy.contractSummary}</div>
+        <div className="sidebar-footer">{shell.labels.customers} · {shell.labels.balances}</div>
       </aside>
       <section className="payments-main">
         <header className="topline">
           <div>
-            <span className="kicker">{shell.copy.contractSummary}</span>
+            <span className="kicker">{shell.brand.name}</span>
             <h1>{shell.labels.payments}</h1>
-            <p className="subtle">{shell.copy.visualDirection}</p>
           </div>
           <div className="top-actions">
             <span className="status">{status}</span>
@@ -380,7 +455,17 @@ function BrandRuntimeApp() {
             </button>
           </div>
         </header>
-        <PaymentsExperience account={account} labels={shell.labels} metrics={metrics} payments={payments} presentation={presentation} shell={shell} />
+        <PaymentsExperience
+          account={account}
+          labels={shell.labels}
+          metrics={metrics}
+          payments={payments}
+          presentation={presentation}
+          shell={shell}
+          onCreatePayment={(form) => {
+            void createPayment(form).catch((error: unknown) => setStatus(errorMessage(error)));
+          }}
+        />
       </section>
     </main>
   );
@@ -392,7 +477,7 @@ function BrandLockup({ shell }: { shell: RuntimeShell }) {
       <div className="brand-mark">{shell.brand.logoDataUri ? <img alt={`${shell.brand.name} logo`} src={shell.brand.logoDataUri} /> : null}</div>
       <div>
         <strong>{shell.brand.name}</strong>
-        <small>Merchant gateway</small>
+        <small>{shell.labels.overview}</small>
       </div>
     </div>
   );
@@ -415,6 +500,7 @@ function AuthExperience({
 }) {
   const layout = presentation?.layout ?? "sidebar-ledger";
   const authExperience = authExperienceFor(shell, presentation);
+  const authComposition = authCompositionFor(authExperience, layout);
   const showStatus = status !== "Sign in or register to open this brand workspace.";
 
   return (
@@ -426,7 +512,10 @@ function AuthExperience({
         `auth-mode-${authExperience.form.modeControl}`,
         `auth-field-${authExperience.form.fieldTreatment}`,
         `auth-surface-${authExperience.form.surface}`,
-        `auth-mobile-${authExperience.layout.mobileOrder}`
+        `auth-mobile-${authExperience.layout.mobileOrder}`,
+        `auth-frame-${authComposition.frame}`,
+        `auth-brand-${authComposition.brandTreatment}`,
+        authComposition.showDescription ? "auth-description-on" : "auth-description-off"
       ].join(" ")}
       style={authShellStyle(shellStyle, authExperience)}
     >
@@ -436,7 +525,7 @@ function AuthExperience({
             {shell.brand.logoDataUri ? <img alt={`${shell.brand.name} logo`} src={shell.brand.logoDataUri} /> : null}
           </div>
           <h1>{shell.brand.name}</h1>
-          <p>{authExperience.content.description}</p>
+          {authComposition.showDescription ? <p>{authExperience.content.description}</p> : null}
         </div>
       </section>
       <section className="auth-panel">
@@ -504,6 +593,7 @@ function PaymentsExperience({
   account,
   labels,
   metrics,
+  onCreatePayment,
   payments,
   presentation,
   shell
@@ -511,14 +601,21 @@ function PaymentsExperience({
   account: RuntimeAccount | null;
   labels: RuntimeShell["labels"];
   metrics: RuntimeMetrics;
+  onCreatePayment: (form: HTMLFormElement) => void;
   payments: RuntimePayment[];
   presentation: RuntimePresentation | undefined;
   shell: RuntimeShell;
 }) {
   const experience = paymentsExperienceFor(shell, presentation);
+  const composer = paymentComposerFor(experience, labels);
+  const table = paymentTableFor(experience, labels);
+  const composerPlacement = payments.length === 0 ? "activity-top" : composer.placement;
   const metricsPlacement = experience.composition.metricsPlacement;
-  const activity = <GeneratedPaymentActivity experience={experience} payments={payments} />;
-  const metricsBlock = metricsPlacement === "hidden" ? null : <GeneratedMetricDeck account={account} experience={experience} metrics={metrics} />;
+  const activity = <GeneratedPaymentActivity experience={experience} payments={payments} table={table} />;
+  const metricsBlock = metricsPlacement === "hidden" ? null : <GeneratedMetricDeck account={account} metrics={metrics} />;
+  const shouldShowComposer = composer.enabled !== false || payments.length === 0;
+  const composerBlock =
+    shouldShowComposer ? <GeneratedPaymentComposer composer={composer} labels={labels} onSubmit={onCreatePayment} /> : null;
   const orderedBlocks =
     metricsPlacement === "right"
       ? [activity, metricsBlock]
@@ -534,29 +631,107 @@ function PaymentsExperience({
         `payments-metrics-${metricsPlacement}`,
         `payments-activity-${experience.composition.activityPattern}`,
         `payments-status-${experience.composition.statusTreatment}`,
-        `payments-amount-${experience.composition.amountEmphasis}`
+        `payments-amount-${experience.composition.amountEmphasis}`,
+        `payments-composer-${composerPlacement}`,
+        `payments-create-${composer.surface}`,
+        `payments-create-${composer.tone}`,
+        `payments-table-${table.density}`,
+        `payments-title-${table.titlePlacement}`,
+        `payments-controls-${table.controlsPlacement}`
       ].join(" ")}
       style={paymentsExperienceStyle(experience)}
     >
-      <section className="payments-generated-intro">
+      {table.titlePlacement === "page" ? <section className="payments-generated-intro">
         <div>
           <span className="kicker">{labels.payments}</span>
           <h2>{experience.content.headline}</h2>
-          <p>{experience.content.description}</p>
         </div>
-      </section>
+      </section> : null}
+      {composerPlacement === "intro" ? composerBlock : null}
+      {composerPlacement === "activity-top" ? composerBlock : null}
       {orderedBlocks.map((block, index) => (block ? <Fragment key={index}>{block}</Fragment> : null))}
+      {composerPlacement === "activity-bottom" || composerPlacement === "sidecar" ? composerBlock : null}
     </div>
+  );
+}
+
+function GeneratedPaymentComposer({
+  composer,
+  labels,
+  onSubmit
+}: {
+  composer: RuntimePaymentComposer;
+  labels: RuntimeShell["labels"];
+  onSubmit: (form: HTMLFormElement) => void;
+}) {
+  return (
+    <section className={`generated-payment-composer panel composer-${composer.surface} composer-${composer.tone}`}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit(event.currentTarget);
+        }}
+      >
+        <div className="composer-heading">
+          <span className="kicker">{labels.createPayment}</span>
+          <h2>{composer.labels.title}</h2>
+        </div>
+        <div className="row">
+          <label>
+            {composer.labels.amount}
+            <input defaultValue="49.99" min="0.01" name="amount" required step="0.01" type="number" />
+          </label>
+          <label>
+            {composer.labels.currency}
+            <input defaultValue="USD" name="currency" required />
+          </label>
+        </div>
+        <div className="row">
+          <label>
+            {composer.labels.customer}
+            <input defaultValue="Ava Customer" name="customerName" required />
+          </label>
+          <label>
+            {composer.labels.customerEmail}
+            <input defaultValue="ava@example.com" name="customerEmail" required type="email" />
+          </label>
+        </div>
+        <div className="row">
+          <label>
+            {composer.labels.methodType}
+            <select defaultValue="card" name="methodType">
+              <option value="card">Card</option>
+              <option value="bank_transfer">Bank transfer</option>
+              <option value="wallet">Wallet</option>
+            </select>
+          </label>
+          <label>
+            {composer.labels.instrument}
+            <input defaultValue="4242 4242 4242 4242" name="instrumentReference" required />
+          </label>
+        </div>
+        <label>
+          {composer.labels.scenario}
+          <select defaultValue={composer.defaultScenario} name="scenario">
+            <option value="settle">Authorize and capture</option>
+            <option value="review">Hold for review</option>
+            <option value="reserve">Reserve funds</option>
+            <option value="fail">Decline</option>
+          </select>
+        </label>
+        <button className="primary" type="submit">
+          {composer.labels.submit}
+        </button>
+      </form>
+    </section>
   );
 }
 
 function GeneratedMetricDeck({
   account,
-  experience,
   metrics
 }: {
   account: RuntimeAccount | null;
-  experience: RuntimePaymentsExperience;
   metrics: RuntimeMetrics;
 }) {
   const balance = account ? formatAmount(account.balance, account.currency) : formatAmount(0, metrics.currency);
@@ -567,47 +742,120 @@ function GeneratedMetricDeck({
       <Metric caption="Gross flow" label="Volume" value={formatAmount(metrics.volume, metrics.currency)} />
       <Metric caption={`${metrics.customers} profiles`} label="Count" value={String(metrics.count)} />
       <Metric caption="Review queue" label="Attention" value={String(metrics.review)} />
-      <small>{experience.visual.dataDensity}</small>
     </section>
   );
 }
 
-function GeneratedPaymentActivity({ experience, payments }: { experience: RuntimePaymentsExperience; payments: RuntimePayment[] }) {
+function GeneratedPaymentActivity({
+  experience,
+  payments,
+  table
+}: {
+  experience: RuntimePaymentsExperience;
+  payments: RuntimePayment[];
+  table: RuntimePaymentTable;
+}) {
   const visiblePayments = payments.slice(0, experience.composition.maxItems);
+  const sortedColumns = [...table.columns].sort((left, right) => left.priority - right.priority);
 
   if (visiblePayments.length === 0) {
     return (
       <section className="generated-activity panel">
-        <div className="empty">{experience.content.emptyState}</div>
+        {table.titlePlacement === "table" ? <GeneratedTableHeading count={0} experience={experience} /> : null}
+        <div className="generated-table-wrap is-empty">
+          <table aria-label={experience.content.headline}>
+            <thead>
+              <tr>
+                {sortedColumns.map((column) => (
+                  <th data-column={column.key} key={column.key}>{column.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="generated-empty-cell" colSpan={sortedColumns.length}>
+                  {experience.content.emptyState}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     );
   }
 
   return (
     <section className="generated-activity panel">
-      <div className="generated-activity-list">
-        {visiblePayments.map((payment) => (
-          <GeneratedPaymentRow experience={experience} key={payment.id} payment={payment} />
-        ))}
+      {table.titlePlacement === "table" ? <GeneratedTableHeading count={visiblePayments.length} experience={experience} /> : null}
+      <div className="generated-table-wrap">
+        <table aria-label={experience.content.headline}>
+          <thead>
+            <tr>
+              {sortedColumns.map((column) => (
+                <th data-column={column.key} key={column.key}>{column.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visiblePayments.map((payment) => (
+              <tr key={payment.id}>
+                {sortedColumns.map((column) => (
+                  <td data-column={column.key} key={column.key}>{paymentTableCell(column, payment, experience)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );
 }
 
-function GeneratedPaymentRow({ experience, payment }: { experience: RuntimePaymentsExperience; payment: RuntimePayment }) {
+function GeneratedTableHeading({ count, experience }: { count: number; experience: RuntimePaymentsExperience }) {
+  return (
+    <div className="generated-table-heading">
+      <h2>{experience.content.headline}</h2>
+      <span className="generated-table-count">{count} records</span>
+    </div>
+  );
+}
+
+function paymentTableCell(column: RuntimePaymentTableColumn, payment: RuntimePayment, experience: RuntimePaymentsExperience): ReactNode {
   const customer = customerFromPayment(payment);
 
+  if (column.key === "status") {
+    return (
+      <span className={`generated-status ${statusClass(payment.status)}`}>
+        {payment.status}
+      </span>
+    );
+  }
+
+  if (column.key === "amount") {
+    return <strong className="generated-payment-amount">{formatAmount(payment.amount, payment.currency)}</strong>;
+  }
+
+  if (column.key === "customer") {
+    return <span>{customer.name}</span>;
+  }
+
+  if (column.key === "method") {
+    return <span>{customer.instrument}</span>;
+  }
+
+  if (column.key === "createdAt") {
+    return <span>{formatDateTime(payment.createdAt)}</span>;
+  }
+
+  if (column.key === "destination") {
+    return <span>{payment.destination || customer.name}</span>;
+  }
+
   return (
-    <article className="generated-payment-row">
-      <span className={`generated-status ${statusClass(payment.status)}`}>{experience.composition.statusTreatment === "dot" ? "" : payment.status}</span>
-      <div className="generated-payment-main">
-        <strong>{payment.reference}</strong>
-        {experience.composition.showCustomer ? <small>{customer.name}</small> : null}
-      </div>
-      {experience.composition.showMethod ? <span className="generated-payment-method">{customer.instrument}</span> : null}
-      {experience.composition.showTimestamp ? <span className="generated-payment-time">{formatDateTime(payment.createdAt)}</span> : null}
-      <strong className="generated-payment-amount">{formatAmount(payment.amount, payment.currency)}</strong>
-    </article>
+    <span className="generated-reference-cell">
+      <strong>{payment.reference}</strong>
+      {experience.composition.showCustomer ? <small>{customer.name}</small> : null}
+    </span>
   );
 }
 
@@ -1037,24 +1285,26 @@ function AuthForm({
 
   return (
     <form
+      aria-label={`${shell.brand.name} ${isRegister ? labels.register : labels.login}`}
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit(mode, event.currentTarget);
       }}
     >
       <div className="auth-mode-switch" role="group" aria-label="Choose authentication mode">
-        <button className={mode === "login" ? "active" : ""} type="button" onClick={() => setMode("login")}>
+        <button aria-pressed={mode === "login"} className={mode === "login" ? "active" : ""} type="button" onClick={() => setMode("login")}>
           {labels.login}
         </button>
-        <button className={mode === "register" ? "active" : ""} type="button" onClick={() => setMode("register")}>
+        <button aria-pressed={mode === "register"} className={mode === "register" ? "active" : ""} type="button" onClick={() => setMode("register")}>
           {labels.register}
         </button>
       </div>
       <label>
         {authExperience.form.fields.email.label}
         <input
-          autoComplete="email"
+          autoComplete={isRegister ? "email" : "username"}
           defaultValue="client@example.com"
+          inputMode="email"
           name="email"
           placeholder={authExperience.form.fields.email.placeholder}
           required
@@ -1064,8 +1314,9 @@ function AuthForm({
       <label>
         {authExperience.form.fields.password.label}
         <input
-          autoComplete="current-password"
+          autoComplete={isRegister ? "new-password" : "current-password"}
           defaultValue="local-demo-password"
+          minLength={8}
           name="password"
           placeholder={authExperience.form.fields.password.placeholder}
           required
@@ -1101,6 +1352,11 @@ function authExperienceFor(shell: RuntimeShell, presentation: RuntimePresentatio
       headline: shell.brand.name,
       description: shell.copy.visualDirection || shell.copy.contractSummary || "Secure access for this brand workspace."
     },
+    composition: {
+      frame: presentation?.layout === "compact-terminal" ? "console" : presentation?.layout === "command-center" ? "centered" : "split",
+      brandTreatment: presentation?.layout === "topbar-console" ? "inline" : "stacked",
+      showDescription: presentation?.layout !== "compact-terminal"
+    },
     layout: {
       brandColumn: 50,
       formMaxWidth: 420,
@@ -1131,8 +1387,19 @@ function authExperienceFor(shell: RuntimeShell, presentation: RuntimePresentatio
   };
 }
 
+function authCompositionFor(authExperience: RuntimeAuthExperience, layout: string) {
+  return {
+    frame:
+      authExperience.composition?.frame ??
+      (layout === "compact-terminal" ? "console" : layout === "command-center" ? "centered" : "split"),
+    brandTreatment: authExperience.composition?.brandTreatment ?? (layout === "topbar-console" ? "inline" : "stacked"),
+    showDescription: authExperience.composition?.showDescription ?? layout !== "compact-terminal"
+  };
+}
+
 function paymentsExperienceFor(shell: RuntimeShell, presentation: RuntimePresentation | undefined): RuntimePaymentsExperience {
-  return shell.ui?.paymentsExperience ?? {
+  const fallbackTable = defaultPaymentTable(shell.labels, presentation);
+  const fallback: RuntimePaymentsExperience = {
     content: {
       headline: shell.labels.payments,
       description: shell.copy.visualDirection || shell.copy.contractSummary || "Seeded payment activity for this brand workspace.",
@@ -1140,7 +1407,7 @@ function paymentsExperienceFor(shell: RuntimeShell, presentation: RuntimePresent
     },
     composition: {
       metricsPlacement: presentation?.layout === "split-workspace" ? "left" : "top",
-      activityPattern: presentation?.layout === "card-operations" ? "cards" : presentation?.layout === "compact-terminal" ? "timeline" : "table",
+      activityPattern: "table",
       statusTreatment: presentation?.layout === "compact-terminal" ? "dot" : presentation?.layout === "card-operations" ? "rail" : "badge",
       amountEmphasis: "balanced",
       showCustomer: true,
@@ -1156,10 +1423,130 @@ function paymentsExperienceFor(shell: RuntimeShell, presentation: RuntimePresent
       panelPadding: 16,
       rowMinHeight: 64
     },
+    table: fallbackTable,
     visual: {
       surface: presentation?.visualTokens.surfaces ?? "brand payment surface",
       status: presentation?.visualTokens.buttons ?? "clear status treatment",
       dataDensity: presentation?.visualTokens.spacing ?? "balanced payment density"
+    },
+    createPayment: defaultPaymentComposer(shell.labels)
+  };
+
+  const input = shell.ui?.paymentsExperience;
+
+  if (!input) {
+    return fallback;
+  }
+
+  const fallbackComposer = fallback.createPayment ?? defaultPaymentComposer(shell.labels);
+  const inputTable = input.table ?? fallbackTable;
+
+  return {
+    content: { ...fallback.content, ...input.content },
+    composition: { ...fallback.composition, ...input.composition },
+    layout: { ...fallback.layout, ...input.layout },
+    table: {
+      ...fallbackTable,
+      ...inputTable,
+      columns: inputTable.columns && inputTable.columns.length > 0 ? inputTable.columns : fallbackTable.columns
+    },
+    visual: { ...fallback.visual, ...input.visual },
+    createPayment: {
+      enabled: input.createPayment?.enabled ?? fallbackComposer.enabled,
+      placement: input.createPayment?.placement ?? fallbackComposer.placement,
+      surface: input.createPayment?.surface ?? fallbackComposer.surface,
+      tone: input.createPayment?.tone ?? fallbackComposer.tone,
+      defaultScenario: input.createPayment?.defaultScenario ?? fallbackComposer.defaultScenario,
+      labels: {
+        ...fallbackComposer.labels,
+        ...input.createPayment?.labels
+      }
+    }
+  };
+}
+
+function paymentTableFor(experience: RuntimePaymentsExperience, labels: RuntimeShell["labels"]): RuntimePaymentTable {
+  const fallback = defaultPaymentTable(labels, undefined);
+  const source = experience.table ?? fallback;
+  const columns = source.columns.length >= 4 ? source.columns : fallback.columns;
+
+  return {
+    ...fallback,
+    ...source,
+    columns: normalizeRuntimeColumns(columns, fallback.columns)
+  };
+}
+
+function normalizeRuntimeColumns(
+  columns: RuntimePaymentTable["columns"],
+  fallback: RuntimePaymentTable["columns"]
+): RuntimePaymentTable["columns"] {
+  const allowed = new Set(["reference", "status", "amount", "customer", "method", "createdAt", "destination"]);
+  const deduped: RuntimePaymentTable["columns"] = [];
+
+  for (const column of columns) {
+    if (allowed.has(column.key) && !deduped.some((existing) => existing.key === column.key)) {
+      deduped.push(column);
+    }
+  }
+
+  for (const column of fallback.slice(0, 3)) {
+    if (!deduped.some((existing) => existing.key === column.key)) {
+      deduped.unshift(column);
+    }
+  }
+
+  return deduped.slice(0, 7).map((column, index) => ({ ...column, priority: index + 1 }));
+}
+
+function defaultPaymentTable(labels: RuntimeShell["labels"], presentation: RuntimePresentation | undefined): RuntimePaymentTable {
+  const isCompact = presentation?.layout === "compact-terminal" || presentation?.density === "compact";
+
+  return {
+    titlePlacement: presentation?.layout === "topbar-console" || presentation?.layout === "compact-terminal" ? "hidden" : "table",
+    controlsPlacement: presentation?.layout === "split-workspace" || presentation?.layout === "card-operations" ? "side" : "above",
+    density: isCompact ? "compact" : presentation?.density === "spacious" ? "spacious" : "regular",
+    columns: [
+      { key: "reference", label: labels.payments, priority: 1 },
+      { key: "status", label: "State", priority: 2 },
+      { key: "amount", label: "Amount", priority: 3 },
+      { key: "customer", label: "Customer", priority: 4 },
+      { key: "method", label: "Source", priority: 5 },
+      { key: "createdAt", label: "Created", priority: 6 }
+    ]
+  };
+}
+
+function paymentComposerFor(experience: RuntimePaymentsExperience, labels: RuntimeShell["labels"]): RuntimePaymentComposer {
+  const fallback = defaultPaymentComposer(labels);
+
+  return {
+    ...fallback,
+    ...experience.createPayment,
+    labels: {
+      ...fallback.labels,
+      ...experience.createPayment?.labels
+    }
+  };
+}
+
+function defaultPaymentComposer(labels: RuntimeShell["labels"]): RuntimePaymentComposer {
+  return {
+    enabled: true,
+    placement: "activity-top",
+    surface: "panel",
+    tone: "operator",
+    defaultScenario: "settle",
+    labels: {
+      title: labels.createPayment,
+      amount: "Amount",
+      currency: "Currency",
+      customer: "Customer",
+      customerEmail: "Customer email",
+      methodType: "Payment source",
+      instrument: "Card or account",
+      scenario: "Processing route",
+      submit: labels.createPayment
     }
   };
 }
@@ -1561,18 +1948,21 @@ function resolveRuntimeTheme(shell: RuntimeShell): RuntimeTheme {
   const colors = tokens.map(colorForToken).filter((color): color is string => Boolean(color));
   const vividColors = colors.filter((color) => !NEUTRAL_COLORS.has(color));
   const darkColor = colors.find(isDarkColor);
-  const primary = vividColors.find((color) => !isDarkColor(color)) ?? vividColors[0] ?? shell.brand.palette.primary;
-  const accent = vividColors.find((color) => color !== primary && !isDarkColor(color)) ?? shell.brand.palette.accent;
+  const saturatedColors = vividColors.filter((color) => !isDarkColor(color) && !isLightColor(color));
+  const primary = saturatedColors[0] ?? vividColors.find((color) => !isDarkColor(color)) ?? shell.brand.palette.primary;
+  const accent = saturatedColors.find((color) => color !== primary) ?? shell.brand.palette.accent;
   const rail = darkColor ?? shell.brand.palette.secondary;
   const isDarkLayout = presentation?.layout === "command-center" || presentation?.layout === "compact-terminal";
+  const lightColor = colors.find((color) => isLightColor(color) && color !== "#ffffff");
   const surface = isDarkLayout
     ? "rgba(255, 255, 255, 0.07)"
     : colors.find((color) => color === "#ffffff" || color === "#f8fafc") ?? shell.brand.palette.surface;
+  const shellText = isDarkLayout ? "#f8fafc" : shell.brand.palette.text;
 
   return {
     accent,
     activeBg: isDarkLayout ? "rgba(255, 255, 255, 0.12)" : `color-mix(in srgb, ${primary} 11%, ${surface})`,
-    background: isDarkLayout ? rail : "#f4f7f8",
+    background: isDarkLayout ? rail : lightColor ?? "#f4f7f8",
     border: isDarkLayout ? "rgba(255, 255, 255, 0.14)" : "#d8e2e8",
     fontFamily: fontStackFor(presentation?.visualTokens.typography),
     muted: isDarkLayout ? "#a9b7c2" : "#647482",
@@ -1581,18 +1971,28 @@ function resolveRuntimeTheme(shell: RuntimeShell): RuntimeTheme {
     panelAlt: isDarkLayout ? "rgba(255, 255, 255, 0.08)" : "#f8fafc",
     primary,
     radius: presentation?.visualTokens.radius ?? "8px",
-    rail: isDarkLayout ? rail : surface,
+    rail,
     secondary: darkColor ?? shell.brand.palette.secondary,
     shadow: isDarkLayout ? "0 22px 60px rgba(0, 0, 0, 0.28)" : "0 16px 42px rgba(22, 35, 48, 0.08)",
-    sidebarText: isDarkLayout ? "#f8fafc" : shell.brand.palette.text,
-    shellText: isDarkLayout ? "#f8fafc" : shell.brand.palette.text,
+    sidebarText: isDarkColor(rail) ? "#f8fafc" : shellText,
+    shellText,
     surface,
     text: isDarkLayout ? "#f8fafc" : shell.brand.palette.text
   };
 }
 
 function colorForToken(value: string): string | null {
-  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/gu, " ").trim();
+  const raw = value.trim().toLowerCase();
+
+  if (/^#[0-9a-f]{6}$/u.test(raw)) {
+    return raw;
+  }
+
+  if (/^#[0-9a-f]{3}$/u.test(raw)) {
+    return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
+  }
+
+  const normalized = raw.replace(/[^a-z0-9]+/gu, " ").trim();
   const direct = COLOR_TOKENS[normalized];
 
   if (direct) {
@@ -1605,7 +2005,50 @@ function colorForToken(value: string): string | null {
 }
 
 function isDarkColor(color: string): boolean {
-  return DARK_COLORS.has(color);
+  if (DARK_COLORS.has(color)) {
+    return true;
+  }
+
+  const rgb = hexToRgb(color);
+
+  if (!rgb) {
+    return false;
+  }
+
+  return relativeLuminance(rgb) < 0.22;
+}
+
+function isLightColor(color: string): boolean {
+  const rgb = hexToRgb(color);
+
+  return rgb ? relativeLuminance(rgb) > 0.82 : color === "#ffffff" || color === "#f8fafc";
+}
+
+function hexToRgb(color: string): { r: number; g: number; b: number } | null {
+  const normalized = color.trim().toLowerCase();
+  const match = /^#([0-9a-f]{6})$/u.exec(normalized);
+
+  if (!match) {
+    return null;
+  }
+
+  const value = match[1]!;
+
+  return {
+    r: Number.parseInt(value.slice(0, 2), 16),
+    g: Number.parseInt(value.slice(2, 4), 16),
+    b: Number.parseInt(value.slice(4, 6), 16)
+  };
+}
+
+function relativeLuminance({ r, g, b }: { r: number; g: number; b: number }): number {
+  const [red, green, blue] = [r, g, b].map((channel) => {
+    const normalized = channel / 255;
+
+    return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+
+  return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
 }
 
 function fontStackFor(value: string | undefined): string {
@@ -1651,6 +2094,7 @@ const COLOR_TOKENS: Record<string, string> = {
   graphite: "#171b1f",
   green: "#16a34a",
   ink: "#111827",
+  lime: "#a3e635",
   magenta: "#be185d",
   midnight: "#101820",
   navy: "#172554",
@@ -1660,8 +2104,10 @@ const COLOR_TOKENS: Record<string, string> = {
   "glass violet": "#8b5cf6",
   "liquidity gold": "#f5c542",
   "matrix green": "#00ff9c",
+  "acid lime": "#84cc16",
   "cool white": "#f8fafc",
   "quartz green": "#16a34a",
+  "signal amber": "#f59e0b",
   "signal green": "#22c55e",
   slate: "#334155",
   steel: "#475569",
@@ -1729,8 +2175,45 @@ function responseKey(shell: RuntimeShell, key: string): string {
   return shell.fields.responseKeys[key] ?? key;
 }
 
+function responseValue(shell: RuntimeShell, payload: unknown, key: string): unknown {
+  const wantedKey = responseKey(shell, key);
+  const source = objectValueOrNull(payload);
+
+  if (!source) {
+    return payload;
+  }
+
+  const direct = source[wantedKey] ?? source[key];
+
+  if (direct !== undefined) {
+    return direct;
+  }
+
+  const data = source.data;
+
+  if (data !== undefined) {
+    return responseValue(shell, data, key);
+  }
+
+  const result = source.result;
+
+  if (result !== undefined) {
+    return responseValue(shell, result, key);
+  }
+
+  return undefined;
+}
+
+function last4(value: string): string {
+  return value.replace(/\D/g, "").slice(-4);
+}
+
+function objectValueOrNull(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
 function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return objectValueOrNull(value) ?? {};
 }
 
 function arrayValue(value: unknown): Record<string, unknown>[] {
@@ -1739,6 +2222,25 @@ function arrayValue(value: unknown): Record<string, unknown>[] {
 
 function valueAt(source: Record<string, unknown>, fields: Record<string, string>, key: string, fallback?: string): unknown {
   return source[fields[key] ?? key] ?? (fallback ? source[fallback] : undefined);
+}
+
+function relationValue(shell: RuntimeShell, source: Record<string, unknown>, responseKeyName: "customers" | "paymentMethods", fallback: string): unknown {
+  const pluralKey = responseKey(shell, responseKeyName);
+  const singularKey = singularAlias(pluralKey);
+
+  return source[fallback] ?? source[singularKey] ?? source[pluralKey];
+}
+
+function singularAlias(value: string): string {
+  if (value.endsWith("ies")) {
+    return `${value.slice(0, -3)}y`;
+  }
+
+  if (value.endsWith("s")) {
+    return value.slice(0, -1);
+  }
+
+  return value;
 }
 
 function decodeAccount(shell: RuntimeShell, value: unknown): RuntimeAccount | null {
@@ -1787,10 +2289,10 @@ function decodePayment(shell: RuntimeShell, value: unknown): RuntimePayment {
     amount: Number(valueAt(source, shell.fields.payment, "amount") ?? 0),
     createdAt: String(valueAt(source, shell.fields.payment, "createdAt") ?? new Date().toISOString()),
     currency: String(valueAt(source, shell.fields.payment, "currency") ?? "USD"),
-    customer: source.customer ? decodeCustomer(shell, source.customer) : null,
+    customer: relationValue(shell, source, "customers", "customer") ? decodeCustomer(shell, relationValue(shell, source, "customers", "customer")) : null,
     destination: nullableString(valueAt(source, shell.fields.payment, "destinationLabel", "destination")),
     methodType: String(valueAt(source, shell.fields.payment, "methodType") ?? "card"),
-    paymentMethod: source.paymentMethod ? decodePaymentMethod(shell, source.paymentMethod) : null,
+    paymentMethod: relationValue(shell, source, "paymentMethods", "paymentMethod") ? decodePaymentMethod(shell, relationValue(shell, source, "paymentMethods", "paymentMethod")) : null,
     reference: String(valueAt(source, shell.fields.payment, "externalReference", "reference") ?? ""),
     status: String(valueAt(source, shell.fields.payment, "status") ?? "unknown")
   };

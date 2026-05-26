@@ -1,5 +1,11 @@
 import type { PaymentCoreStatus } from "./payment-core.js";
 
+export type LayoutBuilderDeepPartial<T> = T extends Array<infer U>
+  ? Array<LayoutBuilderDeepPartial<U>>
+  : T extends object
+    ? { [K in keyof T]?: LayoutBuilderDeepPartial<T[K]> | undefined }
+    : T;
+
 export type LayoutBuilderFieldStyle = "camelCase" | "snake_case" | "kebab-case";
 export type LayoutBuilderPayloadStructure = "flat" | "nested" | "key-value-array";
 export type LayoutBuilderIdentityRole = "platform_admin" | "brand_operator" | "merchant_owner";
@@ -28,10 +34,27 @@ export type LayoutBuilderAiAuthMobileOrder = "brand-first" | "form-first";
 export type LayoutBuilderAiAuthModeControl = "segmented" | "tabs" | "toggle";
 export type LayoutBuilderAiAuthFieldTreatment = "boxed" | "filled" | "underlined";
 export type LayoutBuilderAiAuthSurface = "flat" | "raised" | "outlined";
+export type LayoutBuilderAiAuthFrame = "split" | "centered" | "offset" | "console" | "minimal";
+export type LayoutBuilderAiAuthBrandTreatment = "stacked" | "inline" | "badge";
 export type LayoutBuilderAiPaymentsMetricsPlacement = "top" | "left" | "right" | "hidden";
-export type LayoutBuilderAiPaymentsActivityPattern = "table" | "cards" | "timeline";
+export type LayoutBuilderAiPaymentsActivityPattern = "table";
 export type LayoutBuilderAiPaymentsStatusTreatment = "badge" | "rail" | "dot";
 export type LayoutBuilderAiPaymentsAmountEmphasis = "primary" | "secondary" | "balanced";
+export type LayoutBuilderAiPaymentsComposerPlacement = "intro" | "activity-top" | "activity-bottom" | "sidecar";
+export type LayoutBuilderAiPaymentsComposerSurface = "compact" | "panel" | "inline";
+export type LayoutBuilderAiPaymentsComposerTone = "minimal" | "operator" | "guided";
+export type LayoutBuilderAiPaymentScenario = "settle" | "review" | "reserve" | "fail";
+export type LayoutBuilderAiPaymentsTableColumnKey =
+  | "reference"
+  | "status"
+  | "amount"
+  | "customer"
+  | "method"
+  | "createdAt"
+  | "destination";
+export type LayoutBuilderAiPaymentsTableTitlePlacement = "page" | "table" | "hidden";
+export type LayoutBuilderAiPaymentsTableControlPlacement = "above" | "side" | "none";
+export type LayoutBuilderAiPaymentsTableDensity = "compact" | "regular" | "spacious";
 export type LayoutBuilderBrandIntentSource = "external-chat" | "codex" | "gemini" | "claude" | "manual";
 export type LayoutBuilderLayoutVariant =
   | "classic"
@@ -119,6 +142,11 @@ export interface LayoutBuilderAiAuthExperienceSpec {
     headline: string;
     description: string;
   };
+  composition: {
+    frame: LayoutBuilderAiAuthFrame;
+    brandTreatment: LayoutBuilderAiAuthBrandTreatment;
+    showDescription: boolean;
+  };
   layout: {
     brandColumn: number;
     formMaxWidth: number;
@@ -172,10 +200,38 @@ export interface LayoutBuilderAiPaymentsExperienceSpec {
     panelPadding: number;
     rowMinHeight: number;
   };
+  table: {
+    titlePlacement: LayoutBuilderAiPaymentsTableTitlePlacement;
+    controlsPlacement: LayoutBuilderAiPaymentsTableControlPlacement;
+    density: LayoutBuilderAiPaymentsTableDensity;
+    columns: Array<{
+      key: LayoutBuilderAiPaymentsTableColumnKey;
+      label: string;
+      priority: number;
+    }>;
+  };
   visual: {
     surface: string;
     status: string;
     dataDensity: string;
+  };
+  createPayment: {
+    enabled: boolean;
+    placement: LayoutBuilderAiPaymentsComposerPlacement;
+    surface: LayoutBuilderAiPaymentsComposerSurface;
+    tone: LayoutBuilderAiPaymentsComposerTone;
+    defaultScenario: LayoutBuilderAiPaymentScenario;
+    labels: {
+      title: string;
+      amount: string;
+      currency: string;
+      customer: string;
+      customerEmail: string;
+      methodType: string;
+      instrument: string;
+      scenario: string;
+      submit: string;
+    };
   };
 }
 
@@ -262,8 +318,8 @@ export interface LayoutBuilderBrandGenerationIntent {
     emptyStates: Record<string, string>;
     actionLabels: Record<string, string>;
   };
-  authExperience?: Partial<LayoutBuilderAiAuthExperienceSpec> | undefined;
-  paymentsExperience?: Partial<LayoutBuilderAiPaymentsExperienceSpec> | undefined;
+  authExperience?: LayoutBuilderDeepPartial<LayoutBuilderAiAuthExperienceSpec> | undefined;
+  paymentsExperience?: LayoutBuilderDeepPartial<LayoutBuilderAiPaymentsExperienceSpec> | undefined;
   statusVocabulary?: Partial<Record<PaymentCoreStatus, string | undefined>> | undefined;
 }
 

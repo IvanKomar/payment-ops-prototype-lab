@@ -1,6 +1,8 @@
 import type {
   LayoutBuilderAiBrandSpec,
+  LayoutBuilderAiEnvelopeStyle,
   LayoutBuilderAiGenerationProfile,
+  LayoutBuilderPayloadStructure,
   PaymentCoreAccount,
   PaymentCoreBalanceTransactionsResponse,
   PaymentCoreMethodType,
@@ -30,6 +32,8 @@ export interface BrandRuntimeContract {
   resourceAlias: string;
   statusMap: Record<PaymentCoreStatus, string>;
   actionLabels: NonNullable<LayoutBuilderAiGenerationProfile["actionLabels"]>;
+  payloadStructure: LayoutBuilderPayloadStructure;
+  responseEnvelope: LayoutBuilderAiEnvelopeStyle;
   fields: {
     paymentId: string;
     externalReference: string;
@@ -129,6 +133,8 @@ export function createBrandRuntimeContract(brand: BrandWithSchema): BrandRuntime
     resourceAlias,
     statusMap: persistedContract?.statusMap ?? generation?.statusMap ?? DEFAULT_STATUS_MAP,
     actionLabels: persistedContract?.actionLabels ?? generation?.actionLabels ?? DEFAULT_ACTION_LABELS,
+    payloadStructure: persistedContract?.payloadStructure ?? generation?.dictionary?.controls.payloadStructure ?? "nested",
+    responseEnvelope: persistedContract?.aiSpec?.controls.responseEnvelope ?? generation?.dictionary?.controls.responseEnvelope ?? "resource_key",
     fields: {
       paymentId: contractField(fieldMap, "payment.paymentId", runtimeField(brand, "paymentId")),
       externalReference: contractField(fieldMap, "payment.externalReference", runtimeField(brand, "externalReference")),
@@ -270,6 +276,35 @@ export function toRuntimeAuthResponse(
     user: mapUser(contract, response.user),
     account: mapAccount(contract, response.account)
   };
+}
+
+export function toRuntimeEntityResponse(
+  contract: BrandRuntimeContract,
+  entity: "account" | "metrics" | "payments" | "customers" | "paymentMethods" | "balances",
+  value: unknown
+): unknown {
+  const responseKey = contract.responseKeys[entity];
+
+  switch (contract.responseEnvelope) {
+    case "plain":
+      return value;
+    case "data":
+      return {
+        data: value,
+        meta: responseMeta(responseKey, value)
+      };
+    case "result":
+      return {
+        ok: true,
+        result: {
+          [responseKey]: value,
+          ...responseMeta(responseKey, value)
+        }
+      };
+    case "resource_key":
+    default:
+      return { [responseKey]: value };
+  }
 }
 
 export interface RuntimeAppShellResponse {
@@ -786,8 +821,8 @@ function mapPayment(contract: BrandRuntimeContract, payment: PaymentCorePayment)
     [contract.fields.destinationLabel]: payment.destinationLabel,
     [contract.fields.methodType]: payment.methodType,
     [contract.fields.createdAt]: payment.createdAt,
-    customer: payment.customer ? mapCustomer(contract, payment.customer) : null,
-    paymentMethod: payment.paymentMethod ? mapPaymentMethod(contract, payment.paymentMethod) : null
+    [relationKey(contract.responseKeys.customers, "customer")]: payment.customer ? mapCustomer(contract, payment.customer) : null,
+    [relationKey(contract.responseKeys.paymentMethods, "paymentMethod")]: payment.paymentMethod ? mapPaymentMethod(contract, payment.paymentMethod) : null
   };
 }
 
@@ -861,6 +896,31 @@ function publicRuntimeReference(value: string | null | undefined, prefix: string
     .padStart(10, "0");
 
   return `${prefix}-${token.slice(0, 4)}-${token.slice(4, 8)}`;
+}
+
+function responseMeta(responseKey: string, value: unknown): Record<string, unknown> {
+  return {
+    resource: responseKey,
+    ...(Array.isArray(value) ? { count: value.length } : {})
+  };
+}
+
+function relationKey(responseKey: string | undefined, fallback: string): string {
+  const key = responseKey?.trim();
+
+  if (!key) {
+    return fallback;
+  }
+
+  if (/ies$/u.test(key)) {
+    return `${key.slice(0, -3)}y`;
+  }
+
+  if (/s$/u.test(key)) {
+    return key.slice(0, -1);
+  }
+
+  return key;
 }
 
 function publicMetrics(

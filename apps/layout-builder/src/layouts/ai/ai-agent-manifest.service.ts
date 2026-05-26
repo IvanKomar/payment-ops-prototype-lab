@@ -101,9 +101,9 @@ export class AiAgentManifestService {
           {
             id: "payments_experience",
             label: "Payments UI",
-            prompt: "How should seeded payment activity be organized: ledger, cards, timeline, market tickets, compact trade feed, or another specific pattern?",
+            prompt: "What should the payment table feel like: terminal grid, market blotter, quest board, settlement register, compact trade sheet, or another specific table model?",
             required: false,
-            reason: "Payments UI is generated into paymentsExperience instead of selected from a fixed payments template."
+            reason: "Payments UI is generated into paymentsExperience.table instead of selected from fixed card/list templates."
           },
           {
             id: "restricted_words",
@@ -118,9 +118,11 @@ export class AiAgentManifestService {
           "Return or submit one JSON object matching LayoutBuilderBrandGenerationIntent.",
           "Target one brand-facing page: /:brandSlug/app/payments with seeded payment activity.",
           "Use unique route language and field aliases; avoid canonical words in visible routes.",
-          "Vary layout architecture, payment row or tile pattern, metrics, status treatment, typography, and color tokens compared with recent brands.",
-          "Generate authExperience with numeric composition, field copy, surface treatment, and mobile order; do not choose from fixed login templates.",
-          "Generate paymentsExperience with numeric composition, metrics placement, activity pattern, status treatment, and visible payment fields; do not choose from fixed payments templates.",
+          "Choose responseEnvelope deliberately: it changes the public BFF response shape, not just key spelling.",
+          "Vary layout architecture, payment table columns, column order, title placement, metrics, status treatment, typography, and color tokens compared with recent brands.",
+          "Choose a high-contrast palette with one dark anchor, one light surface, and one vivid accent; do not submit nearby green/teal-only palettes unless explicitly requested.",
+          "Generate authExperience.composition, numeric layout, field copy, surface treatment, and mobile order as a bespoke auth screen; keep it accessible, compact, and task-focused.",
+          "Generate paymentsExperience as a production payment table: activityPattern must be table, table.columns must include 4-7 brand-specific columns, and content.description is metadata only, not hero copy.",
           "Let Layout Builder compile and store generationProfile.dictionary for BFF-only decoding and encoding."
         ]
       },
@@ -167,10 +169,12 @@ export class AiAgentManifestService {
           "Do not reuse settlement ledger console language unless explicitly requested.",
           "Include preferredTerms that can drive route and field naming without hashes.",
           "Vary payload structure, field style, response envelope, dashboard composition, and navigation pattern where the brief allows.",
-          "For the brand-facing app, treat payments as the only required page and make the payment activity pattern visibly different from recent brands.",
-          "Do not rely on palette and copy changes alone; change layout architecture, density, status treatment, metric grouping, row or tile geometry, and typography.",
-          "For auth, generate authExperience with numeric layout, field copy, form control style, surface treatment, and visual notes instead of relying on canned login templates.",
-          "For the payments page, generate paymentsExperience with metrics placement, activity pattern, status treatment, field visibility, and numeric layout instead of relying on canned payments templates."
+          "Do not rely on case style alone for contract uniqueness; vary whether entity responses are direct resources, resource-key objects, data envelopes, or result envelopes.",
+          "For the brand-facing app, treat payments as the only required page and make the payment table structure visibly different from recent brands.",
+          "Do not rely on palette and copy changes alone; change layout architecture, table density, table columns, column order, title placement, status treatment, metric grouping, and typography.",
+          "Do not generate palettes that are visually adjacent to the last brand. Pair different hue families, for example graphite/lime/amber vs ivory/indigo/coral, not green-black vs green-white.",
+          "For auth, generate authExperience.composition.frame, brandTreatment, numeric layout, field copy, form control style, surface treatment, and visual notes; use proven login UX: clear labels, one primary action, readable contrast, no decorative clutter.",
+          "For the payments page, generate paymentsExperience.table with titlePlacement, controlsPlacement, density, and 4-7 columns instead of relying on canned cards/lists/timelines. The table must be the primary visual object, with metrics and create-payment controls secondary."
         ],
         requiredVariation: [
           "domain",
@@ -423,6 +427,11 @@ function exampleSpec(): LayoutBuilderAiBrandSpec {
             headline: "Aster Vault",
             description: "Secure access for operators returning to a compact wallet settlement console."
           },
+          composition: {
+            frame: "centered",
+            brandTreatment: "badge",
+            showDescription: true
+          },
           layout: {
             brandColumn: 46,
             formMaxWidth: 400,
@@ -459,7 +468,7 @@ function exampleSpec(): LayoutBuilderAiBrandSpec {
           },
           composition: {
             metricsPlacement: "left",
-            activityPattern: "timeline",
+            activityPattern: "table",
             statusTreatment: "dot",
             amountEmphasis: "balanced",
             showCustomer: true,
@@ -475,10 +484,40 @@ function exampleSpec(): LayoutBuilderAiBrandSpec {
             panelPadding: 14,
             rowMinHeight: 58
           },
+          table: {
+            titlePlacement: "table",
+            controlsPlacement: "side",
+            density: "compact",
+            columns: [
+              { key: "status", label: "Signal", priority: 1 },
+              { key: "reference", label: "Movement", priority: 2 },
+              { key: "amount", label: "Move value", priority: 3 },
+              { key: "customer", label: "Counterparty", priority: 4 },
+              { key: "createdAt", label: "Opened", priority: 5 }
+            ]
+          },
           visual: {
             surface: "graphite shell with white ledger panels",
             status: "mint signal states on movement rows",
             dataDensity: "compact settlement review density"
+          },
+          createPayment: {
+            enabled: true,
+            placement: "activity-top",
+            surface: "compact",
+            tone: "operator",
+            defaultScenario: "settle",
+            labels: {
+              title: "Open movement",
+              amount: "Move value",
+              currency: "Unit",
+              customer: "Counterparty",
+              customerEmail: "Counterparty signal",
+              methodType: "Rail",
+              instrument: "Rail reference",
+              scenario: "Route",
+              submit: "Send movement"
+            }
           }
         },
         presentation: {
@@ -556,6 +595,11 @@ function exampleIntent(): LayoutBuilderBrandGenerationIntent {
         headline: "Copper Harbor",
         description: "Dock-pass access for market operators clearing cargo-style payment activity."
       },
+      composition: {
+        frame: "split",
+        brandTreatment: "stacked",
+        showDescription: true
+      },
       layout: {
         brandColumn: 44,
         formMaxWidth: 430,
@@ -592,7 +636,7 @@ function exampleIntent(): LayoutBuilderBrandGenerationIntent {
       },
       composition: {
         metricsPlacement: "left",
-        activityPattern: "cards",
+        activityPattern: "table",
         statusTreatment: "rail",
         amountEmphasis: "primary",
         showCustomer: true,
@@ -608,10 +652,41 @@ function exampleIntent(): LayoutBuilderBrandGenerationIntent {
         panelPadding: 16,
         rowMinHeight: 72
       },
+      table: {
+        titlePlacement: "hidden",
+        controlsPlacement: "side",
+        density: "spacious",
+        columns: [
+          { key: "reference", label: "Cargo file", priority: 1 },
+          { key: "status", label: "Dock state", priority: 2 },
+          { key: "customer", label: "Client orbit", priority: 3 },
+          { key: "destination", label: "Berth", priority: 4 },
+          { key: "amount", label: "Cargo value", priority: 5 },
+          { key: "method", label: "Rail array", priority: 6 }
+        ]
+      },
       visual: {
         surface: "copper and steel payment board with tide-blue separators",
-        status: "status rail on each cargo card",
+        status: "status rail embedded into cargo table rows",
         dataDensity: "balanced scan density for repeated payment review"
+      },
+      createPayment: {
+        enabled: true,
+        placement: "sidecar",
+        surface: "panel",
+        tone: "guided",
+        defaultScenario: "settle",
+        labels: {
+          title: "Log cargo clearing",
+          amount: "Cargo value",
+          currency: "Currency",
+          customer: "Client orbit",
+          customerEmail: "Client signal",
+          methodType: "Rail array",
+          instrument: "Rail reference",
+          scenario: "Dock route",
+          submit: "Clear cargo"
+        }
       }
     },
     statusVocabulary: {
@@ -784,6 +859,11 @@ function authExperienceJsonSchema(): Record<string, unknown> {
       headline: stringSchema(),
       description: stringSchema()
     }),
+    composition: objectSchema({
+      frame: enumSchema(["split", "centered", "offset", "console", "minimal"]),
+      brandTreatment: enumSchema(["stacked", "inline", "badge"]),
+      showDescription: { type: "boolean" }
+    }),
     layout: objectSchema({
       brandColumn: { type: "integer", minimum: 30, maximum: 70 },
       formMaxWidth: { type: "integer", minimum: 320, maximum: 620 },
@@ -823,7 +903,7 @@ function paymentsExperienceJsonSchema(): Record<string, unknown> {
     }),
     composition: objectSchema({
       metricsPlacement: enumSchema(["top", "left", "right", "hidden"]),
-      activityPattern: enumSchema(["table", "cards", "timeline"]),
+      activityPattern: enumSchema(["table"]),
       statusTreatment: enumSchema(["badge", "rail", "dot"]),
       amountEmphasis: enumSchema(["primary", "secondary", "balanced"]),
       showCustomer: { type: "boolean" },
@@ -839,10 +919,40 @@ function paymentsExperienceJsonSchema(): Record<string, unknown> {
       panelPadding: { type: "integer", minimum: 10, maximum: 36 },
       rowMinHeight: { type: "integer", minimum: 44, maximum: 112 }
     }),
+    table: objectSchema({
+      titlePlacement: enumSchema(["page", "table", "hidden"]),
+      controlsPlacement: enumSchema(["above", "side", "none"]),
+      density: enumSchema(["compact", "regular", "spacious"]),
+      columns: arraySchema(
+        objectSchema({
+          key: enumSchema(["reference", "status", "amount", "customer", "method", "createdAt", "destination"]),
+          label: stringSchema(),
+          priority: { type: "integer", minimum: 1, maximum: 7 }
+        })
+      )
+    }),
     visual: objectSchema({
       surface: stringSchema(),
       status: stringSchema(),
       dataDensity: stringSchema()
+    }),
+    createPayment: objectSchema({
+      enabled: { type: "boolean" },
+      placement: enumSchema(["intro", "activity-top", "activity-bottom", "sidecar"]),
+      surface: enumSchema(["compact", "panel", "inline"]),
+      tone: enumSchema(["minimal", "operator", "guided"]),
+      defaultScenario: enumSchema(["settle", "review", "reserve", "fail"]),
+      labels: objectSchema({
+        title: stringSchema(),
+        amount: stringSchema(),
+        currency: stringSchema(),
+        customer: stringSchema(),
+        customerEmail: stringSchema(),
+        methodType: stringSchema(),
+        instrument: stringSchema(),
+        scenario: stringSchema(),
+        submit: stringSchema()
+      })
     })
   });
 }

@@ -59,6 +59,7 @@ import {
   toRuntimeBalanceTransactionsResponse,
   toRuntimeCustomerResponse,
   toRuntimeCustomersResponse,
+  toRuntimeEntityResponse,
   toRuntimeHistoryResponse,
   toRuntimeOverviewResponse,
   toRuntimePaymentMethodResponse,
@@ -763,18 +764,18 @@ export class LayoutService {
 
     switch (operation) {
       case "account":
-        return { [contract.responseKeys.account]: mappedOverview.account ?? null };
+        return toRuntimeEntityResponse(contract, "account", mappedOverview.account ?? null);
       case "metrics":
-        return { [contract.responseKeys.metrics]: canonicalOverview.metrics ?? null };
+        return toRuntimeEntityResponse(contract, "metrics", canonicalOverview.metrics ?? null);
       case "payments":
-        return { [contract.responseKeys.payments]: Array.isArray(mappedOverview[contract.resourceAlias]) ? mappedOverview[contract.resourceAlias] : [] };
+        return toRuntimeEntityResponse(contract, "payments", Array.isArray(mappedOverview[contract.resourceAlias]) ? mappedOverview[contract.resourceAlias] : []);
       case "customers":
-        return { [contract.responseKeys.customers]: Array.isArray(mappedOverview.customers) ? mappedOverview.customers : [] };
+        return toRuntimeEntityResponse(contract, "customers", Array.isArray(mappedOverview.customers) ? mappedOverview.customers : []);
       case "paymentMethods":
-        return { [contract.responseKeys.paymentMethods]: Array.isArray(mappedOverview.paymentMethods) ? mappedOverview.paymentMethods : [] };
+        return toRuntimeEntityResponse(contract, "paymentMethods", Array.isArray(mappedOverview.paymentMethods) ? mappedOverview.paymentMethods : []);
       case "balanceTransactions":
       case "balances":
-        return { [contract.responseKeys.balances]: Array.isArray(mappedOverview.balanceTransactions) ? mappedOverview.balanceTransactions : [] };
+        return toRuntimeEntityResponse(contract, "balances", Array.isArray(mappedOverview.balanceTransactions) ? mappedOverview.balanceTransactions : []);
       default:
         throw new NotFoundException(`Brand entity endpoint was not found: ${slug}/${entity}`);
     }
@@ -805,15 +806,15 @@ export class LayoutService {
     const sessionToken = parseBearerToken(authorization);
 
     if (operation === "payments") {
-      return this.createRuntimePayment(brand.id, brand.schema.slug, sessionToken, payload);
+      return toRuntimeEntityResponse(contract, "payments", await this.createRuntimePayment(brand.id, brand.schema.slug, sessionToken, payload));
     }
 
     if (operation === "customers") {
-      return this.createRuntimeCustomer(brand.id, brand.schema.slug, sessionToken, payload);
+      return toRuntimeEntityResponse(contract, "customers", await this.createRuntimeCustomer(brand.id, brand.schema.slug, sessionToken, payload));
     }
 
     if (operation === "paymentMethods") {
-      return this.createRuntimePaymentMethod(brand.id, brand.schema.slug, sessionToken, payload);
+      return toRuntimeEntityResponse(contract, "paymentMethods", await this.createRuntimePaymentMethod(brand.id, brand.schema.slug, sessionToken, payload));
     }
 
     throw new NotFoundException(`Brand entity endpoint was not found: ${slug}/${entity}`);
@@ -1190,6 +1191,8 @@ export class LayoutService {
       brandId: brand.id,
       brandName: brand.name,
       resourceAlias: spec.resourceAlias,
+      payloadStructure: spec.controls.payloadStructure,
+      responseEnvelope: spec.controls.responseEnvelope,
       statusMap: spec.statuses,
       actionLabels: {
         register: spec.ui.labels.register,

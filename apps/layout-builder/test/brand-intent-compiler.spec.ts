@@ -68,9 +68,75 @@ describe("BrandIntentCompilerService", () => {
     expect(routes).not.toContain("payments");
     expect(routes).not.toContain("customers");
     expect(routes).not.toContain("balances");
+    expect(spec.entities.payments.route).not.toContain("ledger");
     expect(spec.resourceAlias).toBe("cargo_items");
     expect(spec.statuses.created).toBe("cargologged");
     expect(spec.ui.presentation.layout).toBe("split-workspace");
+    expect(spec.ui.authExperience.form.fields.email.label).toBe("Operator email");
+    expect(spec.ui.authExperience.form.fields.password.label).toBe("Dock key");
+  });
+
+  it("maps descriptive layout language into distinct visual patterns", () => {
+    const baseIntent = {
+      brandName: "PixelForge Relay",
+      concept: {
+        domain: "player asset exchange",
+        audience: "competitive players",
+        productMetaphor: "forge relay",
+        authMetaphor: "loadout pass",
+        paymentMetaphor: "artifact handoff",
+        tone: "fast arcade operations",
+        avoidWords: ["payments", "customers", "account"],
+        preferredTerms: ["forge", "loadout", "artifact", "player", "socket", "charge"]
+      },
+      namingRules: {
+        routeStyle: "abstract arcade verbs",
+        fieldStyle: "kebab-case" as const,
+        forbiddenCanonicalNames: ["payments", "customers", "balances", "account", "metrics"],
+        examples: ["ignite-relay", "loadout-gate", "artifact-run"]
+      },
+      uiDirection: {
+        layout: "card operations command board",
+        density: "balanced",
+        navigation: "command rail",
+        visualStyle: "arcade card board",
+        palette: ["graphite", "lime", "magenta", "cool white"],
+        dashboardBlocks: ["metrics", "recentPayments", "customers", "createPayment"]
+      },
+      copy: {
+        loginTitle: "Enter loadout",
+        registerTitle: "Claim relay slot",
+        emptyStates: {
+          payments: "No artifact handoffs are active.",
+          customers: "No players are linked yet.",
+          balances: "No forge charges have posted."
+        },
+        actionLabels: {
+          createPayment: "Send artifact",
+          history: "Relay feed",
+          refund: "Reverse handoff",
+          payments: "Artifact handoffs",
+          customers: "Player links",
+          balances: "Forge charges",
+          overview: "Forge board"
+        }
+      },
+      statusVocabulary: {
+        created: "queuedRune",
+        settled: "handoffDone"
+      }
+    };
+
+    const spec = new BrandIntentCompilerService().compile(baseIntent);
+
+    expect(spec.ui.presentation.layout).toBe("card-operations");
+    expect(spec.ui.presentation.navigationPattern).toBe("command-rail");
+    expect(spec.ui.paymentsExperience.composition.activityPattern).toBe("table");
+    expect(spec.ui.paymentsExperience.composition.metricsPlacement).toBe("right");
+    expect(spec.ui.paymentsExperience.table.columns.map((column) => column.key)).toEqual(["reference", "customer", "amount", "status", "destination"]);
+    expect(spec.ui.paymentsExperience.table.titlePlacement).toBe("table");
+    expect(spec.ui.paymentsExperience.createPayment.placement).toBe("sidecar");
+    expect(spec.ui.authExperience.form.modeControl).toBe("toggle");
+    expect(spec.entities.payments.route).toBe("artifact-handoff-abstract");
   });
 });
-

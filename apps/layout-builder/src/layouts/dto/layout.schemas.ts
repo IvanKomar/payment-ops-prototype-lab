@@ -109,6 +109,106 @@ const paymentStatusVocabularySchema = z
   .optional();
 
 const textListSchema = z.array(z.string().trim().min(1).max(120)).max(24);
+const optionalLabelSchema = z.object({
+  label: z.string().trim().min(1).max(80).optional(),
+  placeholder: z.string().trim().min(1).max(120).optional()
+});
+const intentAuthExperienceSchema = z.object({
+  content: z.object({
+    headline: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().min(1).max(240).optional()
+  }).optional(),
+  composition: z.object({
+    frame: z.enum(["split", "centered", "offset", "console", "minimal"]).optional(),
+    brandTreatment: z.enum(["stacked", "inline", "badge"]).optional(),
+    showDescription: z.boolean().optional()
+  }).optional(),
+  layout: z.object({
+    brandColumn: z.number().int().min(20).max(80).optional(),
+    formMaxWidth: z.number().int().min(280).max(720).optional(),
+    logoSize: z.number().int().min(40).max(160).optional(),
+    panelPadding: z.number().int().min(8).max(56).optional(),
+    gap: z.number().int().min(8).max(96).optional(),
+    brandAlignment: z.enum(["start", "center", "end"]).optional(),
+    formAlignment: z.enum(["start", "center", "end"]).optional(),
+    textAlign: z.enum(["left", "center", "right"]).optional(),
+    mobileOrder: z.enum(["brand-first", "form-first"]).optional()
+  }).optional(),
+  form: z.object({
+    modeControl: z.enum(["segmented", "tabs", "toggle"]).optional(),
+    fieldTreatment: z.enum(["boxed", "filled", "underlined"]).optional(),
+    surface: z.enum(["flat", "raised", "outlined"]).optional(),
+    showDisplayNameOnLogin: z.boolean().optional(),
+    fields: z.object({
+      email: optionalLabelSchema.optional(),
+      password: optionalLabelSchema.optional(),
+      displayName: optionalLabelSchema.optional()
+    }).optional()
+  }).optional(),
+  visual: z.object({
+    background: z.string().trim().min(1).max(260).optional(),
+    panel: z.string().trim().min(1).max(260).optional(),
+    accent: z.string().trim().min(1).max(160).optional()
+  }).optional()
+});
+const intentPaymentsExperienceSchema = z.object({
+  content: z.object({
+    headline: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().min(1).max(240).optional(),
+    emptyState: z.string().trim().min(1).max(180).optional()
+  }).optional(),
+  composition: z.object({
+    metricsPlacement: z.enum(["top", "left", "right", "hidden"]).optional(),
+    activityPattern: z.literal("table").optional(),
+    statusTreatment: z.enum(["badge", "rail", "dot"]).optional(),
+    amountEmphasis: z.enum(["primary", "secondary", "balanced"]).optional(),
+    showCustomer: z.boolean().optional(),
+    showMethod: z.boolean().optional(),
+    showTimestamp: z.boolean().optional(),
+    maxItems: z.number().int().min(4).max(30).optional()
+  }).optional(),
+  layout: z.object({
+    metricsColumns: z.number().int().min(1).max(5).optional(),
+    sidebarWidth: z.number().int().min(160).max(460).optional(),
+    cardMinWidth: z.number().int().min(160).max(460).optional(),
+    gap: z.number().int().min(6).max(56).optional(),
+    panelPadding: z.number().int().min(8).max(48).optional(),
+    rowMinHeight: z.number().int().min(40).max(124).optional()
+  }).optional(),
+  table: z.object({
+    titlePlacement: z.enum(["page", "table", "hidden"]).optional(),
+    controlsPlacement: z.enum(["above", "side", "none"]).optional(),
+    density: z.enum(["compact", "regular", "spacious"]).optional(),
+    columns: z.array(z.object({
+      key: z.enum(["reference", "status", "amount", "customer", "method", "createdAt", "destination"]),
+      label: z.string().trim().min(1).max(50),
+      priority: z.number().int().min(1).max(7).optional()
+    })).min(4).max(7).optional()
+  }).optional(),
+  visual: z.object({
+    surface: z.string().trim().min(1).max(260).optional(),
+    status: z.string().trim().min(1).max(260).optional(),
+    dataDensity: z.string().trim().min(1).max(180).optional()
+  }).optional(),
+  createPayment: z.object({
+    enabled: z.boolean().optional(),
+    placement: z.enum(["intro", "activity-top", "activity-bottom", "sidecar"]).optional(),
+    surface: z.enum(["compact", "panel", "inline"]).optional(),
+    tone: z.enum(["minimal", "operator", "guided"]).optional(),
+    defaultScenario: z.enum(["settle", "review", "reserve", "fail"]).optional(),
+    labels: z.object({
+      title: z.string().trim().min(1).max(80).optional(),
+      amount: z.string().trim().min(1).max(60).optional(),
+      currency: z.string().trim().min(1).max(60).optional(),
+      customer: z.string().trim().min(1).max(60).optional(),
+      customerEmail: z.string().trim().min(1).max(80).optional(),
+      methodType: z.string().trim().min(1).max(60).optional(),
+      instrument: z.string().trim().min(1).max(80).optional(),
+      scenario: z.string().trim().min(1).max(80).optional(),
+      submit: z.string().trim().min(1).max(80).optional()
+    }).optional()
+  }).optional()
+});
 
 export const brandGenerationIntentSchema = z.object({
   brandName: z.string().trim().min(1).max(80),
@@ -142,6 +242,8 @@ export const brandGenerationIntentSchema = z.object({
     emptyStates: z.record(z.string().trim().min(1).max(80), z.string().trim().min(1).max(180)),
     actionLabels: z.record(z.string().trim().min(1).max(80), z.string().trim().min(1).max(100))
   }),
+  authExperience: intentAuthExperienceSchema.optional(),
+  paymentsExperience: intentPaymentsExperienceSchema.optional(),
   statusVocabulary: paymentStatusVocabularySchema
 }) satisfies z.ZodType<LayoutBuilderBrandGenerationIntent>;
 

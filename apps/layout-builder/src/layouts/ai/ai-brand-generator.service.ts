@@ -247,6 +247,11 @@ function defaultUiSpec(input: GenerateBrandArtifactInput): LayoutBuilderAiBrandS
         headline: input.brandName,
         description: input.generationProfile.visualDirection
       },
+      composition: {
+        frame: "split",
+        brandTreatment: "stacked",
+        showDescription: true
+      },
       layout: {
         brandColumn: 50,
         formMaxWidth: 420,
@@ -316,10 +321,41 @@ function defaultUiSpec(input: GenerateBrandArtifactInput): LayoutBuilderAiBrandS
         panelPadding: 16,
         rowMinHeight: 64
       },
+      table: {
+        titlePlacement: "table",
+        controlsPlacement: "above",
+        density: "regular",
+        columns: [
+          { key: "reference", label: input.generationProfile.actionLabels.history, priority: 1 },
+          { key: "status", label: "State", priority: 2 },
+          { key: "amount", label: "Amount", priority: 3 },
+          { key: "customer", label: "Customer", priority: 4 },
+          { key: "method", label: "Source", priority: 5 },
+          { key: "createdAt", label: "Created", priority: 6 }
+        ]
+      },
       visual: {
         surface: "light panels with restrained borders",
         status: "solid primary and quiet secondary buttons",
         dataDensity: "balanced dashboard spacing"
+      },
+      createPayment: {
+        enabled: true,
+        placement: "activity-top",
+        surface: "panel",
+        tone: "operator",
+        defaultScenario: "settle",
+        labels: {
+          title: input.generationProfile.actionLabels.createPayment,
+          amount: "Amount",
+          currency: "Currency",
+          customer: "Customer",
+          customerEmail: "Customer email",
+          methodType: "Payment source",
+          instrument: "Card or account",
+          scenario: "Processing route",
+          submit: input.generationProfile.actionLabels.createPayment
+        }
       }
     }
   };

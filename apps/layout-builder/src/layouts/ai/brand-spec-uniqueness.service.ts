@@ -36,21 +36,27 @@ function similarityAgainstExisting(spec: LayoutBuilderAiBrandSpec, existing: Lay
   const sameEnvelope = spec.controls.responseEnvelope === existing.controls.responseEnvelope ? 1 : 0;
   const dashboardOverlap = overlap(spec.ui.presentation.dashboardComposition, existing.ui.presentation.dashboardComposition);
   const copyOverlap = tokenOverlap(spec.ui.presentation.copyTone, existing.ui.presentation.copyTone);
+  const sameAuthPattern = authPattern(spec) === authPattern(existing) ? 1 : 0;
+  const samePaymentPattern = paymentPattern(spec) === paymentPattern(existing) ? 1 : 0;
+  const samePaymentGeometry = paymentGeometry(spec) === paymentGeometry(existing) ? 1 : 0;
 
   const similarity = Math.min(
     100,
     routeOverlap * 24 +
-      aliasOverlap * 18 +
-      statusOverlap * 16 +
+      aliasOverlap * 16 +
+      statusOverlap * 14 +
       labelOverlap * 12 +
       paletteOverlap * 8 +
-      sameLayout * 6 +
+      sameLayout * 8 +
       sameNavigation * 4 +
       samePayloadStructure * 4 +
       sameFieldStyle * 3 +
       sameEnvelope * 3 +
       dashboardOverlap * 4 +
-      copyOverlap * 8
+      copyOverlap * 6 +
+      sameAuthPattern * 5 +
+      samePaymentPattern * 7 +
+      samePaymentGeometry * 5
   );
   const issues = [
     routeOverlap > 0.2 ? `Public route overlap is too high (${percent(routeOverlap)}).` : "",
@@ -63,7 +69,10 @@ function similarityAgainstExisting(spec: LayoutBuilderAiBrandSpec, existing: Lay
     sameFieldStyle ? `Field style repeats an existing brand (${spec.controls.fieldStyle}).` : "",
     sameEnvelope ? `Response envelope repeats an existing brand (${spec.controls.responseEnvelope}).` : "",
     dashboardOverlap > 0.6 ? `Dashboard composition is too similar (${percent(dashboardOverlap)}).` : "",
-    copyOverlap > 0.35 ? `Copy tone is too similar (${percent(copyOverlap)} token overlap).` : ""
+    copyOverlap > 0.35 ? `Copy tone is too similar (${percent(copyOverlap)} token overlap).` : "",
+    sameAuthPattern ? `Auth experience pattern repeats an existing brand (${authPattern(spec)}).` : "",
+    samePaymentPattern ? `Payments experience pattern repeats an existing brand (${paymentPattern(spec)}).` : "",
+    samePaymentGeometry ? `Payments geometry repeats an existing brand (${paymentGeometry(spec)}).` : ""
   ].filter(Boolean);
 
   return {
@@ -89,6 +98,51 @@ function uiLabels(spec: LayoutBuilderAiBrandSpec): string[] {
     ...Object.values(spec.ui.presentation.componentLabels),
     ...Object.values(spec.ui.presentation.emptyStates)
   ];
+}
+
+function authPattern(spec: LayoutBuilderAiBrandSpec): string {
+  const auth = spec.ui.authExperience;
+  return [
+    auth.composition?.frame ?? "split",
+    auth.composition?.brandTreatment ?? "stacked",
+    String(auth.composition?.showDescription ?? true),
+    auth.form.modeControl,
+    auth.form.fieldTreatment,
+    auth.form.surface,
+    auth.layout.brandAlignment,
+    auth.layout.formAlignment,
+    auth.layout.textAlign,
+    auth.layout.mobileOrder
+  ].join(":");
+}
+
+function paymentPattern(spec: LayoutBuilderAiBrandSpec): string {
+  const payments = spec.ui.paymentsExperience;
+  return [
+    payments.composition.metricsPlacement,
+    payments.composition.activityPattern,
+    payments.composition.statusTreatment,
+    payments.composition.amountEmphasis,
+    payments.table.titlePlacement,
+    payments.table.controlsPlacement,
+    payments.table.density,
+    payments.table.columns.map((column) => `${column.key}:${column.label}`).join(","),
+    payments.createPayment.placement,
+    payments.createPayment.surface,
+    payments.createPayment.tone
+  ].join(":");
+}
+
+function paymentGeometry(spec: LayoutBuilderAiBrandSpec): string {
+  const layout = spec.ui.paymentsExperience.layout;
+  return [
+    layout.metricsColumns,
+    Math.round(layout.sidebarWidth / 20),
+    Math.round(layout.cardMinWidth / 20),
+    Math.round(layout.gap / 4),
+    Math.round(layout.panelPadding / 4),
+    Math.round(layout.rowMinHeight / 8)
+  ].join(":");
 }
 
 function overlap(left: readonly string[], right: readonly string[]): number {

@@ -56,9 +56,17 @@ const AI_AUTH_MODE_CONTROLS = ["segmented", "tabs", "toggle"] as const;
 const AI_AUTH_FIELD_TREATMENTS = ["boxed", "filled", "underlined"] as const;
 const AI_AUTH_SURFACES = ["flat", "raised", "outlined"] as const;
 const AI_PAYMENTS_METRICS_PLACEMENTS = ["top", "left", "right", "hidden"] as const;
-const AI_PAYMENTS_ACTIVITY_PATTERNS = ["table", "cards", "timeline"] as const;
+const AI_PAYMENTS_ACTIVITY_PATTERNS = ["table"] as const;
 const AI_PAYMENTS_STATUS_TREATMENTS = ["badge", "rail", "dot"] as const;
 const AI_PAYMENTS_AMOUNT_EMPHASIS = ["primary", "secondary", "balanced"] as const;
+const AI_PAYMENTS_COMPOSER_PLACEMENTS = ["intro", "activity-top", "activity-bottom", "sidecar"] as const;
+const AI_PAYMENTS_COMPOSER_SURFACES = ["compact", "panel", "inline"] as const;
+const AI_PAYMENTS_COMPOSER_TONES = ["minimal", "operator", "guided"] as const;
+const AI_PAYMENT_SCENARIOS = ["settle", "review", "reserve", "fail"] as const;
+const AI_PAYMENTS_TABLE_COLUMN_KEYS = ["reference", "status", "amount", "customer", "method", "createdAt", "destination"] as const;
+const AI_PAYMENTS_TABLE_TITLE_PLACEMENTS = ["page", "table", "hidden"] as const;
+const AI_PAYMENTS_TABLE_CONTROL_PLACEMENTS = ["above", "side", "none"] as const;
+const AI_PAYMENTS_TABLE_DENSITIES = ["compact", "regular", "spacious"] as const;
 
 const slugSchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{1,80}$/u);
 const aliasSchema = z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_-]{1,60}$/u);
@@ -124,6 +132,11 @@ const authExperienceSchema = z.object({
     headline: z.string().trim().min(1).max(100),
     description: z.string().trim().min(1).max(260)
   }),
+  composition: z.object({
+    frame: z.enum(["split", "centered", "offset", "console", "minimal"]),
+    brandTreatment: z.enum(["stacked", "inline", "badge"]),
+    showDescription: z.boolean()
+  }),
   layout: z.object({
     brandColumn: z.number().int().min(30).max(70),
     formMaxWidth: z.number().int().min(320).max(620),
@@ -176,10 +189,55 @@ const paymentsExperienceSchema = z.object({
     panelPadding: z.number().int().min(10).max(36),
     rowMinHeight: z.number().int().min(44).max(112)
   }),
+  table: z.object({
+    titlePlacement: z.enum(AI_PAYMENTS_TABLE_TITLE_PLACEMENTS),
+    controlsPlacement: z.enum(AI_PAYMENTS_TABLE_CONTROL_PLACEMENTS),
+    density: z.enum(AI_PAYMENTS_TABLE_DENSITIES),
+    columns: z
+      .array(
+        z.object({
+          key: z.enum(AI_PAYMENTS_TABLE_COLUMN_KEYS),
+          label: z.string().trim().min(1).max(50),
+          priority: z.number().int().min(1).max(7)
+        })
+      )
+      .min(4)
+      .max(7)
+      .superRefine((columns, context) => {
+        const keys = columns.map((column) => column.key);
+        const duplicates = keys.filter((key, index) => keys.indexOf(key) !== index);
+
+        if (duplicates.length > 0) {
+          context.addIssue({ code: "custom", message: `Duplicate payment table columns: ${duplicates.join(", ")}` });
+        }
+
+        if (!keys.includes("reference") || !keys.includes("status") || !keys.includes("amount")) {
+          context.addIssue({ code: "custom", message: "Payment table must include reference, status, and amount columns" });
+        }
+      })
+  }),
   visual: z.object({
     surface: z.string().trim().min(1).max(180),
     status: z.string().trim().min(1).max(160),
     dataDensity: z.string().trim().min(1).max(160)
+  }),
+  createPayment: z.object({
+    enabled: z.boolean(),
+    placement: z.enum(AI_PAYMENTS_COMPOSER_PLACEMENTS),
+    surface: z.enum(AI_PAYMENTS_COMPOSER_SURFACES),
+    tone: z.enum(AI_PAYMENTS_COMPOSER_TONES),
+    defaultScenario: z.enum(AI_PAYMENT_SCENARIOS),
+    labels: z.object({
+      title: z.string().trim().min(1).max(80),
+      amount: z.string().trim().min(1).max(50),
+      currency: z.string().trim().min(1).max(50),
+      customer: z.string().trim().min(1).max(60),
+      customerEmail: z.string().trim().min(1).max(60),
+      methodType: z.string().trim().min(1).max(60),
+      instrument: z.string().trim().min(1).max(60),
+      scenario: z.string().trim().min(1).max(60),
+      submit: z.string().trim().min(1).max(60)
+    })
   })
 });
 
@@ -484,6 +542,7 @@ function specPrompt(
     "Routes must be slug-only path segments without a leading slash, for example vault-door or pulse-feed. Never return /vault-door, URLs, query strings, or multi-segment paths.",
     "Use unique route slugs and field aliases. Do not use profile, bff, runtime, rest-api, account, accounts, payments, customers, payment-methods, payment_methods, balances, or metrics as routes.",
     "Every entity must include route, method, requiresSession, requestKey, responseKey, and emptyState.",
+    "controls.responseEnvelope is applied to public BFF JSON shape. Pick it intentionally so one brand may return a direct resource, another a named resource object, another a data envelope, and another a result envelope.",
     "register and login must have requiresSession false. account, metrics, payments, customers, paymentMethods, and balances must have requiresSession true.",
     "Auth must include tokenResponseKey, tokenStorageKey, errorKey, and fields for email/password/displayName/currency.",
     "ui must include labels, navigation, tableLabels, formLabels, and presentation.",
@@ -492,8 +551,9 @@ function specPrompt(
     `ui.presentation.layout must be one of: ${AI_UI_LAYOUTS.join(", ")}.`,
     `ui.presentation.dashboardComposition must use only: ${AI_DASHBOARD_BLOCKS.join(", ")}.`,
     "ui.presentation must make visual layout, density, navigation, palette, typography, surfaces, buttons, copy tone, component labels, and empty states unique for this brand.",
-    "ui.authExperience must define content, numeric layout values, form field copy, mode control, field treatment, surface treatment, and short visual direction strings. Do not expose route slugs, field aliases, token keys, internal service names, or implementation details in authExperience.",
-    "ui.paymentsExperience must define content, metrics placement, activity pattern, status treatment, amount emphasis, visibility toggles, numeric layout values, and visual notes. Do not expose internal route slugs, field aliases, token keys, service names, or implementation details in paymentsExperience.",
+    "ui.presentation.visualTokens.palette must have real contrast: one dark anchor, one light surface, and at least one vivid accent from a different hue family. Avoid nearby green/teal-only palettes unless the brief explicitly requires them.",
+    "ui.authExperience must define content, composition frame, brand treatment, numeric layout values, form field copy, mode control, field treatment, surface treatment, and short visual direction strings. Do not expose route slugs, field aliases, token keys, internal service names, or implementation details in authExperience.",
+    "ui.paymentsExperience must define a production payment table, not cards or timeline: composition.activityPattern must be table, table.columns must contain 4-7 brand-specific columns, table title/controls/density should vary, and the table must stay visually primary over metrics and create-payment controls. content.description is metadata only and should not be written like repeated hero copy.",
     "Conversation:",
     ...messages.map((message) => `${message.role}: ${message.content}`)
   ].join("\n");
@@ -548,6 +608,11 @@ function localAuthExperience(brandName: string, vocabulary: (typeof LOCAL_VOCABU
       headline: brandName,
       description: vocabulary.visual
     },
+    composition: {
+      frame: layout === "compact-terminal" ? "console" : layout === "command-center" ? "centered" : layout === "topbar-console" ? "offset" : "split",
+      brandTreatment: layout === "topbar-console" ? "inline" : isCompact ? "badge" : "stacked",
+      showDescription: layout !== "compact-terminal"
+    },
     layout: {
       brandColumn: layout === "split-workspace" ? 44 : layout === "card-operations" ? 52 : 48,
       formMaxWidth: isCompact ? 380 : 440,
@@ -583,6 +648,7 @@ function localPaymentsExperience(brandName: string, vocabulary: (typeof LOCAL_VO
   const density = vocabulary.density as LayoutBuilderAiBrandSpec["ui"]["presentation"]["density"];
   const isCompact = density === "compact";
   const cardLike = layout === "card-operations";
+  const formLabels: Record<string, string | undefined> = vocabulary.formLabels;
 
   return {
     content: {
@@ -592,7 +658,7 @@ function localPaymentsExperience(brandName: string, vocabulary: (typeof LOCAL_VO
     },
     composition: {
       metricsPlacement: layout === "split-workspace" ? "left" : layout === "card-operations" ? "right" : "top",
-      activityPattern: cardLike ? "cards" : layout === "compact-terminal" || layout === "command-center" ? "timeline" : "table",
+      activityPattern: "table",
       statusTreatment: layout === "compact-terminal" ? "dot" : cardLike ? "rail" : "badge",
       amountEmphasis: isCompact ? "secondary" : cardLike ? "primary" : "balanced",
       showCustomer: true,
@@ -608,11 +674,69 @@ function localPaymentsExperience(brandName: string, vocabulary: (typeof LOCAL_VO
       panelPadding: isCompact ? 12 : 16,
       rowMinHeight: isCompact ? 54 : 68
     },
+    table: localPaymentTable(vocabulary, layout, density),
     visual: {
       surface: vocabulary.surfaces,
       status: vocabulary.buttons,
       dataDensity: vocabulary.spacing
+    },
+    createPayment: {
+      enabled: true,
+      placement: cardLike ? "sidecar" : isCompact ? "activity-bottom" : "activity-top",
+      surface: isCompact ? "compact" : cardLike ? "panel" : "inline",
+      tone: cardLike ? "guided" : "operator",
+      defaultScenario: "settle",
+      labels: {
+        title: vocabulary.labels.createPayment,
+        amount: formLabels.amount ?? "Amount",
+        currency: formLabels.currency ?? "Currency",
+        customer: formLabels.customer ?? "Customer",
+        customerEmail: formLabels.customerEmail ?? "Customer email",
+        methodType: formLabels.methodType ?? formLabels.method ?? "Payment source",
+        instrument: formLabels.instrumentReference ?? "Card or account",
+        scenario: formLabels.scenario ?? "Processing route",
+        submit: vocabulary.labels.createPayment
+      }
     }
+  };
+}
+
+function localPaymentTable(
+  vocabulary: (typeof LOCAL_VOCABULARIES)[number],
+  layout: LayoutBuilderAiBrandSpec["ui"]["presentation"]["layout"],
+  density: LayoutBuilderAiBrandSpec["ui"]["presentation"]["density"]
+): LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"] {
+  const labels = vocabulary.tableLabels;
+  const columnsByLayout: Record<
+    LayoutBuilderAiBrandSpec["ui"]["presentation"]["layout"],
+    Array<LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"][number]["key"]>
+  > = {
+    "sidebar-ledger": ["reference", "status", "amount", "customer", "method", "createdAt"],
+    "topbar-console": ["status", "reference", "customer", "destination", "amount", "method", "createdAt"],
+    "split-workspace": ["reference", "customer", "method", "status", "amount", "createdAt"],
+    "command-center": ["status", "createdAt", "reference", "amount", "customer"],
+    "card-operations": ["reference", "customer", "amount", "status", "destination"],
+    "compact-terminal": ["createdAt", "reference", "status", "amount", "method"]
+  };
+  const labelByKey: Record<LayoutBuilderAiBrandSpec["ui"]["paymentsExperience"]["table"]["columns"][number]["key"], string> = {
+    reference: labels.id ?? "Payment",
+    status: labels.status ?? "State",
+    amount: labels.amount ?? "Amount",
+    customer: labels.customer ?? "Customer",
+    method: "Source",
+    createdAt: labels.createdAt ?? "Created",
+    destination: "Destination"
+  };
+
+  return {
+    titlePlacement: layout === "topbar-console" || layout === "compact-terminal" ? "hidden" : layout === "command-center" ? "page" : "table",
+    controlsPlacement: layout === "split-workspace" || layout === "card-operations" ? "side" : layout === "compact-terminal" || layout === "command-center" ? "none" : "above",
+    density: density === "compact" ? "compact" : density === "spacious" ? "spacious" : "regular",
+    columns: columnsByLayout[layout].map((key, index) => ({
+      key,
+      label: labelByKey[key],
+      priority: index + 1
+    }))
   };
 }
 
@@ -988,6 +1112,11 @@ const GEMINI_BRAND_SPEC_RESPONSE_SCHEMA = objectSchema({
         headline: stringSchema(),
         description: stringSchema()
       }),
+      composition: objectSchema({
+        frame: enumSchema(["split", "centered", "offset", "console", "minimal"]),
+        brandTreatment: enumSchema(["stacked", "inline", "badge"]),
+        showDescription: { type: "boolean" }
+      }),
       layout: objectSchema({
         brandColumn: { type: "integer" },
         formMaxWidth: { type: "integer" },
@@ -1040,10 +1169,40 @@ const GEMINI_BRAND_SPEC_RESPONSE_SCHEMA = objectSchema({
         panelPadding: { type: "integer" },
         rowMinHeight: { type: "integer" }
       }),
+      table: objectSchema({
+        titlePlacement: enumSchema(AI_PAYMENTS_TABLE_TITLE_PLACEMENTS),
+        controlsPlacement: enumSchema(AI_PAYMENTS_TABLE_CONTROL_PLACEMENTS),
+        density: enumSchema(AI_PAYMENTS_TABLE_DENSITIES),
+        columns: arraySchema(
+          objectSchema({
+            key: enumSchema(AI_PAYMENTS_TABLE_COLUMN_KEYS),
+            label: stringSchema(),
+            priority: { type: "integer" }
+          })
+        )
+      }),
       visual: objectSchema({
         surface: stringSchema(),
         status: stringSchema(),
         dataDensity: stringSchema()
+      }),
+      createPayment: objectSchema({
+        enabled: { type: "boolean" },
+        placement: enumSchema(AI_PAYMENTS_COMPOSER_PLACEMENTS),
+        surface: enumSchema(AI_PAYMENTS_COMPOSER_SURFACES),
+        tone: enumSchema(AI_PAYMENTS_COMPOSER_TONES),
+        defaultScenario: enumSchema(AI_PAYMENT_SCENARIOS),
+        labels: objectSchema({
+          title: stringSchema(),
+          amount: stringSchema(),
+          currency: stringSchema(),
+          customer: stringSchema(),
+          customerEmail: stringSchema(),
+          methodType: stringSchema(),
+          instrument: stringSchema(),
+          scenario: stringSchema(),
+          submit: stringSchema()
+        })
       })
     }),
     presentation: objectSchema({
